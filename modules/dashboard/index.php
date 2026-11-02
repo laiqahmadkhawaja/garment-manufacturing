@@ -351,7 +351,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
             <!-- Department Pending Work Chart -->
             <div class="col-12 col-lg-4">
-                <div class="card-modern h-100">
+                <div class="card-modern">
                     <div class="card-modern-header">
                         <div>
                             <h6 class="fw-bold mb-0 text-dark">Department Work Status</h6>
@@ -359,7 +359,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         </div>
                     </div>
                     <div class="card-modern-body">
-                        <canvas id="deptWorkChart" height="230"></canvas>
+                        <!-- Chart Container with strictly bounded height to prevent Chart.js resize loop -->
+                        <div style="position: relative; height: 240px; width: 100%; overflow: hidden;">
+                            <canvas id="deptWorkChart"></canvas>
+                        </div>
                         
                         <div class="mt-3 border-top pt-3">
                             <div class="d-flex justify-content-between small text-muted mb-1">
