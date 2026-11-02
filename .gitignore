@@ -1,0 +1,13 @@
+# Logs
+error.log
+*.log
+
+# Backups (keep schema.sql, ignore generated dumps)
+backups/*.sql
+!backups/.gitkeep
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

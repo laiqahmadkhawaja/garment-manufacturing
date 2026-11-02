@@ -1,0 +1,99 @@
+<?php
+/**
+ * Garment Manufacturing ERP - Production AJAX Endpoints
+ */
+require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../config/auth.php';
+
+require_login();
+
+$action = $_GET['action'] ?? $_POST['action'] ?? '';
+$db = get_db();
+
+if ($action === 'get_lot_operations_and_variants') {
+    $lotId = (int)($_GET['lot_id'] ?? 0);
+
+    // Lot info
+    $stmt = $db->prepare("SELECT l.*, p.name AS product_name, d.design_number, d.name AS design_name 
+                          FROM lots l 
+                          JOIN products p ON l.product_id = p.id 
+                          LEFT JOIN designs d ON l.design_id = d.id 
+                          WHERE l.id = ?");
+    $stmt->execute([$lotId]);
+    $lot = $stmt->fetch();
+
+    if (!$lot) {
+        json_response(['status' => 'error', 'message' => 'Lot not found'], 404);
+    }
+
+    // Applicable operations for this lot
+    $opStmt = $db->prepare("SELECT lws.operation_id, lws.sequence, o.name AS op_name, o.code AS op_code, o.default_rate, dep.name AS dept_name,
+                            (SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = lws.lot_id AND operation_id = lws.operation_id) AS good_done
+                            FROM lot_workflow_steps lws 
+                            JOIN operations o ON lws.operation_id = o.id 
+                            LEFT JOIN departments dep ON o.department_id = dep.id 
+                            WHERE lws.lot_id = ? 
+                            ORDER BY lws.sequence ASC");
+    $opStmt->execute([$lotId]);
+    $operations = $opStmt->fetchAll();
+
+    // Lot variants
+    $vStmt = $db->prepare("SELECT lv.*, c.name AS color_name, c.hex_code, s.name AS size_name, s.code AS size_code 
+                           FROM lot_variants lv 
+                           JOIN colors c ON lv.color_id = c.id 
+                           JOIN sizes s ON lv.size_id = s.id 
+                           WHERE lv.lot_id = ? 
+                           ORDER BY c.name ASC, s.sort_order ASC");
+    $vStmt->execute([$lotId]);
+    $variants = $vStmt->fetchAll();
+
+    json_response([
+        'status' => 'success',
+        'lot' => $lot,
+        'operations' => $operations,
+        'variants' => $variants
+    ]);
+}
+
+if ($action === 'get_variant_stage_balance') {
+    $lotId = (int)($_GET['lot_id'] ?? 0);
+    $opId = (int)($_GET['operation_id'] ?? 0);
+    $colorId = (int)($_GET['color_id'] ?? 0);
+    $sizeId = (int)($_GET['size_id'] ?? 0);
+
+    // Get planned qty for this variant
+    $vStmt = $db->prepare("SELECT quantity FROM lot_variants WHERE lot_id = ? AND color_id = ? AND size_id = ?");
+    $vStmt->execute([$lotId, $colorId, $sizeId]);
+    $planned = (int)$vStmt->fetchColumn();
+
+    // Completed good qty for this variant & operation
+    $doneStmt = $db->prepare("SELECT COALESCE(SUM(good_qty), 0) AS good_done, 
+                                     COALESCE(SUM(rejected_qty), 0) AS rejected_done, 
+                                     COALESCE(SUM(rework_qty), 0) AS rework_done 
+                              FROM production_entries 
+                              WHERE lot_id = ? AND operation_id = ? AND color_id = ? AND size_id = ?");
+    $doneStmt->execute([$lotId, $opId, $colorId, $sizeId]);
+    $counts = $doneStmt->fetch();
+
+    $goodDone = (int)$counts['good_done'];
+    $rejectedDone = (int)$counts['rejected_done'];
+    $reworkDone = (int)$counts['rework_done'];
+    $pending = max(0, $planned - $goodDone);
+
+    // Get default rate for operation
+    $rStmt = $db->prepare("SELECT default_rate FROM operations WHERE id = ?");
+    $rStmt->execute([$opId]);
+    $defaultRate = (float)$rStmt->fetchColumn();
+
+    json_response([
+        'status' => 'success',
+        'planned' => $planned,
+        'good_done' => $goodDone,
+        'rejected_done' => $rejectedDone,
+        'rework_done' => $reworkDone,
+        'pending' => $pending,
+        'default_rate' => $defaultRate
+    ]);
+}
+
+json_response(['status' => 'error', 'message' => 'Unknown action'], 400);
