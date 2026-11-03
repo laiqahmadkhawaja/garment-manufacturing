@@ -133,6 +133,14 @@ $wStmt = $db->prepare("SELECT lws.*, o.name AS op_name, o.code AS op_code, o.def
 $wStmt->execute([$lotId]);
 $workflowSteps = $wStmt->fetchAll();
 
+$lotPackOpId = 9;
+foreach ($workflowSteps as $ws) {
+    if (($ws['code'] ?? '') === 'OP-PACK' || stripos($ws['operation_name'] ?? '', 'Pack') !== false) {
+        $lotPackOpId = (int)$ws['operation_id'];
+        break;
+    }
+}
+
 // 3. Worker Entries on this Lot
 $weStmt = $db->prepare("SELECT pe.*, w.name AS worker_name, w.code AS worker_code, o.name AS op_name, c.name AS color_name, s.name AS size_name 
                         FROM production_entries pe 
@@ -331,9 +339,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <i class="bi bi-lightning-charge-fill"></i>
                             <span>Production Entry</span>
                         </a>
-                        <a href="<?= BASE_URL ?>modules/packing/index.php?lot_id=<?= $lot['id'] ?>" class="btn btn-outline-info btn-sm d-inline-flex align-items-center gap-1">
+                        <a href="<?= BASE_URL ?>modules/production/index.php?lot_id=<?= $lot['id'] ?>&operation_id=<?= $lotPackOpId ?>" class="btn btn-outline-info btn-sm d-inline-flex align-items-center gap-1">
                             <i class="bi bi-box-seam-fill"></i>
-                            <span>Pack Pieces</span>
+                            <span>Pack in Workflow</span>
                         </a>
                         <a href="<?= BASE_URL ?>modules/lots/print_job_sheet.php?id=<?= $lot['id'] ?>" target="_blank" class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1">
                             <i class="bi bi-printer"></i>
@@ -988,8 +996,8 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <h6 class="fw-bold mb-0 text-dark">Packing Entries</h6>
                             <span class="text-muted small">Transforms completed production pieces into finished goods warehouse stock</span>
                         </div>
-                        <a href="<?= BASE_URL ?>modules/packing/index.php?lot_id=<?= $lotId ?>" class="btn btn-sm btn-primary">
-                            <i class="bi bi-box-seam-fill me-1"></i> New Packing Entry
+                        <a href="<?= BASE_URL ?>modules/production/index.php?lot_id=<?= $lotId ?>&operation_id=<?= $lotPackOpId ?>" class="btn btn-sm btn-primary">
+                            <i class="bi bi-box-seam-fill me-1"></i> Record Workflow Packing
                         </a>
                     </div>
                     <div class="card-modern-body p-0">

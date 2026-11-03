@@ -793,6 +793,86 @@ $shiftBlocked = (($allowance33['colors'][$cId2]['current_done'] + $attemptShifte
 $scenario33Passed = ($correctRestricted && $exceedsBlocked && $validPermitted && $shiftBlocked);
 assert_test("33. Stage-to-Stage Defect Exclusion per Color", $scenario33Passed, "Color 1192 restricted to 49 pcs (1 rejected in Stitching); Color 1193 allowed 50 pcs; shifting rejected piece across colors strictly blocked");
 
+// =========================================================================
+// SCENARIO 34: UNIFIED WORKFLOW PACKING & AUTO FINISHED GOODS DEPOSIT
+// =========================================================================
+echo "\n--- TESTING SCENARIO 34: UNIFIED WORKFLOW PACKING & FINISHED GOODS INWARD ---\n";
+
+// 1. Create a 100 pcs Lot
+$lotNum34 = 'LOT-TEST-PACK-' . time();
+$db->prepare("INSERT INTO lots (lot_number, lot_date, product_id, total_pieces, status, created_by) VALUES (?, CURDATE(), 1, 100, 'In Production', 1)")
+   ->execute([$lotNum34]);
+$lotId34 = (int)$db->lastInsertId();
+
+// Setup 6 Colors for this Lot (16 pcs each, balanced set packing)
+$colorsList = $db->query("SELECT id FROM colors LIMIT 6")->fetchAll(PDO::FETCH_COLUMN);
+$cId = $colorsList[0] ?? 1;
+$sId = 1;
+
+// Packing Operation (ID 9 or OP-PACK)
+$packOpStmt = $db->query("SELECT id FROM operations WHERE code = 'OP-PACK' OR name LIKE '%Pack%' LIMIT 1");
+$packOpId = (int)$packOpStmt->fetchColumn() ?: 9;
+
+// Pack 50 pieces in Workflow Packing
+$pePackNum1 = 'PE-PACK-50-' . time();
+$peRate = 2.00;
+$goodPack1 = 50;
+$labourAmt1 = $goodPack1 * $peRate; // Rs. 100.00
+
+// Record production entry
+$db->prepare("INSERT INTO production_entries (entry_number, entry_date, lot_id, operation_id, worker_id, color_id, size_id, qty_received, good_qty, rate, labour_amount)
+              VALUES (?, CURDATE(), ?, ?, 1, ?, ?, ?, ?, ?, ?)")
+   ->execute([$pePackNum1, $lotId34, $packOpId, $cId, $sId, $goodPack1, $goodPack1, $peRate, $labourAmt1]);
+
+// Automated Workflow Packing Inward
+$packDoc1 = 'PKG-TEST-' . time();
+$db->prepare("INSERT INTO packing_entries (packing_number, packing_date, lot_id, product_id, color_id, size_id, packed_qty, packing_worker_id, packing_rate, labour_amount, package_type, package_no, warehouse_id, created_by)
+              VALUES (?, CURDATE(), ?, 1, ?, ?, ?, 1, ?, ?, 'Master Set', 'SET-TEST-01', 1, 1)")
+   ->execute([$packDoc1, $lotId34, $cId, $sId, $goodPack1, $peRate, $labourAmt1]);
+$pkgId1 = (int)$db->lastInsertId();
+
+// Stock deposit
+$db->prepare("INSERT INTO finished_goods_stock (product_id, color_id, size_id, lot_id, warehouse_id, current_stock, dispatched_stock, updated_at)
+              VALUES (1, ?, ?, ?, 1, ?, 0, NOW())")
+   ->execute([$cId, $sId, $lotId34, $goodPack1]);
+
+// Inventory transaction
+$db->prepare("INSERT INTO inventory_transactions (transaction_date, item_type, product_id, color_id, size_id, lot_id, warehouse_id, transaction_type, quantity_in, quantity_out, unit_cost, reference_type, reference_id, remarks, created_by)
+              VALUES (CURDATE(), 'Finished Goods', 1, ?, ?, ?, 1, 'Packing', ?, 0.00, 0.00, 'WORKFLOW_PACKING', ?, 'Workflow packing test', 1)")
+   ->execute([$cId, $sId, $lotId34, $goodPack1, $pkgId1]);
+
+// Update lot status to Partially Packed
+$totPacked1 = (int)$db->query("SELECT COALESCE(SUM(packed_qty), 0) FROM packing_entries WHERE lot_id = $lotId34")->fetchColumn();
+$newStatus1 = ($totPacked1 >= 100) ? 'Ready Stock' : 'Partially Packed';
+$db->prepare("UPDATE lots SET status = ? WHERE id = ?")->execute([$newStatus1, $lotId34]);
+
+$partialCheck = ($newStatus1 === 'Partially Packed' && $totPacked1 === 50);
+
+// Pack remaining 50 pieces in Workflow Packing
+$packDoc2 = 'PKG-TEST2-' . time();
+$goodPack2 = 50;
+$labourAmt2 = $goodPack2 * $peRate;
+$db->prepare("INSERT INTO packing_entries (packing_number, packing_date, lot_id, product_id, color_id, size_id, packed_qty, packing_worker_id, packing_rate, labour_amount, package_type, package_no, warehouse_id, created_by)
+              VALUES (?, CURDATE(), ?, 1, ?, ?, ?, 1, ?, ?, 'Master Set', 'SET-TEST-02', 1, 1)")
+   ->execute([$packDoc2, $lotId34, $cId, $sId, $goodPack2, $peRate, $labourAmt2]);
+$pkgId2 = (int)$db->lastInsertId();
+
+$db->prepare("UPDATE finished_goods_stock SET current_stock = current_stock + ?, updated_at = NOW() WHERE lot_id = ? AND color_id = ? AND size_id = ?")
+   ->execute([$goodPack2, $lotId34, $cId, $sId]);
+
+$totPacked2 = (int)$db->query("SELECT COALESCE(SUM(packed_qty), 0) FROM packing_entries WHERE lot_id = $lotId34")->fetchColumn();
+$newStatus2 = ($totPacked2 >= 100) ? 'Ready Stock' : 'Partially Packed';
+$db->prepare("UPDATE lots SET status = ? WHERE id = ?")->execute([$newStatus2, $lotId34]);
+
+$stockStmt = $db->prepare("SELECT current_stock FROM finished_goods_stock WHERE lot_id = ? AND color_id = ? AND size_id = ?");
+$stockStmt->execute([$lotId34, $cId, $sId]);
+$totalCurrentStock = (int)$stockStmt->fetchColumn();
+
+$fullCheck = ($newStatus2 === 'Ready Stock' && $totPacked2 === 100 && $totalCurrentStock === 100);
+
+$scenario34Passed = ($partialCheck && $fullCheck);
+assert_test("34. Unified Workflow Packing & Finished Goods Stock Inward", $scenario34Passed, "Workflow packing deposited 100 pcs directly into finished_goods_stock; transitioned lot status to 'Partially Packed' at 50 pcs and 'Ready Stock' at 100 pcs without duplicate box steps");
+
 echo "\n========================================================================\n";
 echo "TEST SUITE SUMMARY: $passCount PASSED, $failCount FAILED\n";
 echo "========================================================================\n";

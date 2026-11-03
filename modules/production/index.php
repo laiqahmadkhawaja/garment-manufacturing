@@ -279,7 +279,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'Please enter pieces for at least one color & size variant in the matrix.';
             } else {
                 // Fetch lot details
-                $lQuery = $db->prepare("SELECT lot_number, status, total_pieces FROM lots WHERE id = ?");
+                $lQuery = $db->prepare("SELECT id, lot_number, status, total_pieces, product_id, design_id FROM lots WHERE id = ?");
                 $lQuery->execute([$lotId]);
                 $lotRow = $lQuery->fetch();
                 if (!$lotRow) {
@@ -288,6 +288,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $lotNum = $lotRow['lot_number'] ?? '';
                     $currentLotStatus = $lotRow['status'] ?? '';
                     $lotTotalPieces = (int)$lotRow['total_pieces'];
+
+                    // Check if current operation is Packing (Unified Workflow Packing)
+                    $isPackingOp = false;
+                    $opCheck = $db->prepare("SELECT code, name FROM operations WHERE id = ?");
+                    $opCheck->execute([$operationId]);
+                    $opRow = $opCheck->fetch();
+                    if ($opRow && ($opRow['code'] === 'OP-PACK' || stripos($opRow['name'], 'Pack') !== false)) {
+                        $isPackingOp = true;
+                    }
 
                     // 1. Stage-level capacity check: cumulative good pieces in this stage cannot exceed lot.total_pieces
                     $stageGoodStmt = $db->prepare("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = ? AND operation_id = ?");
@@ -447,6 +456,85 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $reworkNotes
                             ]);
                         }
+
+                        // If this operation is Packing (Unified Workflow Packing), automatically record into packing_entries & finished goods stock
+                        if ($isPackingOp && $entry['good_qty'] > 0) {
+                            $packNum = generate_doc_number('PKG-', 'packing_entries', 'packing_number');
+                            $packageNo = 'SET-LOT' . $lotId . '-' . $entry['color_id'] . '-' . $entry['size_id'];
+                            $pkStmt = $db->prepare("INSERT INTO packing_entries 
+                                (packing_number, packing_date, lot_id, product_id, design_id, color_id, size_id, packed_qty, packing_worker_id, packing_rate, labour_amount, package_type, package_no, remarks, warehouse_id, created_by) 
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Master Set', ?, ?, 1, ?)");
+                            $pkStmt->execute([
+                                $packNum,
+                                $entryDate,
+                                $lotId,
+                                $lotRow['product_id'] ?? null,
+                                $lotRow['design_id'] ?? null,
+                                $entry['color_id'],
+                                $entry['size_id'],
+                                $entry['good_qty'],
+                                $workerId,
+                                $rate,
+                                $entry['labour_amount'],
+                                $packageNo,
+                                'Workflow Packing Matrix Operation',
+                                $_SESSION['user_id'] ?? null
+                            ]);
+                            $packingId = (int)$db->lastInsertId();
+
+                            // Update Finished Goods Stock
+                            $stkCheck = $db->prepare("SELECT id FROM finished_goods_stock WHERE lot_id = ? AND color_id = ? AND size_id = ? AND warehouse_id = 1 LIMIT 1");
+                            $stkCheck->execute([$lotId, $entry['color_id'], $entry['size_id']]);
+                            $existingStkId = $stkCheck->fetchColumn();
+                            if ($existingStkId) {
+                                $db->prepare("UPDATE finished_goods_stock SET current_stock = current_stock + ?, updated_at = NOW() WHERE id = ?")
+                                   ->execute([$entry['good_qty'], $existingStkId]);
+                            } else {
+                                $db->prepare("INSERT INTO finished_goods_stock (product_id, design_id, color_id, size_id, lot_id, warehouse_id, current_stock, dispatched_stock, updated_at) 
+                                              VALUES (?, ?, ?, ?, ?, 1, ?, 0, NOW())")
+                                   ->execute([
+                                       $lotRow['product_id'] ?? null,
+                                       $lotRow['design_id'] ?? null,
+                                       $entry['color_id'],
+                                       $entry['size_id'],
+                                       $lotId,
+                                       $entry['good_qty']
+                                   ]);
+                            }
+
+                            // Record Finished Goods Inward Inventory Movement
+                            $db->prepare("INSERT INTO inventory_transactions 
+                                (transaction_date, item_type, product_id, design_id, color_id, size_id, lot_id, warehouse_id, transaction_type, quantity_in, quantity_out, unit_cost, reference_type, reference_id, remarks, created_by) 
+                                VALUES (?, 'Finished Goods', ?, ?, ?, ?, ?, 1, 'Packing', ?, 0.00, 0.00, 'WORKFLOW_PACKING', ?, ?, ?)")
+                               ->execute([
+                                   $entryDate,
+                                   $lotRow['product_id'] ?? null,
+                                   $lotRow['design_id'] ?? null,
+                                   $entry['color_id'],
+                                   $entry['size_id'],
+                                   $lotId,
+                                   $entry['good_qty'],
+                                   $packingId,
+                                   "Workflow packing completed into finished goods inventory",
+                                   $_SESSION['user_id'] ?? null
+                               ]);
+                        }
+                    }
+
+                    // Auto-transition lot status on Packing operation
+                    if ($isPackingOp) {
+                        $totPackedStmt = $db->prepare("SELECT COALESCE(SUM(packed_qty), 0) FROM packing_entries WHERE lot_id = ?");
+                        $totPackedStmt->execute([$lotId]);
+                        $totPackedForLot = (int)$totPackedStmt->fetchColumn();
+                        if ($totPackedForLot >= $lotTotalPieces && $currentLotStatus !== 'Ready Stock') {
+                            $db->prepare("UPDATE lots SET status = 'Ready Stock' WHERE id = ?")->execute([$lotId]);
+                            $db->prepare("INSERT INTO lot_status_history (lot_id, old_status, new_status, remarks, changed_by) VALUES (?, ?, 'Ready Stock', 'Lot fully packed into Finished Goods Stock via workflow', ?)")
+                               ->execute([$lotId, $currentLotStatus, $_SESSION['user_id'] ?? null]);
+                        } elseif ($totPackedForLot > 0 && $currentLotStatus !== 'Ready Stock' && $currentLotStatus !== 'Partially Packed') {
+                            $db->prepare("UPDATE lots SET status = 'Partially Packed' WHERE id = ?")->execute([$lotId]);
+                            $db->prepare("INSERT INTO lot_status_history (lot_id, old_status, new_status, remarks, changed_by) VALUES (?, ?, 'Partially Packed', 'Lot partially packed into Finished Goods Stock via workflow', ?)")
+                               ->execute([$lotId, $currentLotStatus, $_SESSION['user_id'] ?? null]);
+                        }
                     }
 
                     // Worker Ledger update (double entry: credit earned labour if totalLabour > 0)
@@ -549,11 +637,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Please enter at least one piece under Good, Rejected, or Rework.';
         } else {
             // Fetch lot details
-            $lQuery = $db->prepare("SELECT lot_number, status, total_pieces FROM lots WHERE id = ?");
+            $lQuery = $db->prepare("SELECT id, lot_number, status, total_pieces, product_id, design_id FROM lots WHERE id = ?");
             $lQuery->execute([$lotId]);
             $lotRow = $lQuery->fetch();
             $lotTotalPieces = (int)($lotRow['total_pieces'] ?? 0);
             $lotNum = $lotRow['lot_number'] ?? '';
+            $currentLotStatus = $lotRow['status'] ?? '';
+
+            // Check if current operation is Packing
+            $isPackingOp = false;
+            $opCheck = $db->prepare("SELECT code, name FROM operations WHERE id = ?");
+            $opCheck->execute([$operationId]);
+            $opRow = $opCheck->fetch();
+            if ($opRow && ($opRow['code'] === 'OP-PACK' || stripos($opRow['name'], 'Pack') !== false)) {
+                $isPackingOp = true;
+            }
 
             // 1. Stage-level capacity check: cumulative good pieces in this stage cannot exceed lot.total_pieces
             $stageGoodStmt = $db->prepare("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = ? AND operation_id = ?");
@@ -638,6 +736,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($reworkQty > 0) {
                     $rewStmt = $db->prepare("INSERT INTO production_rework (production_entry_id, lot_id, operation_id, color_id, size_id, quantity, notes, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending')");
                     $rewStmt->execute([$entryId, $lotId, $operationId, $colorId, $sizeId, $reworkQty, $notes ?: 'Requires correction/touchup']);
+                }
+
+                // If operation is Packing, create packing record and deposit into finished goods stock
+                if ($isPackingOp && $goodQty > 0) {
+                    $packNum = generate_doc_number('PKG-', 'packing_entries', 'packing_number');
+                    $packageNo = 'SET-LOT' . $lotId . '-' . $colorId . '-' . $sizeId;
+                    $pkStmt = $db->prepare("INSERT INTO packing_entries 
+                        (packing_number, packing_date, lot_id, product_id, design_id, color_id, size_id, packed_qty, packing_worker_id, packing_rate, labour_amount, package_type, package_no, remarks, warehouse_id, created_by) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Master Set', ?, ?, 1, ?)");
+                    $pkStmt->execute([
+                        $packNum,
+                        $entryDate,
+                        $lotId,
+                        $lotRow['product_id'] ?? null,
+                        $lotRow['design_id'] ?? null,
+                        $colorId,
+                        $sizeId,
+                        $goodQty,
+                        $workerId,
+                        $rate,
+                        $labourAmount,
+                        $packageNo,
+                        'Workflow Packing Single Variant Operation',
+                        $_SESSION['user_id'] ?? null
+                    ]);
+                    $packingId = (int)$db->lastInsertId();
+
+                    // Update Finished Goods Stock
+                    $stkCheck = $db->prepare("SELECT id FROM finished_goods_stock WHERE lot_id = ? AND color_id = ? AND size_id = ? AND warehouse_id = 1 LIMIT 1");
+                    $stkCheck->execute([$lotId, $colorId, $sizeId]);
+                    $existingStkId = $stkCheck->fetchColumn();
+                    if ($existingStkId) {
+                        $db->prepare("UPDATE finished_goods_stock SET current_stock = current_stock + ?, updated_at = NOW() WHERE id = ?")
+                           ->execute([$goodQty, $existingStkId]);
+                    } else {
+                        $db->prepare("INSERT INTO finished_goods_stock (product_id, design_id, color_id, size_id, lot_id, warehouse_id, current_stock, dispatched_stock, updated_at) 
+                                      VALUES (?, ?, ?, ?, ?, 1, ?, 0, NOW())")
+                           ->execute([
+                               $lotRow['product_id'] ?? null,
+                               $lotRow['design_id'] ?? null,
+                               $colorId,
+                               $sizeId,
+                               $lotId,
+                               $goodQty
+                           ]);
+                    }
+
+                    // Record Inventory Movement
+                    $db->prepare("INSERT INTO inventory_transactions 
+                        (transaction_date, item_type, product_id, design_id, color_id, size_id, lot_id, warehouse_id, transaction_type, quantity_in, quantity_out, unit_cost, reference_type, reference_id, remarks, created_by) 
+                        VALUES (?, 'Finished Goods', ?, ?, ?, ?, ?, 1, 'Packing', ?, 0.00, 0.00, 'WORKFLOW_PACKING', ?, ?, ?)")
+                       ->execute([
+                           $entryDate,
+                           $lotRow['product_id'] ?? null,
+                           $lotRow['design_id'] ?? null,
+                           $colorId,
+                           $sizeId,
+                           $lotId,
+                           $goodQty,
+                           $packingId,
+                           "Workflow packing completed into finished goods inventory",
+                           $_SESSION['user_id'] ?? null
+                       ]);
+
+                    // Auto-transition lot status
+                    $totPackedStmt = $db->prepare("SELECT COALESCE(SUM(packed_qty), 0) FROM packing_entries WHERE lot_id = ?");
+                    $totPackedStmt->execute([$lotId]);
+                    $totPackedForLot = (int)$totPackedStmt->fetchColumn();
+                    if ($totPackedForLot >= $lotTotalPieces && $currentLotStatus !== 'Ready Stock') {
+                        $db->prepare("UPDATE lots SET status = 'Ready Stock' WHERE id = ?")->execute([$lotId]);
+                        $db->prepare("INSERT INTO lot_status_history (lot_id, old_status, new_status, remarks, changed_by) VALUES (?, ?, 'Ready Stock', 'Lot fully packed into Finished Goods Stock via workflow', ?)")
+                           ->execute([$lotId, $currentLotStatus, $_SESSION['user_id'] ?? null]);
+                    } elseif ($totPackedForLot > 0 && $currentLotStatus !== 'Ready Stock' && $currentLotStatus !== 'Partially Packed') {
+                        $db->prepare("UPDATE lots SET status = 'Partially Packed' WHERE id = ?")->execute([$lotId]);
+                        $db->prepare("INSERT INTO lot_status_history (lot_id, old_status, new_status, remarks, changed_by) VALUES (?, ?, 'Partially Packed', 'Lot partially packed into Finished Goods Stock via workflow', ?)")
+                           ->execute([$lotId, $currentLotStatus, $_SESSION['user_id'] ?? null]);
+                    }
                 }
 
                 // 4. Update Worker Ledger (Double-Entry: Credit worker earnings)
@@ -1119,6 +1294,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <button type="button" id="btnToggleQualityMode" class="btn btn-outline-warning btn-sm d-flex align-items-center gap-1" title="Toggle Rejection and Rework tracking per variant">
                                             <i class="bi bi-shield-exclamation"></i>
                                             <span id="lblQualityToggleText">Log Rejections & Rework</span>
+                                        </button>
+                                        <button type="button" id="btnPackSets" class="btn btn-outline-info btn-sm d-flex align-items-center gap-1 shadow-sm d-none" title="Pack assorted color sets (1 of each color per size)">
+                                            <i class="bi bi-box-seam-fill"></i>
+                                            <span>📦 Pack Color Sets (سیٹ پیک)</span>
                                         </button>
                                         <button type="button" id="btnFillAllPending" class="btn btn-primary btn-sm d-flex align-items-center gap-1 shadow-sm">
                                             <i class="bi bi-lightning-fill"></i>
@@ -1854,6 +2033,18 @@ document.addEventListener('DOMContentLoaded', function() {
             if (wrapper) wrapper.insertBefore(stageNoticeEl, wrapper.firstChild);
         }
 
+        const opSelect = document.getElementById('pe_operation_id');
+        const selectedOpText = opSelect ? (opSelect.options[opSelect.selectedIndex]?.text || '') : '';
+        const isPacking = selectedOpText.toLowerCase().includes('pack');
+        const btnPackSets = document.getElementById('btnPackSets');
+        if (btnPackSets) {
+            if (isPacking && !isStageFullyComplete) {
+                btnPackSets.classList.remove('d-none');
+            } else {
+                btnPackSets.classList.add('d-none');
+            }
+        }
+
         if (isStageFullyComplete) {
             stageNoticeEl.className = 'alert alert-success d-flex flex-wrap align-items-center justify-content-between p-3 mb-3 border rounded-3 shadow-sm';
             stageNoticeEl.innerHTML = `
@@ -2183,6 +2374,38 @@ document.addEventListener('DOMContentLoaded', function() {
                 submitBtn.classList.add('btn-primary');
             }
         }
+    }
+
+    // Pack Assorted Color Sets Button (Unified Workflow Packing Mode)
+    const btnPackSets = document.getElementById('btnPackSets');
+    if (btnPackSets) {
+        btnPackSets.addEventListener('click', function() {
+            // Group cells by size ID to find minimum pending across colors (balanced assorted color sets)
+            const sizeCells = {};
+            document.querySelectorAll('.cell-variant').forEach(cell => {
+                const sId = cell.dataset.size;
+                if (!sizeCells[sId]) sizeCells[sId] = [];
+                sizeCells[sId].push(cell);
+            });
+
+            Object.keys(sizeCells).forEach(sId => {
+                const cells = sizeCells[sId];
+                let minPending = 999999;
+                cells.forEach(cell => {
+                    const pend = parseInt(cell.dataset.pending) || 0;
+                    if (pend < minPending) minPending = pend;
+                });
+                if (minPending === 999999 || minPending < 0) minPending = 0;
+
+                cells.forEach(cell => {
+                    const goodInp = cell.querySelector('.cell-good');
+                    if (goodInp && !goodInp.readOnly) {
+                        goodInp.value = minPending;
+                    }
+                });
+            });
+            recalculateMatrixTotals();
+        });
     }
 
     // 1-Click Fill All Pending Button

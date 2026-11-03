@@ -78,7 +78,7 @@ $activeNav = $activeNav ?? 'dashboard';
         </a>
         <a href="<?= BASE_URL ?>modules/packing/index.php" class="nav-link <?= $activeNav === 'packing' ? 'active' : '' ?>">
             <i class="bi bi-box-seam-fill text-info"></i>
-            <span>Packing Management</span>
+            <span>Finished Goods & Packing</span>
         </a>
         <a href="<?= BASE_URL ?>modules/inventory/index.php" class="nav-link <?= $activeNav === 'finished_goods' ? 'active' : '' ?>">
             <i class="bi bi-tags-fill"></i>
