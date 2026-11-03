@@ -134,6 +134,20 @@ function verify_csrf(?string $token): bool {
     return hash_equals($_SESSION['csrf_token'], $token);
 }
 
+function check_csrf(): void {
+    $token = $_POST['csrf_token'] ?? $_GET['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null;
+    if (!verify_csrf($token)) {
+        if (!empty($_SESSION['user_id'])) {
+            // Re-generate token to allow retry
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        }
+        set_flash('danger', 'Security validation expired. Please submit the form again.');
+        $backUrl = $_SERVER['HTTP_REFERER'] ?? (defined('BASE_URL') ? BASE_URL : '/');
+        header("Location: $backUrl");
+        exit;
+    }
+}
+
 /**
  * Audit log recorder
  */
