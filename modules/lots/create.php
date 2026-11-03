@@ -35,9 +35,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $expectedDate = !empty($_POST['expected_date']) ? trim($_POST['expected_date']) : null;
     $instructions = trim($_POST['instructions'] ?? '');
     
-    // Support both Itemized Rows and Matrix mode
     $entryMode = trim($_POST['entry_mode'] ?? 'itemized');
     $matrix = $_POST['matrix'] ?? [];
+    $matrixRows = $_POST['matrix_rows'] ?? [];
     $items = $_POST['items'] ?? [];
 
     if (empty($lotNumber) || $productId <= 0) {
@@ -52,11 +52,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $totalPieces = 0;
             $usedColors = [];
             $usedSizes = [];
-            $validVariants = [];
             $aggregated = [];
 
-            // 1. Process Itemized Rows
-            if ($entryMode === 'itemized' && !empty($items) && is_array($items)) {
+            // 1. Process Itemized Rows (Row has Color dropdown + Size dropdown + Quantity)
+            if (!empty($items) && is_array($items)) {
                 foreach ($items as $item) {
                     $cId = (int)($item['color_id'] ?? 0);
                     $sId = (int)($item['size_id'] ?? 0);
@@ -78,28 +77,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $totalPieces += $q;
                     }
                 }
-                $validVariants = array_values($aggregated);
             }
 
-            // 2. Fallback / Matrix Grid Mode
-            if (empty($validVariants) && !empty($matrix) && is_array($matrix)) {
-                foreach ($matrix as $cId => $sizesArr) {
-                    if (!is_array($sizesArr)) continue;
-                    foreach ($sizesArr as $sId => $qty) {
-                        $q = (int)$qty;
-                        if ($q > 0) {
-                            $totalPieces += $q;
-                            $usedColors[$cId] = true;
-                            $usedSizes[$sId] = true;
-                            $validVariants[] = [
-                                'color_id' => (int)$cId,
-                                'size_id' => (int)$sId,
-                                'quantity' => $q
-                            ];
+            // 2. Process Dynamic Matrix Rows (Row has Color dropdown + Size columns)
+            if (!empty($matrixRows) && is_array($matrixRows)) {
+                foreach ($matrixRows as $row) {
+                    $cId = (int)($row['color_id'] ?? 0);
+                    $sizesArr = $row['sizes'] ?? [];
+                    if ($cId > 0 && is_array($sizesArr)) {
+                        foreach ($sizesArr as $sId => $q) {
+                            $sId = (int)$sId;
+                            $q = (int)$q;
+                            if ($sId > 0 && $q > 0) {
+                                $key = $cId . '_' . $sId;
+                                if (isset($aggregated[$key])) {
+                                    $aggregated[$key]['quantity'] += $q;
+                                } else {
+                                    $aggregated[$key] = [
+                                        'color_id' => $cId,
+                                        'size_id' => $sId,
+                                        'quantity' => $q
+                                    ];
+                                }
+                                $usedColors[$cId] = true;
+                                $usedSizes[$sId] = true;
+                                $totalPieces += $q;
+                            }
                         }
                     }
                 }
             }
+
+            // 3. Fallback to Classic Matrix Grid (matrix[color_id][size_id])
+            if (empty($aggregated) && !empty($matrix) && is_array($matrix)) {
+                foreach ($matrix as $cId => $sizesArr) {
+                    $cId = (int)$cId;
+                    if (!is_array($sizesArr) || $cId <= 0) continue;
+                    foreach ($sizesArr as $sId => $qty) {
+                        $sId = (int)$sId;
+                        $q = (int)$qty;
+                        if ($sId > 0 && $q > 0) {
+                            $key = $cId . '_' . $sId;
+                            if (isset($aggregated[$key])) {
+                                $aggregated[$key]['quantity'] += $q;
+                            } else {
+                                $aggregated[$key] = [
+                                    'color_id' => $cId,
+                                    'size_id' => $sId,
+                                    'quantity' => $q
+                                ];
+                            }
+                            $usedColors[$cId] = true;
+                            $usedSizes[$sId] = true;
+                            $totalPieces += $q;
+                        }
+                    }
+                }
+            }
+
+            $validVariants = array_values($aggregated);
 
             if ($totalPieces <= 0 || empty($validVariants)) {
                 $error = 'Please enter valid planned quantities for at least one color and size variant.';
@@ -135,7 +171,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     // Assign Workflow Snapshot
-                    // Check if design has workflow, else product default, else standard template 1
                     $templateId = 1;
                     if ($designId) {
                         $dStmt = $db->prepare("SELECT workflow_template_id FROM designs WHERE id = ?");
@@ -156,7 +191,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $templateSteps = $stepQuery->fetchAll();
 
                     if (empty($templateSteps)) {
-                        // Fallback to all operations
                         $allOps = $db->query("SELECT id, sequence, is_mandatory FROM operations ORDER BY sequence ASC")->fetchAll();
                         $insertStep = $db->prepare("INSERT INTO lot_workflow_steps (lot_id, operation_id, sequence, is_mandatory, status) VALUES (?, ?, ?, ?, 'Pending')");
                         foreach ($allOps as $op) {
@@ -290,7 +324,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <i class="bi bi-list-check me-1"></i> Row Selection
                             </button>
                             <button type="button" class="btn btn-outline-secondary fw-semibold" id="btnModeMatrix">
-                                <i class="bi bi-grid-3x3-gap me-1"></i> Full Matrix
+                                <i class="bi bi-grid-3x3-gap me-1"></i> Color Grid Matrix
                             </button>
                         </div>
                         <div class="badge bg-primary fs-6 px-3 py-2 shadow-sm">
@@ -323,7 +357,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             <span class="input-group-text p-1 px-2 color-preview">
                                                 <span class="d-inline-block rounded-circle border swatch-dot" style="width: 14px; height: 14px; background-color: #adb5bd;"></span>
                                             </span>
-                                            <select name="items[0][color_id]" class="form-select color-select fw-semibold" required>
+                                            <select name="items[0][color_id]" class="form-select color-select fw-semibold">
                                                 <option value="">-- Choose Color --</option>
                                                 <?php foreach ($colors as $c): ?>
                                                     <option value="<?= $c['id'] ?>" data-hex="<?= clean($c['hex_code']) ?>">
@@ -334,7 +368,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         </div>
                                     </td>
                                     <td>
-                                        <select name="items[0][size_id]" class="form-select size-select fw-semibold" required>
+                                        <select name="items[0][size_id]" class="form-select size-select fw-semibold">
                                             <option value="">-- Choose Size --</option>
                                             <?php foreach ($sizes as $s): ?>
                                                 <option value="<?= $s['id'] ?>" data-code="<?= clean($s['code']) ?>">
@@ -345,7 +379,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     </td>
                                     <td>
                                         <div class="input-group">
-                                            <input type="number" name="items[0][quantity]" class="form-control text-center fw-bold row-qty-input" min="1" placeholder="0" required>
+                                            <input type="number" name="items[0][quantity]" class="form-control text-center fw-bold row-qty-input" min="1" placeholder="0">
                                             <span class="input-group-text small text-muted">pcs</span>
                                         </div>
                                     </td>
@@ -364,7 +398,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             <span class="input-group-text p-1 px-2 color-preview">
                                                 <span class="d-inline-block rounded-circle border swatch-dot" style="width: 14px; height: 14px; background-color: #adb5bd;"></span>
                                             </span>
-                                            <select name="items[1][color_id]" class="form-select color-select fw-semibold" required>
+                                            <select name="items[1][color_id]" class="form-select color-select fw-semibold">
                                                 <option value="">-- Choose Color --</option>
                                                 <?php foreach ($colors as $c): ?>
                                                     <option value="<?= $c['id'] ?>" data-hex="<?= clean($c['hex_code']) ?>">
@@ -375,7 +409,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         </div>
                                     </td>
                                     <td>
-                                        <select name="items[1][size_id]" class="form-select size-select fw-semibold" required>
+                                        <select name="items[1][size_id]" class="form-select size-select fw-semibold">
                                             <option value="">-- Choose Size --</option>
                                             <?php foreach ($sizes as $s): ?>
                                                 <option value="<?= $s['id'] ?>" data-code="<?= clean($s['code']) ?>">
@@ -386,7 +420,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     </td>
                                     <td>
                                         <div class="input-group">
-                                            <input type="number" name="items[1][quantity]" class="form-control text-center fw-bold row-qty-input" min="1" placeholder="0" required>
+                                            <input type="number" name="items[1][quantity]" class="form-control text-center fw-bold row-qty-input" min="1" placeholder="0">
                                             <span class="input-group-text small text-muted">pcs</span>
                                         </div>
                                     </td>
@@ -410,61 +444,122 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <i class="bi bi-copy me-1"></i> Duplicate Last Color
                             </button>
                         </div>
-                        <span class="text-muted small">Select your target color & size; add as many rows as needed for this lot.</span>
+                        <span class="text-muted small">Select your target color & size; 2 rows shown by default.</span>
                     </div>
                 </div>
 
                 <!-- ============================================================= -->
-                <!-- MODE 2: FULL MATRIX GRID (OPTIONAL) -->
+                <!-- MODE 2: DYNAMIC MATRIX WITH COLOR DROPDOWNS (2 ROWS DEFAULT) -->
                 <!-- ============================================================= -->
                 <div id="matrixContainer" class="card-modern-body p-0 d-none">
                     <div class="table-responsive">
-                        <table class="table table-modern table-bordered align-middle text-center mb-0">
-                            <thead>
-                                <tr class="table-light">
-                                    <th class="text-start" style="min-width: 160px;">Color</th>
+                        <table class="table table-bordered align-middle text-center mb-0" id="dynamicMatrixTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 45px;">#</th>
+                                    <th class="text-start" style="min-width: 200px;">Select Color *</th>
                                     <?php foreach ($sizes as $s): ?>
-                                        <th style="min-width: 100px;">
+                                        <th style="min-width: 85px;">
                                             <div><?= clean($s['name']) ?></div>
                                             <span class="badge bg-secondary-subtle text-secondary"><?= clean($s['code']) ?></span>
                                         </th>
                                     <?php endforeach; ?>
-                                    <th style="min-width: 110px;" class="table-active">Color Total</th>
+                                    <th style="min-width: 100px;" class="table-active">Color Total</th>
+                                    <th style="width: 50px;">Action</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <?php foreach ($colors as $c): ?>
-                                    <tr data-color-id="<?= $c['id'] ?>">
-                                        <td class="text-start fw-semibold text-dark">
-                                            <span class="d-inline-block rounded-circle border me-2 align-middle" style="width: 14px; height: 14px; background-color: <?= clean($c['hex_code']) ?>;"></span>
-                                            <?= clean($c['name']) ?>
+                            <tbody id="matrixGridTbody">
+                                <!-- Default Matrix Row 1 -->
+                                <tr class="matrix-row" data-row-index="0">
+                                    <td class="text-center fw-bold text-muted mrow-num">1</td>
+                                    <td>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text p-1 px-2">
+                                                <span class="d-inline-block rounded-circle border mswatch-dot" style="width: 14px; height: 14px; background-color: #adb5bd;"></span>
+                                            </span>
+                                            <select name="matrix_rows[0][color_id]" class="form-select form-select-sm mcolor-select fw-semibold">
+                                                <option value="">-- Choose Color --</option>
+                                                <?php foreach ($colors as $c): ?>
+                                                    <option value="<?= $c['id'] ?>" data-hex="<?= clean($c['hex_code']) ?>">
+                                                        <?= clean($c['name']) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </td>
+                                    <?php foreach ($sizes as $s): ?>
+                                        <td>
+                                            <input type="number" 
+                                                   name="matrix_rows[0][sizes][<?= $s['id'] ?>]" 
+                                                   class="form-control form-control-sm text-center mcell-input" 
+                                                   min="0" 
+                                                   placeholder="0"
+                                                   data-size="<?= $s['id'] ?>">
                                         </td>
-                                        <?php foreach ($sizes as $s): ?>
-                                            <td>
-                                                <input type="number" 
-                                                       name="matrix[<?= $c['id'] ?>][<?= $s['id'] ?>]" 
-                                                       class="form-control form-control-sm text-center matrix-grid-input" 
-                                                       min="0" 
-                                                       placeholder="0"
-                                                       data-color="<?= $c['id'] ?>"
-                                                       data-size="<?= $s['id'] ?>"
-                                                       value="<?= clean($_POST['matrix'][$c['id']][$s['id']] ?? '') ?>">
-                                            </td>
-                                        <?php endforeach; ?>
-                                        <td class="table-active fw-bold text-primary color-row-total">0</td>
-                                    </tr>
-                                <?php endforeach; ?>
+                                    <?php endforeach; ?>
+                                    <td class="table-active fw-bold text-primary mrow-total">0</td>
+                                    <td>
+                                        <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 btn-remove-mrow" title="Remove Color Row">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+
+                                <!-- Default Matrix Row 2 -->
+                                <tr class="matrix-row" data-row-index="1">
+                                    <td class="text-center fw-bold text-muted mrow-num">2</td>
+                                    <td>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text p-1 px-2">
+                                                <span class="d-inline-block rounded-circle border mswatch-dot" style="width: 14px; height: 14px; background-color: #adb5bd;"></span>
+                                            </span>
+                                            <select name="matrix_rows[1][color_id]" class="form-select form-select-sm mcolor-select fw-semibold">
+                                                <option value="">-- Choose Color --</option>
+                                                <?php foreach ($colors as $c): ?>
+                                                    <option value="<?= $c['id'] ?>" data-hex="<?= clean($c['hex_code']) ?>">
+                                                        <?= clean($c['name']) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </td>
+                                    <?php foreach ($sizes as $s): ?>
+                                        <td>
+                                            <input type="number" 
+                                                   name="matrix_rows[1][sizes][<?= $s['id'] ?>]" 
+                                                   class="form-control form-control-sm text-center mcell-input" 
+                                                   min="0" 
+                                                   placeholder="0"
+                                                   data-size="<?= $s['id'] ?>">
+                                        </td>
+                                    <?php endforeach; ?>
+                                    <td class="table-active fw-bold text-primary mrow-total">0</td>
+                                    <td>
+                                        <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 btn-remove-mrow" title="Remove Color Row">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
                             </tbody>
                             <tfoot>
                                 <tr class="table-light fw-bold">
-                                    <td class="text-start">Size Totals</td>
+                                    <td colspan="2" class="text-start ps-3">Size Totals</td>
                                     <?php foreach ($sizes as $s): ?>
-                                        <td id="size_total_<?= $s['id'] ?>">0</td>
+                                        <td id="msize_total_<?= $s['id'] ?>">0</td>
                                     <?php endforeach; ?>
-                                    <td class="table-primary text-primary fs-6" id="footerGrandTotal">0</td>
+                                    <td class="table-primary text-primary fs-6" id="mfooterGrandTotal">0</td>
+                                    <td></td>
                                 </tr>
                             </tfoot>
                         </table>
+                    </div>
+
+                    <!-- Toolbar to Add Matrix Rows -->
+                    <div class="p-3 bg-light border-top d-flex justify-content-between align-items-center">
+                        <button type="button" class="btn btn-primary btn-sm fw-semibold shadow-sm" id="btnAddMatrixRow">
+                            <i class="bi bi-plus-circle me-1"></i> Add Color Row
+                        </button>
+                        <span class="text-muted small">Choose color for each row and enter piece counts across sizes.</span>
                     </div>
                 </div>
             </div>
@@ -500,7 +595,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const itemizedContainer = document.getElementById('itemizedContainer');
     const matrixContainer = document.getElementById('matrixContainer');
 
-    // Dynamic Lot Number on Button
     lotNumberInput.addEventListener('input', function() {
         btnLotNum.textContent = this.value || '...';
     });
@@ -535,35 +629,42 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Toggle Modes
-    btnModeItemized.addEventListener('click', function() {
-        entryModeInput.value = 'itemized';
-        btnModeItemized.className = 'btn btn-primary fw-semibold';
-        btnModeMatrix.className = 'btn btn-outline-secondary fw-semibold';
-        itemizedContainer.classList.remove('d-none');
-        matrixContainer.classList.add('d-none');
-        recalculateItemized();
-    });
+    function setMode(mode) {
+        entryModeInput.value = mode;
+        if (mode === 'itemized') {
+            btnModeItemized.className = 'btn btn-primary fw-semibold';
+            btnModeMatrix.className = 'btn btn-outline-secondary fw-semibold';
+            itemizedContainer.classList.remove('d-none');
+            matrixContainer.classList.add('d-none');
+            itemizedContainer.querySelectorAll('input, select').forEach(el => el.disabled = false);
+            matrixContainer.querySelectorAll('input, select').forEach(el => el.disabled = true);
+            recalculateItemized();
+        } else {
+            btnModeMatrix.className = 'btn btn-primary fw-semibold';
+            btnModeItemized.className = 'btn btn-outline-secondary fw-semibold';
+            matrixContainer.classList.remove('d-none');
+            itemizedContainer.classList.add('d-none');
+            matrixContainer.querySelectorAll('input, select').forEach(el => el.disabled = false);
+            itemizedContainer.querySelectorAll('input, select').forEach(el => el.disabled = true);
+            recalculateMatrixRows();
+        }
+    }
 
-    btnModeMatrix.addEventListener('click', function() {
-        entryModeInput.value = 'matrix';
-        btnModeMatrix.className = 'btn btn-primary fw-semibold';
-        btnModeItemized.className = 'btn btn-outline-secondary fw-semibold';
-        matrixContainer.classList.remove('d-none');
-        itemizedContainer.classList.add('d-none');
-        recalculateMatrix();
-    });
+    btnModeItemized.addEventListener('click', function() { setMode('itemized'); });
+    btnModeMatrix.addEventListener('click', function() { setMode('matrix'); });
 
-    // =========================================================================
-    // ITEM DATA TEMPLATES FOR DYNAMIC ROW ADDITION
-    // =========================================================================
+    // Common Templates
     const colorOptionsHtml = `<?php foreach ($colors as $c): ?><option value="<?= $c['id'] ?>" data-hex="<?= clean($c['hex_code']) ?>"><?= clean($c['name']) ?></option><?php endforeach; ?>`;
     const sizeOptionsHtml = `<?php foreach ($sizes as $s): ?><option value="<?= $s['id'] ?>" data-code="<?= clean($s['code']) ?>"><?= clean($s['name']) ?> (<?= clean($s['code']) ?>)</option><?php endforeach; ?>`;
 
+    // =========================================================================
+    // 1. ITEMIZED ROWS ENGINE
+    // =========================================================================
     const itemizedTbody = document.getElementById('itemizedTbody');
     const btnAddRow = document.getElementById('btnAddRow');
     const btnDuplicateRow = document.getElementById('btnDuplicateRow');
 
-    function createRow(colorId = '', sizeId = '', qty = '') {
+    function createItemizedRow(colorId = '', sizeId = '', qty = '') {
         const rowCount = itemizedTbody.querySelectorAll('.variant-row').length;
         const newIndex = Date.now() + Math.floor(Math.random() * 1000);
 
@@ -577,21 +678,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     <span class="input-group-text p-1 px-2 color-preview">
                         <span class="d-inline-block rounded-circle border swatch-dot" style="width: 14px; height: 14px; background-color: #adb5bd;"></span>
                     </span>
-                    <select name="items[${newIndex}][color_id]" class="form-select color-select fw-semibold" required>
+                    <select name="items[${newIndex}][color_id]" class="form-select color-select fw-semibold">
                         <option value="">-- Choose Color --</option>
                         ${colorOptionsHtml}
                     </select>
                 </div>
             </td>
             <td>
-                <select name="items[${newIndex}][size_id]" class="form-select size-select fw-semibold" required>
+                <select name="items[${newIndex}][size_id]" class="form-select size-select fw-semibold">
                     <option value="">-- Choose Size --</option>
                     ${sizeOptionsHtml}
                 </select>
             </td>
             <td>
                 <div class="input-group">
-                    <input type="number" name="items[${newIndex}][quantity]" class="form-control text-center fw-bold row-qty-input" min="1" placeholder="0" value="${qty}" required>
+                    <input type="number" name="items[${newIndex}][quantity]" class="form-control text-center fw-bold row-qty-input" min="1" placeholder="0" value="${qty}">
                     <span class="input-group-text small text-muted">pcs</span>
                 </div>
             </td>
@@ -611,9 +712,9 @@ document.addEventListener('DOMContentLoaded', function() {
             tr.querySelector('.size-select').value = sizeId;
         }
 
-        bindRowEvents(tr);
+        bindItemizedRowEvents(tr);
         itemizedTbody.appendChild(tr);
-        renumberRows();
+        renumberItemizedRows();
         recalculateItemized();
     }
 
@@ -626,7 +727,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function bindRowEvents(row) {
+    function bindItemizedRowEvents(row) {
         const colorSel = row.querySelector('.color-select');
         const sizeSel = row.querySelector('.size-select');
         const qtyInp = row.querySelector('.row-qty-input');
@@ -647,12 +748,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             row.remove();
-            renumberRows();
+            renumberItemizedRows();
             recalculateItemized();
         });
     }
 
-    function renumberRows() {
+    function renumberItemizedRows() {
         const rows = itemizedTbody.querySelectorAll('.variant-row');
         rows.forEach((r, idx) => {
             const numEl = r.querySelector('.row-num');
@@ -660,15 +761,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Attach listeners on initial 2 rows
     itemizedTbody.querySelectorAll('.variant-row').forEach(row => {
-        bindRowEvents(row);
+        bindItemizedRowEvents(row);
         const cSel = row.querySelector('.color-select');
         if (cSel) updateSwatch(cSel);
     });
 
     btnAddRow.addEventListener('click', function() {
-        createRow();
+        createItemizedRow();
     });
 
     btnDuplicateRow.addEventListener('click', function() {
@@ -676,15 +776,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (rows.length > 0) {
             const lastRow = rows[rows.length - 1];
             const lastColor = lastRow.querySelector('.color-select').value;
-            createRow(lastColor, '', '');
+            createItemizedRow(lastColor, '', '');
         } else {
-            createRow();
+            createItemizedRow();
         }
     });
 
-    // =========================================================================
-    // RECALCULATION ENGINES
-    // =========================================================================
     function recalculateItemized() {
         if (entryModeInput.value !== 'itemized') return;
 
@@ -708,7 +805,120 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('summaryPieces').textContent = totalPcs.toLocaleString();
     }
 
-    function recalculateMatrix() {
+    // =========================================================================
+    // 2. DYNAMIC MATRIX ROWS ENGINE (Color Dropdown per Row)
+    // =========================================================================
+    const matrixGridTbody = document.getElementById('matrixGridTbody');
+    const btnAddMatrixRow = document.getElementById('btnAddMatrixRow');
+    const allSizesList = <?= json_encode($sizes) ?>;
+
+    function createMatrixRow(colorId = '') {
+        const rowCount = matrixGridTbody.querySelectorAll('.matrix-row').length;
+        const newIndex = Date.now() + Math.floor(Math.random() * 1000);
+
+        let sizeColsHtml = '';
+        allSizesList.forEach(s => {
+            sizeColsHtml += `
+                <td>
+                    <input type="number" 
+                           name="matrix_rows[${newIndex}][sizes][${s.id}]" 
+                           class="form-control form-control-sm text-center mcell-input" 
+                           min="0" 
+                           placeholder="0"
+                           data-size="${s.id}">
+                </td>`;
+        });
+
+        const tr = document.createElement('tr');
+        tr.className = 'matrix-row';
+        tr.dataset.rowIndex = newIndex;
+        tr.innerHTML = `
+            <td class="text-center fw-bold text-muted mrow-num">${rowCount + 1}</td>
+            <td>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text p-1 px-2">
+                        <span class="d-inline-block rounded-circle border mswatch-dot" style="width: 14px; height: 14px; background-color: #adb5bd;"></span>
+                    </span>
+                    <select name="matrix_rows[${newIndex}][color_id]" class="form-select form-select-sm mcolor-select fw-semibold">
+                        <option value="">-- Choose Color --</option>
+                        ${colorOptionsHtml}
+                    </select>
+                </div>
+            </td>
+            ${sizeColsHtml}
+            <td class="table-active fw-bold text-primary mrow-total">0</td>
+            <td>
+                <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 btn-remove-mrow" title="Remove Color Row">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        `;
+
+        if (colorId) {
+            const sel = tr.querySelector('.mcolor-select');
+            sel.value = colorId;
+            updateMatrixSwatch(sel);
+        }
+
+        bindMatrixRowEvents(tr);
+        matrixGridTbody.appendChild(tr);
+        renumberMatrixRows();
+        recalculateMatrixRows();
+    }
+
+    function updateMatrixSwatch(colorSelect) {
+        const selected = colorSelect.options[colorSelect.selectedIndex];
+        const hex = selected ? selected.dataset.hex : '';
+        const dot = colorSelect.closest('.input-group').querySelector('.mswatch-dot');
+        if (dot) {
+            dot.style.backgroundColor = hex || '#adb5bd';
+        }
+    }
+
+    function bindMatrixRowEvents(row) {
+        const colorSel = row.querySelector('.mcolor-select');
+        const removeBtn = row.querySelector('.btn-remove-mrow');
+
+        colorSel.addEventListener('change', function() {
+            updateMatrixSwatch(this);
+            recalculateMatrixRows();
+        });
+
+        row.querySelectorAll('.mcell-input').forEach(inp => {
+            inp.addEventListener('input', recalculateMatrixRows);
+        });
+
+        removeBtn.addEventListener('click', function() {
+            const rows = matrixGridTbody.querySelectorAll('.matrix-row');
+            if (rows.length <= 1) {
+                alert('At least one color row is required in the matrix.');
+                return;
+            }
+            row.remove();
+            renumberMatrixRows();
+            recalculateMatrixRows();
+        });
+    }
+
+    function renumberMatrixRows() {
+        const rows = matrixGridTbody.querySelectorAll('.matrix-row');
+        rows.forEach((r, idx) => {
+            const numEl = r.querySelector('.mrow-num');
+            if (numEl) numEl.textContent = idx + 1;
+        });
+    }
+
+    matrixGridTbody.querySelectorAll('.matrix-row').forEach(row => {
+        bindMatrixRowEvents(row);
+        const cSel = row.querySelector('.mcolor-select');
+        if (cSel) updateMatrixSwatch(cSel);
+    });
+
+    btnAddMatrixRow.addEventListener('click', function() {
+        createMatrixRow();
+    });
+
+    function recalculateMatrixRows() {
         if (entryModeInput.value !== 'matrix') return;
 
         let grandTotal = 0;
@@ -716,62 +926,88 @@ document.addEventListener('DOMContentLoaded', function() {
         const activeColors = new Set();
         const sizeTotals = {};
 
-        <?php foreach ($sizes as $s): ?>
-            sizeTotals[<?= $s['id'] ?>] = 0;
-        <?php endforeach; ?>
+        allSizesList.forEach(s => {
+            sizeTotals[s.id] = 0;
+        });
 
-        document.querySelectorAll('tr[data-color-id]').forEach(row => {
-            const colorId = row.dataset.colorId;
+        matrixGridTbody.querySelectorAll('.matrix-row').forEach(row => {
+            const cVal = row.querySelector('.mcolor-select').value;
             let rowTotal = 0;
 
-            row.querySelectorAll('.matrix-grid-input').forEach(input => {
-                const val = parseInt(input.value) || 0;
-                const sizeId = input.dataset.size;
+            row.querySelectorAll('.mcell-input').forEach(inp => {
+                const val = parseInt(inp.value) || 0;
+                const sizeId = inp.dataset.size;
                 if (val > 0) {
                     rowTotal += val;
-                    activeColors.add(colorId);
                     activeSizes.add(sizeId);
                     sizeTotals[sizeId] = (sizeTotals[sizeId] || 0) + val;
                 }
             });
 
-            row.querySelector('.color-row-total').textContent = rowTotal;
+            if (cVal && rowTotal > 0) {
+                activeColors.add(cVal);
+            }
+
+            row.querySelector('.mrow-total').textContent = rowTotal;
             grandTotal += rowTotal;
         });
 
         for (const [sizeId, total] of Object.entries(sizeTotals)) {
-            const cell = document.getElementById('size_total_' + sizeId);
+            const cell = document.getElementById('msize_total_' + sizeId);
             if (cell) cell.textContent = total;
         }
 
         document.getElementById('matrixGrandTotal').textContent = grandTotal.toLocaleString();
-        document.getElementById('footerGrandTotal').textContent = grandTotal.toLocaleString();
+        document.getElementById('mfooterGrandTotal').textContent = grandTotal.toLocaleString();
         document.getElementById('summaryColors').textContent = activeColors.size;
         document.getElementById('summarySizes').textContent = activeSizes.size;
         document.getElementById('summaryPieces').textContent = grandTotal.toLocaleString();
     }
 
-    document.querySelectorAll('.matrix-grid-input').forEach(inp => {
-        inp.addEventListener('input', recalculateMatrix);
-    });
-
     // Form submit validation
     document.getElementById('lotForm').addEventListener('submit', function(e) {
         const mode = entryModeInput.value;
         let total = 0;
+        let hasIncompleteRow = false;
 
         if (mode === 'itemized') {
             itemizedTbody.querySelectorAll('.variant-row').forEach(row => {
                 const q = parseInt(row.querySelector('.row-qty-input').value) || 0;
                 const c = row.querySelector('.color-select').value;
                 const s = row.querySelector('.size-select').value;
-                if (c && s && q > 0) total += q;
+                if (c && s && q > 0) {
+                    total += q;
+                } else if ((c || s || q > 0) && (!c || !s || q <= 0)) {
+                    hasIncompleteRow = true;
+                }
             });
+
+            if (hasIncompleteRow) {
+                e.preventDefault();
+                alert('Please select both Color, Size and enter a quantity > 0 for all active rows.');
+                return;
+            }
         } else {
-            document.querySelectorAll('.matrix-grid-input').forEach(inp => {
-                const q = parseInt(inp.value) || 0;
-                if (q > 0) total += q;
+            matrixGridTbody.querySelectorAll('.matrix-row').forEach(row => {
+                const c = row.querySelector('.mcolor-select').value;
+                let rowSum = 0;
+                row.querySelectorAll('.mcell-input').forEach(inp => {
+                    const q = parseInt(inp.value) || 0;
+                    if (q > 0) rowSum += q;
+                });
+                if (rowSum > 0 && !c) {
+                    hasIncompleteRow = true;
+                }
+                if (c && rowSum > 0) {
+                    total += rowSum;
+                }
             });
+
+            if (hasIncompleteRow) {
+                e.preventDefault();
+                alert('Please select a Color for every row with planned quantities in the matrix.');
+                return;
+            }
         }
 
         if (total <= 0) {
@@ -780,7 +1016,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    recalculateItemized();
+    // Initialize mode
+    setMode('<?= clean($entryMode) ?>' === 'matrix' ? 'matrix' : 'itemized');
 });
 </script>
 
