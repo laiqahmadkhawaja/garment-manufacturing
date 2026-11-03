@@ -18,16 +18,17 @@ $flashMessages = get_flash_messages();
 <!-- Toast Notification Container -->
 <div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1090;"></div>
 
-<!-- Offline Local Scripts -->
-<script src="<?= BASE_URL ?>assets/js/jquery.min.js"></script>
+<!-- Offline Local Scripts (Native Modern JS) -->
 <script src="<?= BASE_URL ?>assets/js/bootstrap.bundle.min.js"></script>
+<?php if (($activeNav ?? '') === 'dashboard'): ?>
 <script src="<?= BASE_URL ?>assets/js/chart.min.js"></script>
+<?php endif; ?>
 <script src="<?= BASE_URL ?>assets/js/app.js"></script>
 
 <!-- Trigger Flash Messages as Toasts or Alerts -->
 <?php if (!empty($flashMessages)): ?>
 <script>
-    $(document).ready(function() {
+    document.addEventListener('DOMContentLoaded', function() {
         <?php foreach ($flashMessages as $msg): ?>
             showToast(<?= json_encode($msg['message']) ?>, <?= json_encode($msg['type']) ?>);
         <?php endforeach; ?>

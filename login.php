@@ -102,7 +102,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
 
-    <script src="<?= BASE_URL ?>assets/js/jquery.min.js"></script>
     <script src="<?= BASE_URL ?>assets/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

@@ -207,19 +207,6 @@ function get_setting(string $key, string $default = ''): string {
 }
 
 /**
- * Trigger internal notification
- */
-function create_notification(string $title, string $message, ?string $link = null, string $type = 'info', ?int $roleId = null, ?int $userId = null): void {
-    try {
-        $db = get_db();
-        $stmt = $db->prepare("INSERT INTO notifications (user_id, role_id, title, message, link, alert_type) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$userId, $roleId, $title, $message, $link, $type]);
-    } catch (Exception $e) {
-        error_log("Failed to create notification: " . $e->getMessage());
-    }
-}
-
-/**
  * Auto-issue raw materials to a production lot based on product BOM / Recipe
  * Automatically deducts available warehouse stock, creates material issue records,
  * and detects stock shortages with exact deficiency numbers.

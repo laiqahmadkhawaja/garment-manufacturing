@@ -1,23 +1,35 @@
 /**
- * Garment Manufacturing ERP - Core Frontend Scripts
+ * Garment Manufacturing ERP - Core Frontend Scripts (Native Vanilla JS)
  */
 
-$(document).ready(function() {
+document.addEventListener('DOMContentLoaded', function() {
     // Mobile sidebar toggle
-    $('#sidebarToggle, #sidebarMobileClose').on('click', function(e) {
-        e.preventDefault();
-        $('.app-sidebar').toggleClass('show');
-        $('#sidebarBackdrop').toggleClass('d-none');
+    const sidebar = document.querySelector('.app-sidebar');
+    const backdrop = document.getElementById('sidebarBackdrop');
+    const toggles = document.querySelectorAll('#sidebarToggle, #sidebarMobileClose');
+
+    toggles.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (sidebar) sidebar.classList.toggle('show');
+            if (backdrop) backdrop.classList.toggle('d-none');
+        });
     });
 
-    $('#sidebarBackdrop').on('click', function() {
-        $('.app-sidebar').removeClass('show');
-        $(this).addClass('d-none');
-    });
+    if (backdrop) {
+        backdrop.addEventListener('click', function() {
+            if (sidebar) sidebar.classList.remove('show');
+            this.classList.add('d-none');
+        });
+    }
 
     // Auto-dismiss alerts after 5 seconds
     setTimeout(function() {
-        $('.alert-dismissible').fadeOut('slow');
+        document.querySelectorAll('.alert-dismissible').forEach(alert => {
+            alert.style.transition = 'opacity 0.5s ease';
+            alert.style.opacity = '0';
+            setTimeout(() => alert.remove(), 500);
+        });
     }, 5000);
 
     // Number formatting helper
@@ -29,15 +41,8 @@ $(document).ready(function() {
     };
 
     // Print helper
-    $('.btn-print-trigger').on('click', function() {
-        window.print();
-    });
-
-    // Global AJAX Setup for CSRF
-    $.ajaxSetup({
-        headers: {
-            'X-CSRF-Token': $('meta[name="csrf-token"]').attr('content')
-        }
+    document.querySelectorAll('.btn-print-trigger').forEach(btn => {
+        btn.addEventListener('click', () => window.print());
     });
 
     // Hash-based Tab Switching
@@ -54,7 +59,7 @@ $(document).ready(function() {
         }
     }
     activateTabFromHash();
-    $(window).on('hashchange', activateTabFromHash);
+    window.addEventListener('hashchange', activateTabFromHash);
 });
 
 /**
@@ -65,26 +70,34 @@ function showToast(message, type = 'success') {
                  type === 'danger' ? 'bi-exclamation-triangle-fill text-danger' : 
                  type === 'warning' ? 'bi-exclamation-circle-fill text-warning' : 'bi-info-circle-fill text-primary';
                  
-    const toastHtml = `
-        <div class="toast align-items-center text-bg-light border-0 shadow-lg mb-2" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="4000">
-            <div class="d-flex">
-                <div class="toast-body d-flex align-items-center gap-2">
-                    <i class="bi ${icon} fs-5"></i>
-                    <span class="fw-medium">${message}</span>
-                </div>
-                <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toastContainer';
+        container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+        container.style.zIndex = '1090';
+        document.body.appendChild(container);
+    }
+
+    const toastEl = document.createElement('div');
+    toastEl.className = 'toast align-items-center text-bg-light border-0 shadow-lg mb-2';
+    toastEl.setAttribute('role', 'alert');
+    toastEl.setAttribute('aria-live', 'assertive');
+    toastEl.setAttribute('aria-atomic', 'true');
+    toastEl.setAttribute('data-bs-delay', '4000');
+    toastEl.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body d-flex align-items-center gap-2">
+                <i class="bi ${icon} fs-5"></i>
+                <span class="fw-medium">${message}</span>
             </div>
+            <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
         </div>
     `;
-    let $container = $('#toastContainer');
-    if ($container.length === 0) {
-        $('body').append('<div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1090;"></div>');
-        $container = $('#toastContainer');
+    container.appendChild(toastEl);
+    if (window.bootstrap && bootstrap.Toast) {
+        const bsToast = new bootstrap.Toast(toastEl);
+        bsToast.show();
+        toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
     }
-    const $toast = $(toastHtml).appendTo($container);
-    const bsToast = new bootstrap.Toast($toast[0]);
-    bsToast.show();
-    $toast.on('hidden.bs.toast', function() {
-        $(this).remove();
-    });
 }
