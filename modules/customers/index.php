@@ -59,6 +59,18 @@ $sql = "SELECT c.*,
         ORDER BY c.name ASC";
 $customers = $db->query($sql)->fetchAll();
 
+// Overall Directory Totals
+$grandInvoiced = 0;
+$grandPaid = 0;
+$grandReceivable = 0;
+foreach ($customers as $c) {
+    $inv = (float)$c['total_invoiced'];
+    $pd = (float)$c['total_paid'];
+    $grandInvoiced += $inv;
+    $grandPaid += $pd;
+    $grandReceivable += ($inv - $pd);
+}
+
 $suggestedCustCode = generate_doc_number('CUST-', 'customers', 'code');
 
 require_once __DIR__ . '/../../includes/header.php';
@@ -73,6 +85,38 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             <div>
                 <h4 class="fw-bold mb-1 text-dark">Customer Parties & Accounts</h4>
                 <p class="text-muted small mb-0">Manage boutique buyers, wholesale parties, dispatches and receivable balances</p>
+            </div>
+        </div>
+
+        <!-- 4 Top KPI Summary Cards -->
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-md-3">
+                <div class="card-modern p-3 border rounded-3 text-center text-md-start">
+                    <span class="text-muted small text-uppercase fw-semibold" style="font-size: 0.72rem;">Active Customers</span>
+                    <div class="fs-4 fw-bold text-dark mt-1"><?= count($customers) ?> Parties</div>
+                    <span class="text-muted small">Registered commercial buyers</span>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card-modern p-3 border rounded-3 text-center text-md-start">
+                    <span class="text-muted small text-uppercase fw-semibold" style="font-size: 0.72rem;">Total Dispatched (Billed)</span>
+                    <div class="fs-4 fw-bold text-dark mt-1"><?= format_currency($grandInvoiced) ?></div>
+                    <span class="text-muted small">Total receivables invoiced</span>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card-modern p-3 border rounded-3 bg-success-subtle border-success-subtle text-center text-md-start">
+                    <span class="text-success small text-uppercase fw-semibold" style="font-size: 0.72rem;">Payments Recovered</span>
+                    <div class="fs-4 fw-bold text-success mt-1"><?= format_currency($grandPaid) ?></div>
+                    <span class="text-success small">Total customer collections</span>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card-modern p-3 border rounded-3 <?= $grandReceivable > 0 ? 'bg-danger-subtle border-danger-subtle' : 'bg-light' ?> text-center text-md-start">
+                    <span class="small text-uppercase fw-semibold <?= $grandReceivable > 0 ? 'text-danger' : 'text-muted' ?>" style="font-size: 0.72rem;">Total Outstanding</span>
+                    <div class="fs-4 fw-bold mt-1 <?= $grandReceivable > 0 ? 'text-danger' : 'text-primary' ?>"><?= format_currency($grandReceivable) ?></div>
+                    <span class="small <?= $grandReceivable > 0 ? 'text-danger' : 'text-muted' ?>">Total net balance due</span>
+                </div>
             </div>
         </div>
 
@@ -156,7 +200,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 ?>
                                     <tr>
                                         <td>
-                                            <span class="fw-bold text-dark fs-6"><?= clean($c['name']) ?></span>
+                                            <a href="<?= BASE_URL ?>modules/customers/view.php?id=<?= $c['id'] ?>" class="fw-bold text-primary text-decoration-none fs-6 d-inline-block hover-underline">
+                                                <?= clean($c['name']) ?>
+                                            </a>
                                             <div class="text-muted small">Code: <?= clean($c['code']) ?></div>
                                         </td>
                                         <td><span class="badge bg-light text-dark border"><?= clean($c['city'] ?: 'Local') ?></span></td>
@@ -172,9 +218,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <td class="text-end fw-bold fs-6 <?= $net > 0 ? 'text-primary' : 'text-muted' ?>">
                                             <?= format_currency($net) ?>
                                         </td>
-                                        <td class="text-end">
-                                            <a href="<?= BASE_URL ?>modules/dispatch/create.php?customer_id=<?= $c['id'] ?>" class="btn btn-sm btn-outline-primary py-1 px-2" title="Dispatch Goods">
-                                                <i class="bi bi-truck"></i> Dispatch
+                                        <td class="text-end text-nowrap">
+                                            <a href="<?= BASE_URL ?>modules/customers/view.php?id=<?= $c['id'] ?>" class="btn btn-sm btn-primary py-1 px-2 fw-semibold" title="View Detailed Account Ledger">
+                                                <i class="bi bi-journal-text me-1"></i> Ledger
+                                            </a>
+                                            <a href="<?= BASE_URL ?>modules/dispatch/create.php?customer_id=<?= $c['id'] ?>" class="btn btn-sm btn-outline-secondary py-1 px-2" title="Dispatch Goods">
+                                                <i class="bi bi-truck me-1"></i> Dispatch
                                             </a>
                                         </td>
                                     </tr>
