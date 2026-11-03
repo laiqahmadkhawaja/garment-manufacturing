@@ -96,6 +96,92 @@ if ($action === 'get_variant_stage_balance') {
     ]);
 }
 
+if ($action === 'get_lot_stage_matrix') {
+    $lotId = (int)($_GET['lot_id'] ?? 0);
+    $opId = (int)($_GET['operation_id'] ?? 0);
+
+    // Fetch lot
+    $lotStmt = $db->prepare("SELECT id, lot_number, total_pieces FROM lots WHERE id = ?");
+    $lotStmt->execute([$lotId]);
+    $lot = $lotStmt->fetch();
+    if (!$lot) {
+        json_response(['status' => 'error', 'message' => 'Lot not found'], 404);
+    }
+
+    // Fetch all variants with completed good & rejected qty for this operation
+    $sql = "SELECT lv.color_id, lv.size_id, lv.quantity AS planned,
+                   c.name AS color_name, c.hex_code,
+                   s.name AS size_name, s.code AS size_code, s.sort_order,
+                   COALESCE((
+                       SELECT SUM(good_qty) FROM production_entries 
+                       WHERE lot_id = lv.lot_id AND operation_id = ? AND color_id = lv.color_id AND size_id = lv.size_id
+                   ), 0) AS good_done,
+                   COALESCE((
+                       SELECT SUM(rejected_qty) FROM production_entries 
+                       WHERE lot_id = lv.lot_id AND operation_id = ? AND color_id = lv.color_id AND size_id = lv.size_id
+                   ), 0) AS rejected_done
+            FROM lot_variants lv
+            JOIN colors c ON lv.color_id = c.id
+            JOIN sizes s ON lv.size_id = s.id
+            WHERE lv.lot_id = ?
+            ORDER BY c.name ASC, s.sort_order ASC";
+    $stmt = $db->prepare($sql);
+    $stmt->execute([$opId, $opId, $lotId]);
+    $rawVariants = $stmt->fetchAll();
+
+    $colors = [];
+    $sizes = [];
+    $grid = [];
+    $totalPlanned = 0;
+    $totalDone = 0;
+    $totalPending = 0;
+
+    foreach ($rawVariants as $v) {
+        $cId = (int)$v['color_id'];
+        $sId = (int)$v['size_id'];
+        $planned = (int)$v['planned'];
+        $goodDone = (int)$v['good_done'];
+        $pending = max(0, $planned - $goodDone);
+
+        $colors[$cId] = [
+            'id' => $cId,
+            'name' => $v['color_name'],
+            'hex_code' => $v['hex_code']
+        ];
+
+        $sizes[$sId] = [
+            'id' => $sId,
+            'name' => $v['size_name'],
+            'code' => $v['size_code'],
+            'sort_order' => (int)$v['sort_order']
+        ];
+
+        $grid[$cId][$sId] = [
+            'planned' => $planned,
+            'good_done' => $goodDone,
+            'rejected_done' => (int)$v['rejected_done'],
+            'pending' => $pending
+        ];
+
+        $totalPlanned += $planned;
+        $totalDone += $goodDone;
+        $totalPending += $pending;
+    }
+
+    json_response([
+        'status' => 'success',
+        'lot' => $lot,
+        'colors' => array_values($colors),
+        'sizes' => array_values($sizes),
+        'grid' => $grid,
+        'totals' => [
+            'planned' => $totalPlanned,
+            'good_done' => $totalDone,
+            'pending' => $totalPending
+        ]
+    ]);
+}
+
 if ($action === 'get_operation_workers') {
     $opId = (int)($_GET['operation_id'] ?? 0);
 
