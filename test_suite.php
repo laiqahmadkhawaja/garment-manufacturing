@@ -154,8 +154,8 @@ assert_test("6. V-Neck workflow excludes buttons", $hasButtons === 0, "Buttons o
 // ------------------------------------------------------------------------
 $db->beginTransaction();
 $db->prepare("INSERT INTO production_entries (entry_number, entry_date, lot_id, operation_id, worker_id, color_id, size_id, good_qty, rejected_qty, rate, labour_amount) 
-              VALUES ('PE-1008', CURRENT_DATE(), ?, 4, 1, 1, 2, 20, 2, 12.00, 240.00)")->execute([$lotId101]);
-$db->prepare("INSERT INTO production_rejections (lot_id, operation_id, color_id, size_id, quantity, reason) VALUES (?, 4, 1, 2, 2, 'Needle cut')")->execute([$lotId101]);
+              VALUES ('PE-1008', CURRENT_DATE(), ?, 5, 1, 1, 2, 20, 2, 12.00, 240.00)")->execute([$lotId101]);
+$db->prepare("INSERT INTO production_rejections (lot_id, operation_id, color_id, size_id, quantity, reason) VALUES (?, 5, 1, 2, 2, 'Needle cut')")->execute([$lotId101]);
 $db->commit();
 
 $rejCheck = (int)$db->query("SELECT SUM(quantity) FROM production_rejections WHERE lot_id = $lotId101")->fetchColumn();

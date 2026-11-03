@@ -83,28 +83,86 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (empty($entriesToSave)) {
                 $error = 'Please enter pieces for at least one color & size variant in the matrix.';
             } else {
-                $db->beginTransaction();
-                try {
-                    // Fetch lot details
-                    $lQuery = $db->prepare("SELECT lot_number, status FROM lots WHERE id = ?");
-                    $lQuery->execute([$lotId]);
-                    $lotRow = $lQuery->fetch();
+                // Fetch lot details
+                $lQuery = $db->prepare("SELECT lot_number, status, total_pieces FROM lots WHERE id = ?");
+                $lQuery->execute([$lotId]);
+                $lotRow = $lQuery->fetch();
+                if (!$lotRow) {
+                    $error = 'Selected lot does not exist.';
+                } else {
                     $lotNum = $lotRow['lot_number'] ?? '';
                     $currentLotStatus = $lotRow['status'] ?? '';
+                    $lotTotalPieces = (int)$lotRow['total_pieces'];
 
-                    // Fetch operation and worker names
-                    $opQuery = $db->prepare("SELECT name FROM operations WHERE id = ?");
-                    $opQuery->execute([$operationId]);
-                    $opName = $opQuery->fetchColumn();
+                    // 1. Stage-level capacity check: cumulative good pieces in this stage cannot exceed lot.total_pieces
+                    $stageGoodStmt = $db->prepare("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = ? AND operation_id = ?");
+                    $stageGoodStmt->execute([$lotId, $operationId]);
+                    $currentStageGood = (int)$stageGoodStmt->fetchColumn();
 
-                    $wQuery = $db->prepare("SELECT name FROM workers WHERE id = ?");
-                    $wQuery->execute([$workerId]);
-                    $workerName = $wQuery->fetchColumn();
+                    if (($currentStageGood + $totalGood) > $lotTotalPieces) {
+                        $overPcs = ($currentStageGood + $totalGood) - $lotTotalPieces;
+                        $allowed = max(0, $lotTotalPieces - $currentStageGood);
+                        $error = "Production quantity exceeds lot capacity! Lot #$lotNum allows a maximum of $lotTotalPieces pieces. Already produced: $currentStageGood pcs. Maximum pieces allowed to record now is $allowed pcs (attempted to add: $totalGood pcs, exceeding by $overPcs pcs).";
+                    } else {
+                        // 2. Variant-level capacity check: each variant cannot exceed planned quantity
+                        $varPlanStmt = $db->prepare("SELECT color_id, size_id, quantity FROM lot_variants WHERE lot_id = ?");
+                        $varPlanStmt->execute([$lotId]);
+                        $lotVariantsMap = [];
+                        while ($vRow = $varPlanStmt->fetch()) {
+                            $lotVariantsMap[$vRow['color_id'] . '_' . $vRow['size_id']] = (int)$vRow['quantity'];
+                        }
 
-                    // Prepare production entries insert
-                    $insertStmt = $db->prepare("INSERT INTO production_entries 
-                        (entry_number, entry_date, lot_id, operation_id, worker_id, color_id, size_id, qty_received, good_qty, rejected_qty, rework_qty, rate, labour_amount, notes, created_by) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                        $varDoneStmt = $db->prepare("SELECT color_id, size_id, COALESCE(SUM(good_qty), 0) as done_qty 
+                                                     FROM production_entries 
+                                                     WHERE lot_id = ? AND operation_id = ? 
+                                                     GROUP BY color_id, size_id");
+                        $varDoneStmt->execute([$lotId, $operationId]);
+                        $varDoneMap = [];
+                        while ($dRow = $varDoneStmt->fetch()) {
+                            $varDoneMap[$dRow['color_id'] . '_' . $dRow['size_id']] = (int)$dRow['done_qty'];
+                        }
+
+                        foreach ($entriesToSave as $entry) {
+                            $vKey = $entry['color_id'] . '_' . $entry['size_id'];
+                            $plannedQty = $lotVariantsMap[$vKey] ?? 0;
+                            $alreadyDone = $varDoneMap[$vKey] ?? 0;
+                            $attemptedGood = $entry['good_qty'];
+
+                            if (($alreadyDone + $attemptedGood) > $plannedQty) {
+                                $cNameStmt = $db->prepare("SELECT name FROM colors WHERE id = ?");
+                                $cNameStmt->execute([$entry['color_id']]);
+                                $cName = $cNameStmt->fetchColumn() ?: 'Color #' . $entry['color_id'];
+
+                                $sNameStmt = $db->prepare("SELECT name FROM sizes WHERE id = ?");
+                                $sNameStmt->execute([$entry['size_id']]);
+                                $sName = $sNameStmt->fetchColumn() ?: 'Size #' . $entry['size_id'];
+
+                                $overVar = ($alreadyDone + $attemptedGood) - $plannedQty;
+                                $varRemaining = max(0, $plannedQty - $alreadyDone);
+                                $error = "Variant quantity limit exceeded for {$cName} ({$sName})! Planned: $plannedQty pcs, Already produced: $alreadyDone pcs, Remaining: $varRemaining pcs (attempted: $attemptedGood pcs, exceeding by $overVar pcs).";
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (empty($error)) {
+                $db->beginTransaction();
+                    try {
+                        // Fetch operation and worker names
+                        $opQuery = $db->prepare("SELECT name FROM operations WHERE id = ?");
+                        $opQuery->execute([$operationId]);
+                        $opName = $opQuery->fetchColumn();
+
+                        $wQuery = $db->prepare("SELECT name FROM workers WHERE id = ?");
+                        $wQuery->execute([$workerId]);
+                        $workerName = $wQuery->fetchColumn();
+
+                        // Prepare production entries insert
+                        $insertStmt = $db->prepare("INSERT INTO production_entries 
+                            (entry_number, entry_date, lot_id, operation_id, worker_id, color_id, size_id, qty_received, good_qty, rejected_qty, rework_qty, rate, labour_amount, notes, created_by) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
                     // Prepare rejections and rework statements
                     $rejStmt = $db->prepare("INSERT INTO production_rejections 
@@ -271,25 +329,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($goodQty === 0 && $rejectedQty === 0 && $reworkQty === 0) {
             $error = 'Please enter at least one piece under Good, Rejected, or Rework.';
         } else {
-            if ($qtyReceived <= 0) {
-                $qtyReceived = $goodQty + $rejectedQty + $reworkQty;
-            }
+            // Fetch lot details
+            $lQuery = $db->prepare("SELECT lot_number, status, total_pieces FROM lots WHERE id = ?");
+            $lQuery->execute([$lotId]);
+            $lotRow = $lQuery->fetch();
+            $lotTotalPieces = (int)($lotRow['total_pieces'] ?? 0);
+            $lotNum = $lotRow['lot_number'] ?? '';
 
-            $labourAmount = round($goodQty * $rate, 2);
+            // 1. Stage-level capacity check: cumulative good pieces in this stage cannot exceed lot.total_pieces
+            $stageGoodStmt = $db->prepare("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = ? AND operation_id = ?");
+            $stageGoodStmt->execute([$lotId, $operationId]);
+            $currentStageGood = (int)$stageGoodStmt->fetchColumn();
 
-            $db->beginTransaction();
-            try {
-                // Check planned variant quantity for reconciliation warning
-                $pvStmt = $db->prepare("SELECT quantity FROM lot_variants WHERE lot_id = ? AND color_id = ? AND size_id = ?");
-                $pvStmt->execute([$lotId, $colorId, $sizeId]);
-                $variantPlanned = (int)$pvStmt->fetchColumn();
+            // 2. Variant-level capacity check: variant cannot exceed planned quantity
+            $pvStmt = $db->prepare("SELECT quantity FROM lot_variants WHERE lot_id = ? AND color_id = ? AND size_id = ?");
+            $pvStmt->execute([$lotId, $colorId, $sizeId]);
+            $variantPlanned = (int)$pvStmt->fetchColumn();
 
-                // Check existing good qty for this variant & operation
-                $curDoneStmt = $db->prepare("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = ? AND operation_id = ? AND color_id = ? AND size_id = ?");
-                $curDoneStmt->execute([$lotId, $operationId, $colorId, $sizeId]);
-                $previouslyDone = (int)$curDoneStmt->fetchColumn();
+            // Check existing good qty for this variant & operation
+            $curDoneStmt = $db->prepare("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = ? AND operation_id = ? AND color_id = ? AND size_id = ?");
+            $curDoneStmt->execute([$lotId, $operationId, $colorId, $sizeId]);
+            $previouslyDone = (int)$curDoneStmt->fetchColumn();
 
+            if (($currentStageGood + $goodQty) > $lotTotalPieces) {
+                $overPcs = ($currentStageGood + $goodQty) - $lotTotalPieces;
+                $allowed = max(0, $lotTotalPieces - $currentStageGood);
+                $error = "Production quantity exceeds lot capacity! Lot #$lotNum allows up to $lotTotalPieces pieces. Already produced: $currentStageGood pcs. Maximum pieces allowed to record now is $allowed pcs (attempted: $goodQty pcs, exceeding by $overPcs pcs).";
+            } elseif (($previouslyDone + $goodQty) > $variantPlanned) {
+                $overVar = ($previouslyDone + $goodQty) - $variantPlanned;
+                $varRemaining = max(0, $variantPlanned - $previouslyDone);
+                $error = "Production quantity exceeds variant planned capacity! Planned: $variantPlanned pcs, Already produced: $previouslyDone pcs, Remaining: $varRemaining pcs (attempted: $goodQty pcs, exceeding by $overVar pcs).";
+            } else {
+                if ($qtyReceived <= 0) {
+                    $qtyReceived = $goodQty + $rejectedQty + $reworkQty;
+                }
+
+                $labourAmount = round($goodQty * $rate, 2);
                 $cumulativeGood = $previouslyDone + $goodQty;
+
+                $db->beginTransaction();
+                try {
 
                 // Generate entry number
                 $entryNumber = generate_doc_number('PE-', 'production_entries', 'entry_number');
@@ -409,6 +488,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+}
 }
 
 // Fetch active lots for dropdown
@@ -876,7 +956,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         const opt = document.createElement('option');
                         opt.value = op.operation_id;
                         opt.dataset.rate = op.default_rate;
-                        opt.textContent = op.sequence + '. ' + op.op_name + ' (' + op.dept_name + ') - Rs. ' + parseFloat(op.default_rate).toFixed(2);
+                        opt.dataset.goodDone = op.good_done || 0;
+                        const goodDone = parseInt(op.good_done) || 0;
+                        const lotTotal = parseInt(data.lot.total_pieces) || 0;
+                        const isCompleted = (goodDone >= lotTotal && lotTotal > 0);
+                        opt.textContent = op.sequence + '. ' + op.op_name + ' (' + op.dept_name + ') - Rs. ' + parseFloat(op.default_rate).toFixed(2) + 
+                                          (isCompleted ? ' [✓ Completed: ' + goodDone + '/' + lotTotal + ']' : ' [' + goodDone + '/' + lotTotal + ' pcs]');
                         opSelect.appendChild(opt);
                     });
 
@@ -1014,13 +1099,34 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    document.getElementById('stageBalanceAlert').classList.remove('d-none');
+                    const balBox = document.getElementById('stageBalanceAlert');
+                    balBox.classList.remove('d-none');
                     document.getElementById('lblPlanned').textContent = data.planned + ' pcs';
                     document.getElementById('lblDone').textContent = data.good_done + ' pcs';
                     document.getElementById('lblPending').textContent = data.pending + ' pcs';
 
-                    if (!goodInput.value || parseInt(goodInput.value) === 0) {
-                        goodInput.placeholder = data.pending;
+                    const btnSaveSingle = document.getElementById('btnSaveSingle');
+                    if (data.pending <= 0) {
+                        goodInput.value = 0;
+                        goodInput.disabled = true;
+                        if (btnSaveSingle) {
+                            btnSaveSingle.disabled = true;
+                            btnSaveSingle.innerHTML = '<i class="bi bi-slash-circle me-1"></i> Variant 100% Completed (Limit Reached)';
+                            btnSaveSingle.classList.remove('btn-primary');
+                            btnSaveSingle.classList.add('btn-secondary');
+                        }
+                    } else {
+                        goodInput.disabled = false;
+                        goodInput.max = data.pending;
+                        if (btnSaveSingle) {
+                            btnSaveSingle.disabled = false;
+                            btnSaveSingle.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Save Single Production Entry';
+                            btnSaveSingle.classList.remove('btn-secondary');
+                            btnSaveSingle.classList.add('btn-primary');
+                        }
+                        if (!goodInput.value || parseInt(goodInput.value) === 0) {
+                            goodInput.placeholder = data.pending;
+                        }
                     }
                 }
             })
@@ -1084,6 +1190,8 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 matrixLoading.classList.add('d-none');
                 if (data.status === 'success') {
+                    window.activeLotTotalPieces = data.lot ? (parseInt(data.lot.total_pieces) || 0) : 0;
+                    window.activeStageGoodDone = data.totals ? (parseInt(data.totals.good_done) || 0) : 0;
                     renderMatrixTable(data);
                     matrixGridWrapper.classList.remove('d-none');
                 } else {
@@ -1103,6 +1211,42 @@ document.addEventListener('DOMContentLoaded', function() {
         const sizes = data.sizes;
         const grid = data.grid;
         const totals = data.totals;
+        const isStageFullyComplete = (totals.pending <= 0);
+
+        let stageNoticeEl = document.getElementById('matrixStageNotice');
+        if (!stageNoticeEl) {
+            stageNoticeEl = document.createElement('div');
+            stageNoticeEl.id = 'matrixStageNotice';
+            const wrapper = document.getElementById('matrixGridWrapper');
+            if (wrapper) wrapper.insertBefore(stageNoticeEl, wrapper.firstChild);
+        }
+
+        if (isStageFullyComplete) {
+            stageNoticeEl.className = 'alert alert-success d-flex flex-wrap align-items-center justify-content-between p-3 mb-3 border rounded-3 shadow-sm';
+            stageNoticeEl.innerHTML = `
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-check-circle-fill text-success fs-3"></i>
+                    <div>
+                        <div class="fw-bold text-dark">Stage 100% Completed</div>
+                        <div class="small text-muted">All ${totals.planned} pieces assigned to this lot have been produced. Further production entries are restricted to enforce lot limits.</div>
+                    </div>
+                </div>
+                <span class="badge bg-success fs-6 px-3 py-2">${totals.good_done} / ${totals.planned} Pcs</span>
+            `;
+            stageNoticeEl.classList.remove('d-none');
+            const fillBtn = document.getElementById('btnFillAllPending');
+            const subBtn = document.getElementById('btnSubmitBatch');
+            if (fillBtn) fillBtn.disabled = true;
+            if (subBtn) {
+                subBtn.disabled = true;
+                subBtn.classList.remove('btn-primary');
+                subBtn.classList.add('btn-secondary');
+            }
+        } else {
+            stageNoticeEl.classList.add('d-none');
+            const fillBtn = document.getElementById('btnFillAllPending');
+            if (fillBtn) fillBtn.disabled = false;
+        }
 
         // Header: Color \ Size | S | M | L ... | Color Total
         let thHtml = '<tr><th class="text-start ps-3 py-2 bg-light text-dark" style="min-width: 140px;">Color \\ Size</th>';
@@ -1283,6 +1427,16 @@ document.addEventListener('DOMContentLoaded', function() {
             grandRew += rewVal;
             grandTotal += cellTotal;
         });
+
+        // Overall Stage Capacity check against Lot Total Pieces
+        const lotMax = window.activeLotTotalPieces || 0;
+        const curDone = window.activeStageGoodDone || 0;
+        if (lotMax > 0 && (curDone + grandGood) > lotMax) {
+            hasError = true;
+            const overPcs = (curDone + grandGood) - lotMax;
+            const allowed = Math.max(0, lotMax - curDone);
+            errorMsg = `Stage production cannot exceed lot capacity of ${lotMax} pcs! Already completed: ${curDone} pcs. Maximum allowed to add now is ${allowed} pcs (attempted: ${grandGood} pcs, exceeding by ${overPcs} pcs).`;
+        }
 
         // Update row sums
         Object.keys(rowSums).forEach(cId => {

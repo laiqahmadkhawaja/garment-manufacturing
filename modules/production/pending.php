@@ -149,11 +149,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         $rej = (int)$st['rejected_done'];
                                         $rew = (int)$st['rework_done'];
 
-                                        $isComplete = ($good >= $total);
+                                        $isOver = ($good > $total);
+                                        $isComplete = ($good === $total);
                                         $isNotStarted = ($good === 0);
-                                        $isShortage = (!$isComplete && $good > 0);
+                                        $isShortage = (!$isComplete && !$isOver && $good > 0);
                                     ?>
-                                        <tr class="<?= $isShortage ? 'table-warning bg-opacity-10' : '' ?>">
+                                        <tr class="<?= $isOver ? 'table-danger bg-opacity-10' : ($isShortage ? 'table-warning bg-opacity-10' : '') ?>">
                                             <td class="fw-bold text-center"><?= $st['sequence'] ?></td>
                                             <td class="fw-bold text-dark">
                                                 <?= clean($st['op_name']) ?>
@@ -163,14 +164,18 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             </td>
                                             <td><?= clean($st['dept_name']) ?></td>
                                             <td class="text-center fw-bold"><?= number_format($total) ?></td>
-                                            <td class="text-center fw-bold text-success"><?= number_format($good) ?></td>
+                                            <td class="text-center fw-bold <?= $isOver ? 'text-danger' : 'text-success' ?>"><?= number_format($good) ?></td>
                                             <td class="text-center <?= $rej > 0 ? 'text-danger fw-bold' : 'text-muted' ?>"><?= number_format($rej) ?></td>
                                             <td class="text-center <?= $rew > 0 ? 'text-warning fw-bold' : 'text-muted' ?>"><?= number_format($rew) ?></td>
-                                            <td class="text-center fw-bold fs-6 <?= $pending > 0 ? 'text-warning-emphasis' : 'text-success' ?>">
-                                                <?= number_format($pending) ?>
+                                            <td class="text-center fw-bold fs-6 <?= $isOver ? 'text-danger' : ($pending > 0 ? 'text-warning-emphasis' : 'text-success') ?>">
+                                                <?= $isOver ? '<span class="text-danger fw-bold">+' . number_format($good - $total) . ' Over</span>' : number_format($pending) ?>
                                             </td>
                                             <td>
-                                                <?php if ($isComplete): ?>
+                                                <?php if ($isOver): ?>
+                                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle fw-bold px-2 py-1">
+                                                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Over (+<?= number_format($good - $total) ?> pcs)
+                                                    </span>
+                                                <?php elseif ($isComplete): ?>
                                                     <span class="badge-status badge-completed"><i class="bi bi-check-circle-fill"></i> Completed</span>
                                                 <?php elseif ($isShortage): ?>
                                                     <span class="badge-status badge-critical">
@@ -182,10 +187,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <?php endif; ?>
                                             </td>
                                             <td class="text-end">
-                                                <?php if (!$isComplete): ?>
+                                                <?php if (!$isComplete && !$isOver): ?>
                                                     <a href="<?= BASE_URL ?>modules/production/index.php?lot_id=<?= $info['lot_id'] ?>&operation_id=<?= $st['operation_id'] ?>" class="btn btn-sm btn-outline-warning py-1 px-2">
                                                         <i class="bi bi-plus-lg me-1"></i> Record Work
                                                     </a>
+                                                <?php elseif ($isOver): ?>
+                                                    <span class="badge bg-danger-subtle text-danger border" title="Capacity exceeded: <?= $good - $total ?> pieces over lot limit"><i class="bi bi-slash-circle me-1"></i> Max Exceeded</span>
                                                 <?php else: ?>
                                                     <span class="text-muted small"><i class="bi bi-check-all text-success fs-5"></i></span>
                                                 <?php endif; ?>
