@@ -36,9 +36,10 @@ if ($action === 'get_product_details') {
 
     $recipeItems = [];
     if ($recipe) {
-        $biStmt = $db->prepare("SELECT bi.*, m.name AS material_name, m.code AS material_code, m.unit_of_measure, m.cost_price 
+        $biStmt = $db->prepare("SELECT bi.*, m.name AS material_name, m.code AS material_code, u.code AS unit_of_measure, u.code AS unit_code, m.cost_price 
                                 FROM bom_items bi 
                                 JOIN materials m ON bi.material_id = m.id 
+                                JOIN units u ON m.unit_id = u.id 
                                 WHERE bi.bom_id = ?");
         $biStmt->execute([$recipe['id']]);
         $recipeItems = $biStmt->fetchAll();

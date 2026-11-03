@@ -183,7 +183,11 @@ foreach ($allProductElements as $el) {
 }
 
 // Active Raw Materials
-$materials = $db->query("SELECT * FROM materials WHERE is_active = 1 ORDER BY name ASC")->fetchAll();
+$materials = $db->query("SELECT m.*, u.code AS unit_of_measure, u.code AS unit_code, u.name AS unit_name 
+                         FROM materials m 
+                         JOIN units u ON m.unit_id = u.id 
+                         WHERE m.is_active = 1 
+                         ORDER BY m.name ASC")->fetchAll();
 
 // Product Recipes / BOMs
 $recipes = $db->query("SELECT b.*, p.name AS product_name, p.code AS product_code, p.product_type,
@@ -194,9 +198,10 @@ $recipes = $db->query("SELECT b.*, p.name AS product_name, p.code AS product_cod
                        ORDER BY p.name ASC")->fetchAll();
 
 // Recipe Items Map
-$recipeItems = $db->query("SELECT bi.*, m.name AS material_name, m.code AS material_code, m.unit_of_measure, m.cost_price 
+$recipeItems = $db->query("SELECT bi.*, m.name AS material_name, m.code AS material_code, u.code AS unit_of_measure, u.code AS unit_code, m.cost_price 
                            FROM bom_items bi 
                            JOIN materials m ON bi.material_id = m.id 
+                           JOIN units u ON m.unit_id = u.id 
                            ORDER BY bi.bom_id ASC, m.name ASC")->fetchAll();
 $recipeItemsMap = [];
 foreach ($recipeItems as $ri) {

@@ -39,7 +39,7 @@ $productBom = $bomStmt->fetch();
 
 $bomItems = [];
 if ($productBom) {
-    $biStmt = $db->prepare("SELECT bi.*, m.name AS material_name, m.code AS material_code, u.code AS unit_code, m.cost_per_unit
+    $biStmt = $db->prepare("SELECT bi.*, m.name AS material_name, m.code AS material_code, u.code AS unit_code, m.cost_price AS cost_per_unit, m.cost_price
                            FROM bom_items bi
                            JOIN materials m ON bi.material_id = m.id
                            JOIN units u ON m.unit_id = u.id

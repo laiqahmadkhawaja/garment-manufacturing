@@ -40,9 +40,10 @@ $recipe = $bStmt->fetch();
 
 $recipeItems = [];
 if ($recipe) {
-    $biStmt = $db->prepare("SELECT bi.*, m.name AS material_name, m.unit_of_measure 
+    $biStmt = $db->prepare("SELECT bi.*, m.name AS material_name, u.code AS unit_of_measure, u.code AS unit_code 
                             FROM bom_items bi 
                             JOIN materials m ON bi.material_id = m.id 
+                            JOIN units u ON m.unit_id = u.id 
                             WHERE bi.bom_id = ?");
     $biStmt->execute([$recipe['id']]);
     $recipeItems = $biStmt->fetchAll();
