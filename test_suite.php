@@ -524,6 +524,64 @@ $anatomyValid = ($vLot['has_anatomy_variants'] == 1 && ($abData['with_sleeves'] 
 assert_test("29. Style Anatomy Breakdown (Sleeves vs Sleeveless)", $anatomyValid, "Total: 200 pcs = With Sleeves: {$abData['with_sleeves']} pcs + Sleeveless: {$abData['sleeveless']} pcs");
 $db->commit();
 
+// ------------------------------------------------------------------------
+// Test 30: Stage 1 Operator Production Entry (Double Shift Auto-Balance)
+// ------------------------------------------------------------------------
+$db->beginTransaction();
+$opEntryLotNum = 'LOT-TEST-OPENTRY-' . time();
+$db->prepare("INSERT INTO lots 
+    (lot_number, lot_date, product_id, shift_type, operator_id, night_operator_id, total_pieces, total_colors, total_sizes, status)
+    VALUES (?, CURDATE(), 1, 'Double Shift', 1, 3, 150, 1, 1, 'Draft')")
+   ->execute([$opEntryLotNum]);
+$opLotId = (int)$db->lastInsertId();
+
+// Operator Stage 1: Day Operator reports 80 pcs, Night Operator automatically remainder 70 pcs (Total 150)
+$dayPieces = 80;
+$nightPieces = 150 - $dayPieces; // 70 pcs auto calculated
+$pieceRate = 5.00; // Rs. 5.00/pc
+
+$peDayNum = 'PE-OP-D-' . time();
+$peNightNum = 'PE-OP-N-' . time();
+
+$db->prepare("INSERT INTO production_entries 
+    (entry_number, entry_date, lot_id, operation_id, worker_id, shift, color_id, size_id, qty_received, good_qty, rate, labour_amount, notes)
+    VALUES (?, CURDATE(), ?, 1, 1, 'Day Shift', NULL, 1, ?, ?, ?, ?, 'Day Operator Stage 1')")
+   ->execute([$peDayNum, $opLotId, $dayPieces, $dayPieces, $pieceRate, $dayPieces * $pieceRate]);
+$dayEntryId = (int)$db->lastInsertId();
+
+$db->prepare("INSERT INTO production_entries 
+    (entry_number, entry_date, lot_id, operation_id, worker_id, shift, color_id, size_id, qty_received, good_qty, rate, labour_amount, notes)
+    VALUES (?, CURDATE(), ?, 1, 3, 'Night Shift', NULL, 1, ?, ?, ?, ?, 'Night Operator Stage 1')")
+   ->execute([$peNightNum, $opLotId, $nightPieces, $nightPieces, $pieceRate, $nightPieces * $pieceRate]);
+$nightEntryId = (int)$db->lastInsertId();
+
+// Record worker ledgers
+$db->prepare("INSERT INTO worker_ledger (worker_id, transaction_date, transaction_type, reference_type, reference_id, lot_id, operation_id, debit, credit, running_balance, description)
+              VALUES (1, CURDATE(), 'Labour', 'PRODUCTION_ENTRY', ?, ?, 1, 0.00, ?, ?, 'Day Operator output')")
+   ->execute([$dayEntryId, $opLotId, $dayPieces * $pieceRate, $dayPieces * $pieceRate]);
+
+$db->prepare("INSERT INTO worker_ledger (worker_id, transaction_date, transaction_type, reference_type, reference_id, lot_id, operation_id, debit, credit, running_balance, description)
+              VALUES (3, CURDATE(), 'Labour', 'PRODUCTION_ENTRY', ?, ?, 1, 0.00, ?, ?, 'Night Operator output')")
+   ->execute([$nightEntryId, $opLotId, $nightPieces * $pieceRate, $nightPieces * $pieceRate]);
+
+// Verify cumulative good qty on stage 1 equals 150 without needing color breakdown
+$sumStmt = $db->prepare("SELECT SUM(good_qty) FROM production_entries WHERE lot_id = ? AND operation_id = 1");
+$sumStmt->execute([$opLotId]);
+$totGood = (int)$sumStmt->fetchColumn();
+
+$dayOpStmt = $db->prepare("SELECT good_qty FROM production_entries WHERE id = ?");
+$dayOpStmt->execute([$dayEntryId]);
+$dGood = (int)$dayOpStmt->fetchColumn();
+
+$nightOpStmt = $db->prepare("SELECT good_qty FROM production_entries WHERE id = ?");
+$nightOpStmt->execute([$nightEntryId]);
+$nGood = (int)$nightOpStmt->fetchColumn();
+
+$db->commit();
+
+$opEntryOk = ($totGood === 150 && $dGood === 80 && $nGood === 70);
+assert_test("30. Stage 1 Operator Entry (Double Shift Auto-Balance)", $opEntryOk, "150 pcs Lot: Day Operator made $dGood pcs, Night Operator automatically completed remaining $nGood pcs (No color tracking required)");
+
 echo "\n========================================================================\n";
 echo "TEST SUITE SUMMARY: $passCount PASSED, $failCount FAILED\n";
 echo "========================================================================\n";

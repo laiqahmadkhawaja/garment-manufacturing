@@ -13,11 +13,17 @@ $db = get_db();
 if ($action === 'get_lot_operations_and_variants') {
     $lotId = (int)($_GET['lot_id'] ?? 0);
 
-    // Lot info
-    $stmt = $db->prepare("SELECT l.*, p.name AS product_name, d.design_number, d.name AS design_name 
+    // Lot info with assigned operators
+    $stmt = $db->prepare("SELECT l.*, p.name AS product_name, d.design_number, d.name AS design_name,
+                                 w_day.name AS day_operator_name, w_day.code AS day_operator_code, w_day.rate_per_minute AS day_operator_min_rate,
+                                 w_night.name AS night_operator_name, w_night.code AS night_operator_code, w_night.rate_per_minute AS night_operator_min_rate,
+                                 sz.name AS single_size_name, sz.code AS single_size_code
                           FROM lots l 
                           JOIN products p ON l.product_id = p.id 
                           LEFT JOIN designs d ON l.design_id = d.id 
+                          LEFT JOIN workers w_day ON l.operator_id = w_day.id
+                          LEFT JOIN workers w_night ON l.night_operator_id = w_night.id
+                          LEFT JOIN sizes sz ON l.single_size_id = sz.id
                           WHERE l.id = ?");
     $stmt->execute([$lotId]);
     $lot = $stmt->fetch();
@@ -52,11 +58,23 @@ if ($action === 'get_lot_operations_and_variants') {
     $vStmt->execute([$lotId]);
     $variants = $vStmt->fetchAll();
 
+    // Distinct sizes for this lot
+    $sStmt = $db->prepare("SELECT DISTINCT s.id, s.name, s.code, s.sort_order,
+                                  (SELECT SUM(quantity) FROM lot_variants WHERE lot_id = ? AND size_id = s.id) AS planned_qty
+                           FROM lot_variants lv
+                           JOIN sizes s ON lv.size_id = s.id
+                           WHERE lv.lot_id = ?
+                           ORDER BY s.sort_order ASC, s.id ASC");
+    $sStmt->execute([$lotId, $lotId]);
+    $lotSizes = $sStmt->fetchAll();
+
     json_response([
         'status' => 'success',
         'lot' => $lot,
         'operations' => $operations,
-        'variants' => $variants
+        'variants' => $variants,
+        'sizes' => $lotSizes
+    ]);
     ]);
 }
 

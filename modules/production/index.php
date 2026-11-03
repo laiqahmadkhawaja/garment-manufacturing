@@ -20,6 +20,193 @@ $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     check_csrf();
     $entryMode = trim($_POST['entry_mode'] ?? 'matrix');
+
+    // =========================================================================
+    // 1. OPERATOR INITIAL PRODUCTION ENTRY MODE (FIRST STAGE - NO COLOR REQUIRED)
+    // =========================================================================
+    if ($entryMode === 'operator_initial') {
+        $lotId = (int)($_POST['lot_id'] ?? 0);
+        $operationId = (int)($_POST['operation_id'] ?? 0);
+        $entryDate = trim($_POST['entry_date'] ?? date('Y-m-d'));
+        $shiftType = in_array($_POST['shift_type'] ?? '', ['Single Shift', 'Double Shift']) ? $_POST['shift_type'] : 'Single Shift';
+        $notes = trim($_POST['notes'] ?? 'Operator initial production run');
+
+        // Day Operator
+        $dayWorkerId = (int)($_POST['day_worker_id'] ?? 0);
+        $dayPieces = (int)($_POST['day_pieces'] ?? 0);
+        $dayRate = (float)($_POST['day_rate'] ?? 0.00);
+        $dayMinRate = (float)($_POST['day_worker_min_rate'] ?? 2.50);
+        $dayMins = (float)($_POST['day_minutes_per_piece'] ?? 0.00);
+        if ($dayRate <= 0 && $dayMins > 0) {
+            $dayRate = round($dayMins * $dayMinRate, 2);
+        }
+
+        // Night Operator (Double Shift)
+        $nightWorkerId = (int)($_POST['night_worker_id'] ?? 0);
+        $nightPieces = (int)($_POST['night_pieces'] ?? 0);
+        $nightRate = (float)($_POST['night_rate'] ?? 0.00);
+        $nightMinRate = (float)($_POST['night_worker_min_rate'] ?? 2.50);
+        $nightMins = (float)($_POST['night_minutes_per_piece'] ?? 0.00);
+        if ($nightRate <= 0 && $nightMins > 0) {
+            $nightRate = round($nightMins * $nightMinRate, 2);
+        }
+
+        // Sizing
+        $sizeMode = trim($_POST['size_mode'] ?? 'Single Size');
+        $singleSizeId = !empty($_POST['single_size_id']) ? (int)$_POST['single_size_id'] : null;
+        $daySizes = $_POST['day_sizes'] ?? [];
+        $nightSizes = $_POST['night_sizes'] ?? [];
+
+        if ($lotId <= 0 || $dayWorkerId <= 0) {
+            $error = 'Please select Lot and Day Operator.';
+        } elseif ($shiftType === 'Double Shift' && $nightWorkerId <= 0) {
+            $error = 'Please select Night Operator for Double Shift.';
+        } else {
+            // Verify lot
+            $lQuery = $db->prepare("SELECT lot_number, status, total_pieces, single_size_id FROM lots WHERE id = ?");
+            $lQuery->execute([$lotId]);
+            $lotRow = $lQuery->fetch();
+
+            if (!$lotRow) {
+                $error = 'Selected lot not found.';
+            } else {
+                $lotNum = $lotRow['lot_number'];
+                if (!$singleSizeId) $singleSizeId = $lotRow['single_size_id'];
+                if (!$singleSizeId) {
+                    $singleSizeId = (int)$db->query("SELECT id FROM sizes ORDER BY sort_order ASC LIMIT 1")->fetchColumn();
+                }
+
+                // If operation not passed, resolve first operation
+                if ($operationId <= 0) {
+                    $opQuery = $db->prepare("SELECT operation_id FROM lot_workflow_steps WHERE lot_id = ? ORDER BY sequence ASC LIMIT 1");
+                    $opQuery->execute([$lotId]);
+                    $operationId = (int)$opQuery->fetchColumn();
+                    if ($operationId <= 0) {
+                        $operationId = (int)$db->query("SELECT id FROM operations ORDER BY sequence ASC LIMIT 1")->fetchColumn();
+                    }
+                }
+
+                $db->beginTransaction();
+                try {
+                    $baseDocNum = generate_doc_number('PE-', 'production_entries', 'entry_number');
+
+                    // 1. Day Operator Entries
+                    $dayTotalPcs = 0;
+                    $dayTotalLabour = 0.00;
+                    $firstDayId = null;
+
+                    if ($sizeMode === 'Multi Size' && !empty($daySizes)) {
+                        $seq = 1;
+                        foreach ($daySizes as $sId => $sQty) {
+                            $sQty = (int)$sQty;
+                            if ($sQty <= 0) continue;
+                            $entryNum = $baseDocNum . '-D' . $seq++;
+                            $labour = round($sQty * $dayRate, 2);
+                            $minsTotal = round($sQty * $dayMins, 2);
+                            $ins = $db->prepare("INSERT INTO production_entries 
+                                (entry_number, entry_date, lot_id, operation_id, worker_id, shift, color_id, size_id, qty_received, good_qty, rate, minutes_per_piece, worker_minute_rate, total_minutes, labour_amount, notes, created_by)
+                                VALUES (?, ?, ?, ?, ?, 'Day Shift', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                            $ins->execute([$entryNum, $entryDate, $lotId, $operationId, $dayWorkerId, $sId, $sQty, $sQty, $dayRate, $dayMins, $dayMinRate, $minsTotal, $labour, $notes, $_SESSION['user_id'] ?? null]);
+                            $newId = (int)$db->lastInsertId();
+                            if (!$firstDayId) $firstDayId = $newId;
+                            $dayTotalPcs += $sQty;
+                            $dayTotalLabour += $labour;
+                        }
+                    } else {
+                        $entryNum = $baseDocNum . '-D';
+                        $dayTotalPcs = $dayPieces;
+                        $dayTotalLabour = round($dayPieces * $dayRate, 2);
+                        $minsTotal = round($dayPieces * $dayMins, 2);
+                        $ins = $db->prepare("INSERT INTO production_entries 
+                            (entry_number, entry_date, lot_id, operation_id, worker_id, shift, color_id, size_id, qty_received, good_qty, rate, minutes_per_piece, worker_minute_rate, total_minutes, labour_amount, notes, created_by)
+                            VALUES (?, ?, ?, ?, ?, 'Day Shift', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                        $ins->execute([$entryNum, $entryDate, $lotId, $operationId, $dayWorkerId, $singleSizeId, $dayPieces, $dayPieces, $dayRate, $dayMins, $dayMinRate, $minsTotal, $dayTotalLabour, $notes, $_SESSION['user_id'] ?? null]);
+                        $firstDayId = (int)$db->lastInsertId();
+                    }
+
+                    // Day Operator Ledger Update
+                    if ($dayTotalLabour > 0 && $firstDayId) {
+                        $wStmt = $db->prepare("SELECT COALESCE((SELECT running_balance FROM worker_ledger WHERE worker_id = ? ORDER BY id DESC LIMIT 1), (SELECT opening_balance FROM workers WHERE id = ?))");
+                        $wStmt->execute([$dayWorkerId, $dayWorkerId]);
+                        $lastBal = (float)$wStmt->fetchColumn();
+                        $newBal = $lastBal + $dayTotalLabour;
+                        $db->prepare("INSERT INTO worker_ledger (worker_id, transaction_date, transaction_type, reference_type, reference_id, lot_id, operation_id, debit, credit, running_balance, description, created_by)
+                                      VALUES (?, ?, 'Labour', 'PRODUCTION_ENTRY', ?, ?, ?, 0.00, ?, ?, ?, ?)")
+                           ->execute([$dayWorkerId, $entryDate, $firstDayId, $lotId, $operationId, $dayTotalLabour, $newBal, "Day Operator initial batch on Lot #$lotNum ($dayTotalPcs pcs @ Rs. $dayRate)", $_SESSION['user_id'] ?? null]);
+                    }
+
+                    // 2. Night Operator Entries (if Double Shift)
+                    $nightTotalPcs = 0;
+                    if ($shiftType === 'Double Shift' && $nightWorkerId > 0) {
+                        $nightTotalLabour = 0.00;
+                        $firstNightId = null;
+
+                        if ($sizeMode === 'Multi Size' && !empty($nightSizes)) {
+                            $seq = 1;
+                            foreach ($nightSizes as $sId => $sQty) {
+                                $sQty = (int)$sQty;
+                                if ($sQty <= 0) continue;
+                                $entryNum = $baseDocNum . '-N' . $seq++;
+                                $labour = round($sQty * $nightRate, 2);
+                                $minsTotal = round($sQty * $nightMins, 2);
+                                $ins = $db->prepare("INSERT INTO production_entries 
+                                    (entry_number, entry_date, lot_id, operation_id, worker_id, shift, color_id, size_id, qty_received, good_qty, rate, minutes_per_piece, worker_minute_rate, total_minutes, labour_amount, notes, created_by)
+                                    VALUES (?, ?, ?, ?, ?, 'Night Shift', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                $ins->execute([$entryNum, $entryDate, $lotId, $operationId, $nightWorkerId, $sId, $sQty, $sQty, $nightRate, $nightMins, $nightMinRate, $minsTotal, $labour, $notes, $_SESSION['user_id'] ?? null]);
+                                $newId = (int)$db->lastInsertId();
+                                if (!$firstNightId) $firstNightId = $newId;
+                                $nightTotalPcs += $sQty;
+                                $nightTotalLabour += $labour;
+                            }
+                        } else {
+                            $entryNum = $baseDocNum . '-N';
+                            $nightTotalPcs = $nightPieces;
+                            $nightTotalLabour = round($nightPieces * $nightRate, 2);
+                            $minsTotal = round($nightPieces * $nightMins, 2);
+                            $ins = $db->prepare("INSERT INTO production_entries 
+                                (entry_number, entry_date, lot_id, operation_id, worker_id, shift, color_id, size_id, qty_received, good_qty, rate, minutes_per_piece, worker_minute_rate, total_minutes, labour_amount, notes, created_by)
+                                VALUES (?, ?, ?, ?, ?, 'Night Shift', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                            $ins->execute([$entryNum, $entryDate, $lotId, $operationId, $nightWorkerId, $singleSizeId, $nightPieces, $nightPieces, $nightRate, $nightMins, $nightMinRate, $minsTotal, $nightTotalLabour, $notes, $_SESSION['user_id'] ?? null]);
+                            $firstNightId = (int)$db->lastInsertId();
+                        }
+
+                        // Night Operator Ledger Update
+                        if ($nightTotalLabour > 0 && $firstNightId) {
+                            $wStmt = $db->prepare("SELECT COALESCE((SELECT running_balance FROM worker_ledger WHERE worker_id = ? ORDER BY id DESC LIMIT 1), (SELECT opening_balance FROM workers WHERE id = ?))");
+                            $wStmt->execute([$nightWorkerId, $nightWorkerId]);
+                            $lastBal = (float)$wStmt->fetchColumn();
+                            $newBal = $lastBal + $nightTotalLabour;
+                            $db->prepare("INSERT INTO worker_ledger (worker_id, transaction_date, transaction_type, reference_type, reference_id, lot_id, operation_id, debit, credit, running_balance, description, created_by)
+                                          VALUES (?, ?, 'Labour', 'PRODUCTION_ENTRY', ?, ?, ?, 0.00, ?, ?, ?, ?)")
+                               ->execute([$nightWorkerId, $entryDate, $firstNightId, $lotId, $operationId, $nightTotalLabour, $newBal, "Night Operator initial batch on Lot #$lotNum ($nightTotalPcs pcs @ Rs. $nightRate)", $_SESSION['user_id'] ?? null]);
+                        }
+                    }
+
+                    // Update Lot Status
+                    if ($lotRow['status'] === 'Draft') {
+                        $db->prepare("UPDATE lots SET status = 'In Production' WHERE id = ?")->execute([$lotId]);
+                        $db->prepare("INSERT INTO lot_status_history (lot_id, old_status, new_status, remarks, changed_by) VALUES (?, 'Draft', 'In Production', 'Operator initial production run submitted', ?)")
+                           ->execute([$lotId, $_SESSION['user_id'] ?? null]);
+                    }
+
+                    // Update workflow step status
+                    $db->prepare("UPDATE lot_workflow_steps SET status = 'In Progress' WHERE lot_id = ? AND operation_id = ? AND status = 'Pending'")
+                       ->execute([$lotId, $operationId]);
+
+                    $db->commit();
+                    $msg = "Operator Initial Production recorded: Day Operator ($dayTotalPcs pcs)";
+                    if ($shiftType === 'Double Shift') {
+                        $msg .= " + Night Operator ($nightTotalPcs pcs) = Total " . ($dayTotalPcs + $nightTotalPcs) . " pcs!";
+                    }
+                    redirect("modules/production/index.php?lot_id=$lotId", $msg);
+                } catch (Exception $e) {
+                    $db->rollBack();
+                    $error = 'Error saving operator entry: ' . $e->getMessage();
+                }
+            }
+        }
+    }
+
     $entryDate = trim($_POST['entry_date'] ?? date('Y-m-d'));
     $lotId = (int)($_POST['lot_id'] ?? 0);
     $operationId = (int)($_POST['operation_id'] ?? 0);
@@ -579,28 +766,238 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                         <!-- Mode Switcher -->
                         <div class="btn-group btn-group-sm" role="group">
-                            <button type="button" class="btn btn-primary fw-semibold" id="btnModeMatrix">
-                                <i class="bi bi-grid-3x3-gap-fill me-1"></i> ⚡ Matrix Grid Entry (Fast)
+                            <button type="button" class="btn btn-primary fw-semibold" id="btnModeOperator">
+                                <i class="bi bi-person-workspace me-1"></i> 🧵 1. Operator Entry (پہلا پروسیس)
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary fw-semibold" id="btnModeMatrix">
+                                <i class="bi bi-grid-3x3-gap-fill me-1"></i> ⚡ 2. Downstream Matrix (اگلے آپریشنز)
                             </button>
                             <button type="button" class="btn btn-outline-secondary fw-semibold" id="btnModeSingle">
-                                <i class="bi bi-list-check me-1"></i> Single Item
+                                <i class="bi bi-list-check me-1"></i> 3. Single Item
                             </button>
                         </div>
                     </div>
                     <div class="card-modern-body">
                         <form method="POST" action="" id="prodEntryForm">
                             <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
-                            <input type="hidden" name="entry_mode" id="pe_entry_mode" value="matrix">
+                            <input type="hidden" name="entry_mode" id="pe_entry_mode" value="operator_initial">
 
-                            <div class="row g-3">
+                            <!-- ================================================================= -->
+                            <!-- SECTION 0: OPERATOR INITIAL PRODUCTION RUN (NO COLORS NEEDED) -->
+                            <!-- ================================================================= -->
+                            <div id="operatorSection" class="mt-2">
+                                <!-- Top Row: Date & Lot Selector -->
+                                <div class="row g-3 mb-3">
+                                    <div class="col-12 col-md-3">
+                                        <label class="form-label fw-semibold">Entry Date *</label>
+                                        <input type="date" name="entry_date" id="op_entry_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                                    </div>
+                                    <div class="col-12 col-md-5">
+                                        <label class="form-label fw-semibold">Select Production Lot *</label>
+                                        <select name="lot_id" id="op_lot_id" class="form-select fw-bold text-primary">
+                                            <option value="">-- Choose Factory Lot --</option>
+                                            <?php foreach ($lots as $l): ?>
+                                                <option value="<?= $l['id'] ?>" <?= ($preselectedLotId === $l['id'] || (isset($_POST['lot_id']) && $_POST['lot_id'] == $l['id'])) ? 'selected' : '' ?>>
+                                                    LOT #<?= clean($l['lot_number']) ?> — <?= clean($l['product_name']) ?> (<?= $l['design_number'] ? 'Design #' . clean($l['design_number']) : 'No Design' ?>) [<?= $l['total_pieces'] ?> pcs]
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label fw-semibold">Initial Stage Operation *</label>
+                                        <select name="operation_id" id="op_operation_id" class="form-select fw-bold text-dark">
+                                            <option value="">-- Select Lot First --</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Hidden state inputs for operator initial entry -->
+                                <input type="hidden" name="shift_type" id="op_shift_type" value="Single Shift">
+                                <input type="hidden" name="size_mode" id="op_size_mode" value="Single Size">
+                                <input type="hidden" name="single_size_id" id="op_single_size_id" value="">
+                                <input type="hidden" name="day_minutes_per_piece" id="op_day_minutes_hidden" value="0.0">
+                                <input type="hidden" name="day_worker_min_rate" id="op_day_min_rate_hidden" value="2.50">
+                                <input type="hidden" name="day_rate" id="op_day_rate_hidden" value="0.00">
+                                <input type="hidden" name="night_minutes_per_piece" id="op_night_minutes_hidden" value="0.0">
+                                <input type="hidden" name="night_worker_min_rate" id="op_night_min_rate_hidden" value="2.50">
+                                <input type="hidden" name="night_rate" id="op_night_rate_hidden" value="0.00">
+
+                                <!-- Lot Info Banner -->
+                                <div id="opLotInfoCard" class="alert alert-light border shadow-sm p-3 rounded-3 mb-3 d-none">
+                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                        <div>
+                                            <span class="fs-5 fw-bold text-dark me-2" id="opLotTitle">LOT #---</span>
+                                            <span class="badge bg-primary" id="opLotPiecesBadge">0 pcs planned</span>
+                                            <span class="badge bg-secondary ms-1" id="opLotShiftBadge">Single Shift</span>
+                                            <span class="badge bg-info-subtle text-info-emphasis ms-1" id="opLotSizeBadge">Single Size</span>
+                                        </div>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="small fw-semibold text-muted">First Stage:</span>
+                                            <span class="badge bg-dark fs-6" id="opStageBadge">Initial Output</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Placeholder if no lot selected -->
+                                <div id="operatorPlaceholder" class="p-5 text-center text-muted border border-dashed rounded-3 mb-3">
+                                    <i class="bi bi-person-workspace display-5 text-primary opacity-50 mb-2 d-block"></i>
+                                    <h6 class="fw-semibold text-dark mb-1">Select Lot for Operator Production Entry</h6>
+                                    <p class="small text-muted mb-0">Choose a production batch above to load the assigned operator(s) and auto-balance produced pieces.</p>
+                                </div>
+
+                                <!-- Active Operator Entry Cards (Loaded when Lot selected) -->
+                                <div id="operatorActiveCards" class="d-none">
+                                    <!-- SINGLE SHIFT OPERATOR CARD -->
+                                    <div id="singleShiftCard" class="card border border-primary-subtle bg-light p-3 rounded-3 mb-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <span class="fw-bold text-dark"><i class="bi bi-sun-fill text-warning me-1"></i> ☀️ Day Shift Operator (ڈے آپریٹر)</span>
+                                            <span class="badge bg-success-subtle text-success border" id="opSingleRateBadge">Rate: Rs. 0.00 / pc</span>
+                                        </div>
+                                        <div class="row g-3 align-items-center">
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label small fw-semibold text-muted mb-1">Assigned Operator</label>
+                                                <select name="day_worker_id" id="op_single_day_worker" class="form-select fw-semibold">
+                                                    <option value="">-- Choose Operator --</option>
+                                                    <?php foreach ($workers as $w): ?>
+                                                        <option value="<?= $w['id'] ?>" data-minrate="<?= $w['rate_per_minute'] ?>"><?= clean($w['name']) ?> (<?= clean($w['code']) ?>)</option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label small fw-semibold text-muted mb-1">Pieces Produced by Operator (تیار کردہ پیسز) *</label>
+                                                <div class="input-group">
+                                                    <input type="number" name="day_pieces" id="op_single_day_pieces" class="form-control form-control-lg fw-bold text-center text-primary fs-3" min="0" placeholder="0">
+                                                    <span class="input-group-text fw-bold">pcs</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2 text-end small">
+                                            <span class="text-muted">Earned Labour:</span>
+                                            <strong class="text-success fs-5 ms-1" id="lblSingleDayLabour">Rs. 0.00</strong>
+                                        </div>
+                                    </div>
+
+                                    <!-- DOUBLE SHIFT OPERATORS CARD (DAY + NIGHT AUTO-BALANCE) -->
+                                    <div id="doubleShiftCard" class="d-none">
+                                        <div class="row g-3 mb-3">
+                                            <!-- Day Shift Operator Card -->
+                                            <div class="col-12 col-md-6">
+                                                <div class="card h-100 border border-warning-subtle bg-light p-3 rounded-3 shadow-sm">
+                                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                                        <span class="fw-bold text-dark"><i class="bi bi-sun-fill text-warning me-1"></i> ☀️ 1. Day Shift Operator</span>
+                                                        <span class="badge bg-warning-subtle text-warning-emphasis border" id="opDoubleDayRateBadge">Rs. 0.00/pc</span>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label small fw-semibold text-muted mb-1">Day Operator (ڈے آپریٹر)</label>
+                                                        <select name="day_worker_id" id="op_double_day_worker" class="form-select fw-semibold">
+                                                            <option value="">-- Select Day Operator --</option>
+                                                            <?php foreach ($workers as $w): ?>
+                                                                <option value="<?= $w['id'] ?>" data-minrate="<?= $w['rate_per_minute'] ?>"><?= clean($w['name']) ?> (<?= clean($w['code']) ?>)</option>
+                                                            <?php endforeach; ?>
+                                                        </select>
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <label class="form-label small fw-semibold text-muted mb-1">Pieces Made by Day Operator *</label>
+                                                        <div class="input-group">
+                                                            <input type="number" name="day_pieces" id="op_double_day_pieces" class="form-control form-control-lg fw-bold text-center text-warning-emphasis fs-3" min="0" placeholder="0">
+                                                            <span class="input-group-text fw-bold">pcs</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="d-flex justify-content-between align-items-center mt-auto pt-2 border-top">
+                                                        <span class="text-muted small">Labour:</span>
+                                                        <strong class="text-success fs-6" id="lblDoubleDayLabour">Rs. 0.00</strong>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Night Shift Operator Card -->
+                                            <div class="col-12 col-md-6">
+                                                <div class="card h-100 border border-primary-subtle bg-light p-3 rounded-3 shadow-sm">
+                                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                                        <span class="fw-bold text-dark"><i class="bi bi-moon-stars-fill text-primary me-1"></i> 🌙 2. Night Shift Operator</span>
+                                                        <span class="badge bg-primary-subtle text-primary border" id="opDoubleNightRateBadge">Rs. 0.00/pc</span>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label small fw-semibold text-muted mb-1">Night Operator (نائٹ آپریٹر)</label>
+                                                        <select name="night_worker_id" id="op_double_night_worker" class="form-select fw-semibold">
+                                                            <option value="">-- Select Night Operator --</option>
+                                                            <?php foreach ($workers as $w): ?>
+                                                                <option value="<?= $w['id'] ?>" data-minrate="<?= $w['rate_per_minute'] ?>"><?= clean($w['name']) ?> (<?= clean($w['code']) ?>)</option>
+                                                            <?php endforeach; ?>
+                                                        </select>
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                                            <label class="form-label small fw-semibold text-muted mb-0">Pieces Made by Night Operator *</label>
+                                                            <span class="badge bg-light text-primary border" style="font-size: 10px;">⚡ Auto-Remaining</span>
+                                                        </div>
+                                                        <div class="input-group">
+                                                            <input type="number" name="night_pieces" id="op_double_night_pieces" class="form-control form-control-lg fw-bold text-center text-primary fs-3" min="0" placeholder="0">
+                                                            <span class="input-group-text fw-bold">pcs</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="d-flex justify-content-between align-items-center mt-auto pt-2 border-top">
+                                                        <span class="text-muted small">Labour:</span>
+                                                        <strong class="text-success fs-6" id="lblDoubleNightLabour">Rs. 0.00</strong>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Quick Auto-Distribution Helper Toolbar -->
+                                        <div class="p-2 bg-light border rounded-3 mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                            <span class="small fw-semibold text-muted"><i class="bi bi-magic me-1"></i> Quick Auto-Balance Helpers:</span>
+                                            <div class="btn-group btn-group-sm">
+                                                <button type="button" class="btn btn-outline-secondary" id="btnSplit5050">⚖️ 50/50 Equal Split</button>
+                                                <button type="button" class="btn btn-outline-secondary" id="btnSet100Day">☀️ 100% Day</button>
+                                                <button type="button" class="btn btn-outline-secondary" id="btnSet100Night">🌙 100% Night</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- MULTI-SIZE BREAKDOWN (If Lot has multiple sizes) -->
+                                    <div id="opMultiSizeSection" class="border rounded-3 p-3 bg-white mb-3 d-none">
+                                        <h6 class="fw-bold mb-2 text-dark"><i class="bi bi-grid-3x3 me-1 text-primary"></i> Multi-Size Operator Distribution (سائز وائز تقسیم)</h6>
+                                        <div class="table-responsive">
+                                            <table class="table table-bordered align-middle text-center mb-0" id="opMultiSizeTable">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>Size</th>
+                                                        <th>Planned Qty</th>
+                                                        <th id="thDaySizeQty">☀️ Day Operator Pieces</th>
+                                                        <th id="thNightSizeQty">🌙 Night Operator Pieces</th>
+                                                        <th>Total Entered</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="opMultiSizeTbody"></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    <!-- Math Match Status Banner -->
+                                    <div id="opMatchStatusBanner" class="alert alert-success py-2 px-3 small fw-semibold text-center mb-3">
+                                        ✓ Total Pieces: <span id="lblOpSumTotal">0</span> / <span id="lblOpLotPlanned">0</span> pcs
+                                    </div>
+
+                                    <!-- Action Button -->
+                                    <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold shadow-sm" id="btnSubmitOperatorEntry">
+                                        <i class="bi bi-check2-circle me-1"></i> Save Operator Initial Production Entry (آپریٹر انٹری محفوظ کریں)
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- ================================================================= -->
+                            <!-- DOWNSTREAM FIELDS CONTAINER (FOR MATRIX & SINGLE ITEM MODES) -->
+                            <!-- ================================================================= -->
+                            <div id="downstreamCommonFields" class="row g-3 d-none">
                                 <!-- Common Fields: Date, Lot, Operation -->
                                 <div class="col-12 col-md-3">
                                     <label class="form-label fw-semibold">Entry Date *</label>
-                                    <input type="date" name="entry_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                                    <input type="date" name="matrix_entry_date" id="pe_entry_date" class="form-control" value="<?= date('Y-m-d') ?>">
                                 </div>
                                 <div class="col-12 col-md-5">
                                     <label class="form-label fw-semibold">Select Lot Number *</label>
-                                    <select name="lot_id" id="pe_lot_id" class="form-select fw-bold text-primary" required>
+                                    <select name="matrix_lot_id" id="pe_lot_id" class="form-select fw-bold text-primary">
                                         <option value="">-- Choose Factory Lot --</option>
                                         <?php foreach ($lots as $l): ?>
                                             <option value="<?= $l['id'] ?>" <?= ($preselectedLotId === $l['id'] || (isset($_POST['lot_id']) && $_POST['lot_id'] == $l['id'])) ? 'selected' : '' ?>>
@@ -611,7 +1008,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 </div>
                                 <div class="col-12 col-md-4">
                                     <label class="form-label fw-semibold">Select Operation *</label>
-                                    <select name="operation_id" id="pe_operation_id" class="form-select fw-bold text-dark" required>
+                                    <select name="matrix_operation_id" id="pe_operation_id" class="form-select fw-bold text-dark">
                                         <option value="">-- Select Lot First --</option>
                                     </select>
                                 </div>
@@ -622,7 +1019,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <label class="form-label fw-semibold mb-0">Worker / Operator *</label>
                                         <span id="workerCountBadge" class="badge bg-light text-secondary border small d-none">0 matching</span>
                                     </div>
-                                    <select name="worker_id" id="pe_worker_id" class="form-select fw-semibold" required>
+                                    <select name="worker_id" id="pe_worker_id" class="form-select fw-semibold">
                                         <option value="">-- Select Operation First --</option>
                                     </select>
                                 </div>
@@ -652,7 +1049,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <div class="col-4">
                                             <div class="input-group">
                                                 <span class="input-group-text px-1 small text-muted">Rs</span>
-                                                <input type="number" name="rate" id="pe_rate" class="form-control fw-bold text-end text-dark" step="0.25" min="0" value="0.00" required title="Final Piece Rate">
+                                                <input type="number" name="rate" id="pe_rate" class="form-control fw-bold text-end text-dark" step="0.25" min="0" value="0.00" title="Final Piece Rate">
                                                 <span class="input-group-text px-1 small text-muted">/pc</span>
                                             </div>
                                             <div class="form-text text-center small" style="font-size: 10px;">پیس ریٹ</div>
@@ -928,12 +1325,108 @@ document.addEventListener('DOMContentLoaded', function() {
     const lblTotalBatchTime = document.getElementById('lblTotalBatchTime');
     const preselectedOpId = <?= (int)$preselectedOpId ?>;
 
-    // Mode Toggle Elements
+    // Mode Toggle Elements (3 Modes)
+    const btnModeOperator = document.getElementById('btnModeOperator');
     const btnModeMatrix = document.getElementById('btnModeMatrix');
     const btnModeSingle = document.getElementById('btnModeSingle');
     const modeInput = document.getElementById('pe_entry_mode');
+    const operatorSection = document.getElementById('operatorSection');
+    const downstreamCommonFields = document.getElementById('downstreamCommonFields');
     const matrixSection = document.getElementById('matrixSection');
     const singleSection = document.getElementById('singleSection');
+
+    // Operator Mode Elements
+    const opLotSelect = document.getElementById('op_lot_id');
+    const opOperationSelect = document.getElementById('op_operation_id');
+    const opPlaceholder = document.getElementById('operatorPlaceholder');
+    const opActiveCards = document.getElementById('operatorActiveCards');
+    const opLotInfoCard = document.getElementById('opLotInfoCard');
+    const opLotTitle = document.getElementById('opLotTitle');
+    const opLotPiecesBadge = document.getElementById('opLotPiecesBadge');
+    const opLotShiftBadge = document.getElementById('opLotShiftBadge');
+    const opLotSizeBadge = document.getElementById('opLotSizeBadge');
+    const opStageBadge = document.getElementById('opStageBadge');
+
+    const singleShiftCard = document.getElementById('singleShiftCard');
+    const doubleShiftCard = document.getElementById('doubleShiftCard');
+
+    const opSingleWorker = document.getElementById('op_single_day_worker');
+    const opSinglePieces = document.getElementById('op_single_day_pieces');
+    const opSingleRateBadge = document.getElementById('opSingleRateBadge');
+    const lblSingleDayLabour = document.getElementById('lblSingleDayLabour');
+
+    const opDoubleDayWorker = document.getElementById('op_double_day_worker');
+    const opDoubleDayPieces = document.getElementById('op_double_day_pieces');
+    const opDoubleDayRateBadge = document.getElementById('opDoubleDayRateBadge');
+    const lblDoubleDayLabour = document.getElementById('lblDoubleDayLabour');
+
+    const opDoubleNightWorker = document.getElementById('op_double_night_worker');
+    const opDoubleNightPieces = document.getElementById('op_double_night_pieces');
+    const opDoubleNightRateBadge = document.getElementById('opDoubleNightRateBadge');
+    const lblDoubleNightLabour = document.getElementById('lblDoubleNightLabour');
+
+    const btnSplit5050 = document.getElementById('btnSplit5050');
+    const btnSet100Day = document.getElementById('btnSet100Day');
+    const btnSet100Night = document.getElementById('btnSet100Night');
+
+    const opMultiSizeSection = document.getElementById('opMultiSizeSection');
+    const opMultiSizeTbody = document.getElementById('opMultiSizeTbody');
+    const lblOpSumTotal = document.getElementById('lblOpSumTotal');
+    const lblOpLotPlanned = document.getElementById('lblOpLotPlanned');
+    const opMatchStatusBanner = document.getElementById('opMatchStatusBanner');
+
+    let currentOpLotData = null;
+
+    function switchMode(mode) {
+        modeInput.value = mode;
+        if (mode === 'operator_initial') {
+            btnModeOperator.className = 'btn btn-primary fw-semibold';
+            btnModeMatrix.className = 'btn btn-outline-secondary fw-semibold';
+            btnModeSingle.className = 'btn btn-outline-secondary fw-semibold';
+
+            operatorSection.classList.remove('d-none');
+            downstreamCommonFields.classList.add('d-none');
+            matrixSection.classList.add('d-none');
+            singleSection.classList.add('d-none');
+
+            if (lotSelect.value && !opLotSelect.value) {
+                opLotSelect.value = lotSelect.value;
+                opLotSelect.dispatchEvent(new Event('change'));
+            }
+        } else if (mode === 'matrix') {
+            btnModeOperator.className = 'btn btn-outline-secondary fw-semibold';
+            btnModeMatrix.className = 'btn btn-primary fw-semibold';
+            btnModeSingle.className = 'btn btn-outline-secondary fw-semibold';
+
+            operatorSection.classList.add('d-none');
+            downstreamCommonFields.classList.remove('d-none');
+            matrixSection.classList.remove('d-none');
+            singleSection.classList.add('d-none');
+
+            if (opLotSelect.value && !lotSelect.value) {
+                lotSelect.value = opLotSelect.value;
+                lotSelect.dispatchEvent(new Event('change'));
+            }
+        } else if (mode === 'single') {
+            btnModeOperator.className = 'btn btn-outline-secondary fw-semibold';
+            btnModeMatrix.className = 'btn btn-outline-secondary fw-semibold';
+            btnModeSingle.className = 'btn btn-primary fw-semibold';
+
+            operatorSection.classList.add('d-none');
+            downstreamCommonFields.classList.remove('d-none');
+            matrixSection.classList.add('d-none');
+            singleSection.classList.remove('d-none');
+
+            if (opLotSelect.value && !lotSelect.value) {
+                lotSelect.value = opLotSelect.value;
+                lotSelect.dispatchEvent(new Event('change'));
+            }
+        }
+    }
+
+    btnModeOperator.addEventListener('click', () => switchMode('operator_initial'));
+    btnModeMatrix.addEventListener('click', () => switchMode('matrix'));
+    btnModeSingle.addEventListener('click', () => switchMode('single'));
 
     // Single Mode Elements
     const varSelect = document.getElementById('pe_variant_key');
@@ -1668,11 +2161,342 @@ document.addEventListener('DOMContentLoaded', function() {
         recalculateMatrixTotals();
     });
 
+    // =========================================================================
+    // OPERATOR INITIAL PRODUCTION ENTRY JAVASCRIPT LOGIC
+    // =========================================================================
+    if (opLotSelect) {
+        opLotSelect.addEventListener('change', function() {
+            const lotId = this.value;
+            if (!lotId) {
+                opPlaceholder.classList.remove('d-none');
+                opActiveCards.classList.add('d-none');
+                opLotInfoCard.classList.add('d-none');
+                return;
+            }
+
+            fetch(`<?= BASE_URL ?>modules/production/ajax.php?action=get_lot_operations_and_variants&lot_id=${lotId}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'success' && data.lot) {
+                        currentOpLotData = data;
+                        const lot = data.lot;
+                        const totalPieces = parseInt(lot.total_pieces, 10) || 0;
+                        const isDouble = (lot.shift_type === 'Double Shift');
+                        const isMultiSize = (lot.size_mode === 'Multi Size');
+
+                        opPlaceholder.classList.add('d-none');
+                        opActiveCards.classList.remove('d-none');
+                        opLotInfoCard.classList.remove('d-none');
+
+                        opLotTitle.textContent = `LOT #${lot.lot_number}`;
+                        opLotPiecesBadge.textContent = `${totalPieces} pcs planned`;
+                        opLotShiftBadge.textContent = isDouble ? '🌙 Double Shift' : '☀️ Single Shift';
+                        opLotShiftBadge.className = isDouble ? 'badge bg-primary ms-1' : 'badge bg-warning-subtle text-warning-emphasis ms-1 border';
+                        opLotSizeBadge.textContent = isMultiSize ? 'Multi-Size Batch' : `Single Size (${lot.single_size_name || 'Standard'})`;
+
+                        document.getElementById('op_shift_type').value = lot.shift_type || 'Single Shift';
+                        document.getElementById('op_size_mode').value = lot.size_mode || 'Single Size';
+                        document.getElementById('op_single_size_id').value = lot.single_size_id || '';
+
+                        // Populate initial operations (default to first operation)
+                        opOperationSelect.innerHTML = '';
+                        const ops = data.operations || [];
+                        ops.forEach((op, idx) => {
+                            const opt = document.createElement('option');
+                            opt.value = op.operation_id;
+                            opt.dataset.mins = op.estimated_minutes || 0;
+                            opt.dataset.rate = op.default_rate || 0;
+                            opt.textContent = `${op.op_name} (${op.op_code})`;
+                            if (idx === 0) opt.selected = true;
+                            opOperationSelect.appendChild(opt);
+                        });
+
+                        updateOperatorRatesAndQuantities();
+                    }
+                });
+        });
+    }
+
+    if (opOperationSelect) {
+        opOperationSelect.addEventListener('change', updateOperatorRatesAndQuantities);
+    }
+
+    function updateOperatorRatesAndQuantities() {
+        if (!currentOpLotData) return;
+        const lot = currentOpLotData.lot;
+        const totalPieces = parseInt(lot.total_pieces, 10) || 0;
+        const isDouble = (lot.shift_type === 'Double Shift');
+        const isMultiSize = (lot.size_mode === 'Multi Size');
+
+        const selectedOpOpt = opOperationSelect.selectedOptions[0];
+        const opMins = selectedOpOpt ? parseFloat(selectedOpOpt.dataset.mins) || 2.0 : 2.0;
+        const opDefRate = selectedOpOpt ? parseFloat(selectedOpOpt.dataset.rate) || 5.0 : 5.0;
+        if (opStageBadge && selectedOpOpt) {
+            opStageBadge.textContent = selectedOpOpt.textContent;
+        }
+
+        if (lblOpLotPlanned) lblOpLotPlanned.textContent = totalPieces;
+
+        if (!isDouble) {
+            // SINGLE SHIFT
+            singleShiftCard.classList.remove('d-none');
+            doubleShiftCard.classList.add('d-none');
+
+            if (lot.operator_id && opSingleWorker) {
+                opSingleWorker.value = lot.operator_id;
+            }
+            const workerOpt = opSingleWorker ? opSingleWorker.selectedOptions[0] : null;
+            const workerMinRate = workerOpt ? parseFloat(workerOpt.dataset.minrate) || 2.50 : 2.50;
+            const pieceRate = opMins > 0 ? (opMins * workerMinRate) : opDefRate;
+
+            document.getElementById('op_day_minutes_hidden').value = opMins;
+            document.getElementById('op_day_min_rate_hidden').value = workerMinRate;
+            document.getElementById('op_day_rate_hidden').value = pieceRate.toFixed(2);
+
+            if (opSingleRateBadge) {
+                opSingleRateBadge.textContent = `Rate: Rs. ${pieceRate.toFixed(2)}/pc (${opMins}m × Rs. ${workerMinRate}/m)`;
+            }
+
+            if (opSinglePieces && (!opSinglePieces.value || parseInt(opSinglePieces.value, 10) === 0)) {
+                opSinglePieces.value = totalPieces;
+            }
+            recalcOperatorTotals();
+        } else {
+            // DOUBLE SHIFT
+            singleShiftCard.classList.add('d-none');
+            doubleShiftCard.classList.remove('d-none');
+
+            if (lot.operator_id && opDoubleDayWorker) opDoubleDayWorker.value = lot.operator_id;
+            if (lot.night_operator_id && opDoubleNightWorker) opDoubleNightWorker.value = lot.night_operator_id;
+
+            const dayWorkerOpt = opDoubleDayWorker ? opDoubleDayWorker.selectedOptions[0] : null;
+            const dayMinRate = dayWorkerOpt ? parseFloat(dayWorkerOpt.dataset.minrate) || 2.50 : 2.50;
+            const dayPieceRate = opMins > 0 ? (opMins * dayMinRate) : opDefRate;
+
+            const nightWorkerOpt = opDoubleNightWorker ? opDoubleNightWorker.selectedOptions[0] : null;
+            const nightMinRate = nightWorkerOpt ? parseFloat(nightWorkerOpt.dataset.minrate) || 2.50 : 2.50;
+            const nightPieceRate = opMins > 0 ? (opMins * nightMinRate) : opDefRate;
+
+            document.getElementById('op_day_minutes_hidden').value = opMins;
+            document.getElementById('op_day_min_rate_hidden').value = dayMinRate;
+            document.getElementById('op_day_rate_hidden').value = dayPieceRate.toFixed(2);
+
+            document.getElementById('op_night_minutes_hidden').value = opMins;
+            document.getElementById('op_night_min_rate_hidden').value = nightMinRate;
+            document.getElementById('op_night_rate_hidden').value = nightPieceRate.toFixed(2);
+
+            if (opDoubleDayRateBadge) opDoubleDayRateBadge.textContent = `Rs. ${dayPieceRate.toFixed(2)}/pc (${opMins}m @ ${dayMinRate}/m)`;
+            if (opDoubleNightRateBadge) opDoubleNightRateBadge.textContent = `Rs. ${nightPieceRate.toFixed(2)}/pc (${opMins}m @ ${nightMinRate}/m)`;
+
+            // Auto-balance default (e.g. 50/50 or day's current)
+            if (opDoubleDayPieces && opDoubleNightPieces && !opDoubleDayPieces.value && !opDoubleNightPieces.value) {
+                const dayHalf = Math.ceil(totalPieces / 2);
+                opDoubleDayPieces.value = dayHalf;
+                opDoubleNightPieces.value = totalPieces - dayHalf;
+            }
+            recalcOperatorTotals();
+        }
+
+        // Multi-Size handling
+        if (isMultiSize && currentOpLotData.sizes && currentOpLotData.sizes.length > 0) {
+            opMultiSizeSection.classList.remove('d-none');
+            buildOpMultiSizeTable(isDouble);
+        } else {
+            opMultiSizeSection.classList.add('d-none');
+        }
+    }
+
+    if (opSingleWorker) {
+        opSingleWorker.addEventListener('change', updateOperatorRatesAndQuantities);
+    }
+    if (opDoubleDayWorker) {
+        opDoubleDayWorker.addEventListener('change', updateOperatorRatesAndQuantities);
+    }
+    if (opDoubleNightWorker) {
+        opDoubleNightWorker.addEventListener('change', updateOperatorRatesAndQuantities);
+    }
+
+    // Auto-balance Day and Night pieces in real-time
+    if (opDoubleDayPieces) {
+        opDoubleDayPieces.addEventListener('input', function() {
+            if (!currentOpLotData) return;
+            const total = parseInt(currentOpLotData.lot.total_pieces, 10) || 0;
+            const dayVal = parseInt(this.value, 10) || 0;
+            const nightVal = Math.max(0, total - dayVal);
+            if (opDoubleNightPieces) opDoubleNightPieces.value = nightVal;
+            recalcOperatorTotals();
+        });
+    }
+
+    if (opDoubleNightPieces) {
+        opDoubleNightPieces.addEventListener('input', function() {
+            if (!currentOpLotData) return;
+            const total = parseInt(currentOpLotData.lot.total_pieces, 10) || 0;
+            const nightVal = parseInt(this.value, 10) || 0;
+            const dayVal = Math.max(0, total - nightVal);
+            if (opDoubleDayPieces) opDoubleDayPieces.value = dayVal;
+            recalcOperatorTotals();
+        });
+    }
+
+    if (opSinglePieces) {
+        opSinglePieces.addEventListener('input', recalcOperatorTotals);
+    }
+
+    // Helper buttons
+    if (btnSplit5050) {
+        btnSplit5050.addEventListener('click', function() {
+            if (!currentOpLotData) return;
+            const total = parseInt(currentOpLotData.lot.total_pieces, 10) || 0;
+            const half = Math.ceil(total / 2);
+            opDoubleDayPieces.value = half;
+            opDoubleNightPieces.value = total - half;
+            recalcOperatorTotals();
+        });
+    }
+
+    if (btnSet100Day) {
+        btnSet100Day.addEventListener('click', function() {
+            if (!currentOpLotData) return;
+            const total = parseInt(currentOpLotData.lot.total_pieces, 10) || 0;
+            opDoubleDayPieces.value = total;
+            opDoubleNightPieces.value = 0;
+            recalcOperatorTotals();
+        });
+    }
+
+    if (btnSet100Night) {
+        btnSet100Night.addEventListener('click', function() {
+            if (!currentOpLotData) return;
+            const total = parseInt(currentOpLotData.lot.total_pieces, 10) || 0;
+            opDoubleDayPieces.value = 0;
+            opDoubleNightPieces.value = total;
+            recalcOperatorTotals();
+        });
+    }
+
+    function recalcOperatorTotals() {
+        if (!currentOpLotData) return;
+        const lot = currentOpLotData.lot;
+        const totalPlanned = parseInt(lot.total_pieces, 10) || 0;
+        const isDouble = (lot.shift_type === 'Double Shift');
+
+        let totalEntered = 0;
+        if (!isDouble) {
+            const dayPcs = parseInt(opSinglePieces.value, 10) || 0;
+            const rate = parseFloat(document.getElementById('op_day_rate_hidden').value) || 0;
+            if (lblSingleDayLabour) lblSingleDayLabour.textContent = `Rs. ${(dayPcs * rate).toFixed(2)}`;
+            totalEntered = dayPcs;
+        } else {
+            const dayPcs = parseInt(opDoubleDayPieces.value, 10) || 0;
+            const dayRate = parseFloat(document.getElementById('op_day_rate_hidden').value) || 0;
+            if (lblDoubleDayLabour) lblDoubleDayLabour.textContent = `Rs. ${(dayPcs * dayRate).toFixed(2)}`;
+
+            const nightPcs = parseInt(opDoubleNightPieces.value, 10) || 0;
+            const nightRate = parseFloat(document.getElementById('op_night_rate_hidden').value) || 0;
+            if (lblDoubleNightLabour) lblDoubleNightLabour.textContent = `Rs. ${(nightPcs * nightRate).toFixed(2)}`;
+
+            totalEntered = dayPcs + nightPcs;
+        }
+
+        if (lblOpSumTotal) lblOpSumTotal.textContent = totalEntered;
+        if (opMatchStatusBanner) {
+            if (totalEntered === totalPlanned && totalPlanned > 0) {
+                opMatchStatusBanner.className = 'alert alert-success py-2 px-3 small fw-semibold text-center mb-3';
+                opMatchStatusBanner.innerHTML = `✓ Total Pieces: ${totalEntered} / ${totalPlanned} pcs (100% of Lot Planned Pieces)`;
+            } else {
+                opMatchStatusBanner.className = 'alert alert-warning py-2 px-3 small fw-semibold text-center mb-3';
+                opMatchStatusBanner.innerHTML = `⚠️ Total Pieces: ${totalEntered} / ${totalPlanned} pcs (${totalPlanned - totalEntered} pending / remaining)`;
+            }
+        }
+    }
+
+    function buildOpMultiSizeTable(isDouble) {
+        if (!opMultiSizeTbody) return;
+        opMultiSizeTbody.innerHTML = '';
+        const sizes = currentOpLotData.sizes || [];
+        sizes.forEach(sz => {
+            const planned = parseInt(sz.planned_qty, 10) || 0;
+            const half = isDouble ? Math.ceil(planned / 2) : planned;
+            const rem = isDouble ? (planned - half) : 0;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="fw-bold">${sz.name} (${sz.code})</td>
+                <td class="fw-semibold text-muted">${planned} pcs</td>
+                <td>
+                    <input type="number" name="day_sizes[${sz.id}]" class="form-control form-control-sm text-center fw-bold op-msize-day" data-planned="${planned}" value="${half}" min="0">
+                </td>
+                ${isDouble ? `
+                <td>
+                    <input type="number" name="night_sizes[${sz.id}]" class="form-control form-control-sm text-center fw-bold op-msize-night" data-planned="${planned}" value="${rem}" min="0">
+                </td>` : `<td>-</td>`}
+                <td class="fw-bold text-primary op-msize-total">${planned}</td>
+            `;
+            opMultiSizeTbody.appendChild(tr);
+
+            const dayInp = tr.querySelector('.op-msize-day');
+            const nightInp = tr.querySelector('.op-msize-night');
+
+            if (dayInp && nightInp) {
+                dayInp.addEventListener('input', function() {
+                    const p = parseInt(this.dataset.planned, 10) || 0;
+                    const d = parseInt(this.value, 10) || 0;
+                    nightInp.value = Math.max(0, p - d);
+                    tr.querySelector('.op-msize-total').textContent = d + parseInt(nightInp.value, 10);
+                });
+                nightInp.addEventListener('input', function() {
+                    const p = parseInt(this.dataset.planned, 10) || 0;
+                    const n = parseInt(this.value, 10) || 0;
+                    dayInp.value = Math.max(0, p - n);
+                    tr.querySelector('.op-msize-total').textContent = n + parseInt(dayInp.value, 10);
+                });
+            }
+        });
+    }
+
+    // Initialize default mode: Operator Initial Entry
+    switchMode('operator_initial');
+
+    // Trigger preselected lot if passed
+    if (opLotSelect && opLotSelect.value) {
+        opLotSelect.dispatchEvent(new Event('change'));
+    }
+
     // Intercept form submission for validation
     document.getElementById('prodEntryForm').addEventListener('submit', function(e) {
         const mode = document.getElementById('pe_entry_mode').value;
-        const workerId = document.getElementById('pe_worker_id').value;
 
+        if (mode === 'operator_initial') {
+            const lotVal = opLotSelect ? opLotSelect.value : '';
+            if (!lotVal) {
+                e.preventDefault();
+                alert('Please select a production lot first.');
+                opLotSelect.focus();
+                return;
+            }
+            const shiftType = document.getElementById('op_shift_type').value;
+            if (shiftType === 'Double Shift') {
+                const dayW = opDoubleDayWorker.value;
+                const nightW = opDoubleNightWorker.value;
+                if (!dayW || !nightW) {
+                    e.preventDefault();
+                    alert('Please select both Day Operator and Night Operator for Double Shift lot.');
+                    return;
+                }
+            } else {
+                const dayW = opSingleWorker.value;
+                if (!dayW) {
+                    e.preventDefault();
+                    alert('Please select Day Operator.');
+                    opSingleWorker.focus();
+                    return;
+                }
+            }
+            return;
+        }
+
+        const workerId = document.getElementById('pe_worker_id').value;
         if (!workerId) {
             e.preventDefault();
             alert('Please select a Worker / Operator before saving.');
