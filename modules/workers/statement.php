@@ -102,8 +102,10 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
             <small class="text-muted">Printable formal ledger account for artisan settlement</small>
         </div>
         <div class="d-flex gap-2">
-            <button onclick="window.print()" class="btn btn-primary fw-bold"><i class="bi bi-printer me-1"></i> Print Statement</button>
-            <button onclick="window.close()" class="btn btn-outline-secondary">Close</button>
+            <button type="button" onclick="window.print()" class="btn btn-primary fw-bold"><i class="bi bi-printer me-1"></i> Print Statement</button>
+            <button type="button" onclick="closePrintView('<?= BASE_URL ?>modules/workers/view.php?id=<?= $worker['id'] ?? '' ?>')" class="btn btn-outline-secondary">
+                <i class="bi bi-x-circle me-1"></i> Close
+            </button>
         </div>
     </div>
 
@@ -251,5 +253,16 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
             </div>
         </div>
     </div>
+
+    <script>
+    function closePrintView(fallbackUrl) {
+        window.close();
+        setTimeout(function() {
+            if (!window.closed) {
+                window.location.href = fallbackUrl;
+            }
+        }, 150);
+    }
+    </script>
 </body>
 </html>
