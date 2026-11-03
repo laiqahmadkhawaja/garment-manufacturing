@@ -35,10 +35,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // =====================================================================
         $matrixData = $_POST['matrix'] ?? [];
         $notes = trim($_POST['notes'] ?? '');
+        $rejectionReason = trim($_POST['matrix_rejection_reason'] ?? 'Quality inspection rejection');
+        $reworkNotes = trim($_POST['matrix_rework_notes'] ?? 'Requires correction/touchup');
 
-        // Collect all non-zero cells
+        // Collect all non-zero cells (good, rejected, rework)
         $entriesToSave = [];
         $totalGood = 0;
+        $totalRejected = 0;
+        $totalRework = 0;
         $totalLabour = 0.00;
 
         foreach ($matrixData as $cId => $sizes) {
@@ -47,19 +51,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach ($sizes as $sId => $item) {
                 $sId = (int)$sId;
                 $gQty = isset($item['good']) ? (int)$item['good'] : (is_numeric($item) ? (int)$item : 0);
-                if ($gQty < 0) {
+                $rQty = isset($item['rejected']) ? (int)$item['rejected'] : 0;
+                $wQty = isset($item['rework']) ? (int)$item['rework'] : 0;
+
+                if ($gQty < 0 || $rQty < 0 || $wQty < 0) {
                     $error = 'Quantities cannot be negative.';
                     break 2;
                 }
-                if ($gQty > 0) {
+
+                $cellReceived = $gQty + $rQty + $wQty;
+                if ($cellReceived > 0) {
                     $cellLabour = round($gQty * $rate, 2);
                     $entriesToSave[] = [
                         'color_id' => $cId,
                         'size_id' => $sId,
+                        'qty_received' => $cellReceived,
                         'good_qty' => $gQty,
+                        'rejected_qty' => $rQty,
+                        'rework_qty' => $wQty,
                         'labour_amount' => $cellLabour
                     ];
                     $totalGood += $gQty;
+                    $totalRejected += $rQty;
+                    $totalRework += $wQty;
                     $totalLabour += $cellLabour;
                 }
             }
@@ -90,7 +104,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Prepare production entries insert
                     $insertStmt = $db->prepare("INSERT INTO production_entries 
                         (entry_number, entry_date, lot_id, operation_id, worker_id, color_id, size_id, qty_received, good_qty, rejected_qty, rework_qty, rate, labour_amount, notes, created_by) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)");
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+
+                    // Prepare rejections and rework statements
+                    $rejStmt = $db->prepare("INSERT INTO production_rejections 
+                        (production_entry_id, lot_id, operation_id, color_id, size_id, quantity, reason) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?)");
+
+                    $rewStmt = $db->prepare("INSERT INTO production_rework 
+                        (production_entry_id, lot_id, operation_id, color_id, size_id, quantity, notes, status) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending')");
 
                     // Generate sequential entry numbers
                     $baseDoc = generate_doc_number('PE-', 'production_entries', 'entry_number');
@@ -108,8 +131,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $workerId,
                             $entry['color_id'],
                             $entry['size_id'],
+                            $entry['qty_received'],
                             $entry['good_qty'],
-                            $entry['good_qty'],
+                            $entry['rejected_qty'],
+                            $entry['rework_qty'],
                             $rate,
                             $entry['labour_amount'],
                             $notes,
@@ -119,38 +144,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($firstEntryId === null) {
                             $firstEntryId = $newId;
                         }
+
+                        // Track Rejection if any
+                        if ($entry['rejected_qty'] > 0) {
+                            $rejStmt->execute([
+                                $newId,
+                                $lotId,
+                                $operationId,
+                                $entry['color_id'],
+                                $entry['size_id'],
+                                $entry['rejected_qty'],
+                                $rejectionReason
+                            ]);
+                        }
+
+                        // Track Rework if any
+                        if ($entry['rework_qty'] > 0) {
+                            $rewStmt->execute([
+                                $newId,
+                                $lotId,
+                                $operationId,
+                                $entry['color_id'],
+                                $entry['size_id'],
+                                $entry['rework_qty'],
+                                $reworkNotes
+                            ]);
+                        }
                     }
 
-                    // Worker Ledger update (double entry)
-                    $balStmt = $db->prepare("SELECT running_balance FROM worker_ledger WHERE worker_id = ? ORDER BY id DESC LIMIT 1");
-                    $balStmt->execute([$workerId]);
-                    $lastBal = $balStmt->fetchColumn();
-                    if ($lastBal === false) {
-                        $wStmt = $db->prepare("SELECT opening_balance FROM workers WHERE id = ?");
-                        $wStmt->execute([$workerId]);
-                        $lastBal = (float)$wStmt->fetchColumn();
-                    } else {
-                        $lastBal = (float)$lastBal;
+                    // Worker Ledger update (double entry: credit earned labour if totalLabour > 0)
+                    if ($totalLabour > 0) {
+                        $balStmt = $db->prepare("SELECT running_balance FROM worker_ledger WHERE worker_id = ? ORDER BY id DESC LIMIT 1");
+                        $balStmt->execute([$workerId]);
+                        $lastBal = $balStmt->fetchColumn();
+                        if ($lastBal === false) {
+                            $wStmt = $db->prepare("SELECT opening_balance FROM workers WHERE id = ?");
+                            $wStmt->execute([$workerId]);
+                            $lastBal = (float)$wStmt->fetchColumn();
+                        } else {
+                            $lastBal = (float)$lastBal;
+                        }
+
+                        $newBal = $lastBal + $totalLabour;
+                        $varCount = count($entriesToSave);
+                        $ledgerDesc = "Batch labour on Lot #$lotNum - $opName ($totalGood good pcs";
+                        if ($totalRejected > 0) $ledgerDesc .= ", $totalRejected rej";
+                        if ($totalRework > 0) $ledgerDesc .= ", $totalRework rew";
+                        $ledgerDesc .= " across $varCount variants @ Rs. " . number_format($rate, 2) . ")";
+
+                        $ledgStmt = $db->prepare("INSERT INTO worker_ledger 
+                            (worker_id, transaction_date, transaction_type, reference_type, reference_id, lot_id, operation_id, debit, credit, running_balance, description, created_by) 
+                            VALUES (?, ?, 'Labour', 'PRODUCTION_ENTRY', ?, ?, ?, 0.00, ?, ?, ?, ?)");
+                        $ledgStmt->execute([
+                            $workerId,
+                            $entryDate,
+                            $firstEntryId,
+                            $lotId,
+                            $operationId,
+                            $totalLabour,
+                            $newBal,
+                            $ledgerDesc,
+                            $_SESSION['user_id'] ?? null
+                        ]);
                     }
-
-                    $newBal = $lastBal + $totalLabour;
-                    $varCount = count($entriesToSave);
-                    $ledgerDesc = "Batch labour earned on Lot #$lotNum - $opName ($totalGood pcs across $varCount variants @ Rs. " . number_format($rate, 2) . ")";
-
-                    $ledgStmt = $db->prepare("INSERT INTO worker_ledger 
-                        (worker_id, transaction_date, transaction_type, reference_type, reference_id, lot_id, operation_id, debit, credit, running_balance, description, created_by) 
-                        VALUES (?, ?, 'Labour', 'PRODUCTION_ENTRY', ?, ?, ?, 0.00, ?, ?, ?, ?)");
-                    $ledgStmt->execute([
-                        $workerId,
-                        $entryDate,
-                        $firstEntryId,
-                        $lotId,
-                        $operationId,
-                        $totalLabour,
-                        $newBal,
-                        $ledgerDesc,
-                        $_SESSION['user_id'] ?? null
-                    ]);
 
                     // Update Lot Status if it was Draft
                     if ($currentLotStatus === 'Draft') {
@@ -163,18 +219,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stepStmt = $db->prepare("UPDATE lot_workflow_steps SET status = 'In Progress' WHERE lot_id = ? AND operation_id = ? AND status = 'Pending'");
                     $stepStmt->execute([$lotId, $operationId]);
 
+                    $varCount = count($entriesToSave);
                     log_audit('PRODUCTION_ENTRY_BATCH', 'production_entries', $firstEntryId, null, [
                         'lot_id' => $lotId,
                         'operation' => $opName,
                         'worker' => $workerName,
                         'variants_count' => $varCount,
                         'total_good' => $totalGood,
+                        'total_rejected' => $totalRejected,
+                        'total_rework' => $totalRework,
                         'total_labour' => $totalLabour
                     ]);
 
                     $db->commit();
 
-                    $feedbackMsg = "Batch production entry saved! Recorded $totalGood pieces across $varCount variants. " . format_currency($totalLabour) . " credited to $workerName.";
+                    $feedbackMsg = "Batch production entry saved! Recorded $totalGood good pieces";
+                    if ($totalRejected > 0) $feedbackMsg .= " (+$totalRejected rejected)";
+                    if ($totalRework > 0) $feedbackMsg .= " (+$totalRework rework)";
+                    $feedbackMsg .= " across $varCount variants. " . format_currency($totalLabour) . " credited to $workerName.";
                     redirect("modules/production/index.php?lot_id=$lotId", $feedbackMsg);
                 } catch (Exception $e) {
                     $db->rollBack();
@@ -488,6 +550,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <span class="text-muted small">Auto-calculates totals and artisan labour.</span>
                                     </div>
                                     <div class="d-flex align-items-center gap-2">
+                                        <button type="button" id="btnToggleQualityMode" class="btn btn-outline-warning btn-sm d-flex align-items-center gap-1" title="Toggle Rejection and Rework tracking per variant">
+                                            <i class="bi bi-shield-exclamation"></i>
+                                            <span id="lblQualityToggleText">Log Rejections & Rework</span>
+                                        </button>
                                         <button type="button" id="btnFillAllPending" class="btn btn-primary btn-sm d-flex align-items-center gap-1 shadow-sm">
                                             <i class="bi bi-lightning-fill"></i>
                                             <span>⚡ 1-Click Fill All Pending</span>
@@ -527,7 +593,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <div class="row g-2 align-items-center text-center text-md-start">
                                             <div class="col-12 col-md-4">
                                                 <div class="small text-muted text-uppercase fw-semibold" style="font-size: 0.72rem;">Batch Pieces To Save</div>
-                                                <div class="fs-4 fw-bold text-primary"><span id="lblBatchTotalPieces">0</span> <small class="fs-6 fw-normal text-muted">pcs</small></div>
+                                                <div class="fs-4 fw-bold text-primary">
+                                                    <span id="lblBatchTotalPieces">0</span> <small class="fs-6 fw-normal text-muted">pcs good</small>
+                                                    <span id="lblBatchDefectsPills" class="badge bg-danger-subtle text-danger border ms-1 d-none" style="font-size: 0.72rem;">0 Rej</span>
+                                                    <span id="lblBatchReworkPills" class="badge bg-warning-subtle text-warning-emphasis border ms-1 d-none" style="font-size: 0.72rem;">0 Rew</span>
+                                                </div>
                                             </div>
                                             <div class="col-12 col-md-4">
                                                 <div class="small text-muted text-uppercase fw-semibold" style="font-size: 0.72rem;">Applied Piece Rate</div>
@@ -536,6 +606,32 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             <div class="col-12 col-md-4 text-md-end">
                                                 <div class="small text-muted text-uppercase fw-semibold" style="font-size: 0.72rem;">Calculated Worker Labour</div>
                                                 <div class="fs-3 fw-bold text-success" id="lblBatchTotalLabour">Rs. 0.00</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Quality Inspection Details (Activated when Quality Mode is toggled) -->
+                                    <div id="qualityDetailsCard" class="card border border-warning-subtle bg-warning-subtle p-3 rounded-3 mb-3 d-none">
+                                        <div class="d-flex align-items-center gap-2 mb-2">
+                                            <i class="bi bi-shield-exclamation text-warning fs-5"></i>
+                                            <h6 class="fw-bold mb-0 text-dark">Quality Inspection Details (Defects & Rework)</h6>
+                                        </div>
+                                        <div class="row g-2">
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label small fw-semibold mb-1">Rejection Reason</label>
+                                                <select name="matrix_rejection_reason" id="pe_matrix_rej_reason" class="form-select form-select-sm">
+                                                    <option value="Stitching defect / skipped stitches">Stitching defect / skipped stitches</option>
+                                                    <option value="Fabric flaw / cut / needle hole">Fabric flaw / cut / needle hole</option>
+                                                    <option value="Measurement out of tolerance">Measurement out of tolerance</option>
+                                                    <option value="Oil stain / dirt mark">Oil stain / dirt mark</option>
+                                                    <option value="Shade variation / color mismatch">Shade variation / color mismatch</option>
+                                                    <option value="Ironing / burn mark">Ironing / burn mark</option>
+                                                    <option value="Other quality defect">Other quality defect</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label small fw-semibold mb-1">Rework Instructions</label>
+                                                <input type="text" name="matrix_rework_notes" id="pe_matrix_rew_notes" class="form-control form-control-sm" placeholder="e.g. Needs alteration, seam unpicking, or touchup">
                                             </div>
                                         </div>
                                     </div>
@@ -932,8 +1028,45 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // =========================================================================
-    // COLOR X SIZE MATRIX GRID ENGINE
+    // COLOR X SIZE MATRIX GRID ENGINE & QUALITY (REJECTIONS/REWORK) MODE
     // =========================================================================
+    let isQualityModeActive = false;
+    const btnToggleQualityMode = document.getElementById('btnToggleQualityMode');
+
+    if (btnToggleQualityMode) {
+        btnToggleQualityMode.addEventListener('click', function() {
+            isQualityModeActive = !isQualityModeActive;
+            updateQualityModeUI();
+        });
+    }
+
+    function updateQualityModeUI() {
+        if (!btnToggleQualityMode) return;
+        const qualityDetailsCard = document.getElementById('qualityDetailsCard');
+        const qualityToggleText = document.getElementById('lblQualityToggleText');
+
+        if (isQualityModeActive) {
+            btnToggleQualityMode.className = 'btn btn-warning btn-sm d-flex align-items-center gap-1 fw-semibold shadow-sm';
+            if (qualityToggleText) qualityToggleText.textContent = 'Hide Quality Inputs';
+            document.querySelectorAll('.quality-prefix').forEach(el => el.classList.remove('d-none'));
+            document.querySelectorAll('.quality-inputs').forEach(el => el.classList.remove('d-none'));
+            if (qualityDetailsCard) qualityDetailsCard.classList.remove('d-none');
+        } else {
+            btnToggleQualityMode.className = 'btn btn-outline-warning btn-sm d-flex align-items-center gap-1';
+            if (qualityToggleText) qualityToggleText.textContent = 'Log Rejections & Rework';
+            document.querySelectorAll('.quality-prefix').forEach(el => el.classList.add('d-none'));
+            document.querySelectorAll('.quality-inputs').forEach(el => el.classList.add('d-none'));
+
+            let hasQualityData = false;
+            document.querySelectorAll('.cell-rejected, .cell-rework').forEach(inp => {
+                if (parseInt(inp.value) > 0) hasQualityData = true;
+            });
+            if (qualityDetailsCard && !hasQualityData) {
+                qualityDetailsCard.classList.add('d-none');
+            }
+        }
+    }
+
     function loadMatrixGrid(lotId, opId) {
         if (!lotId || !opId) {
             matrixPlaceholder.classList.remove('d-none');
@@ -974,7 +1107,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Header: Color \ Size | S | M | L ... | Color Total
         let thHtml = '<tr><th class="text-start ps-3 py-2 bg-light text-dark" style="min-width: 140px;">Color \\ Size</th>';
         sizes.forEach(s => {
-            thHtml += `<th class="py-2 text-dark" style="min-width: 90px;">
+            thHtml += `<th class="py-2 text-dark" style="min-width: 105px;">
                 <span class="badge bg-dark-subtle text-dark border px-2">${s.code}</span>
                 <div class="small fw-normal text-muted" style="font-size: 0.75rem;">${s.name}</div>
             </th>`;
@@ -997,15 +1130,49 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (cell && cell.planned > 0) {
                     colorPlannedTotal += cell.planned;
                     if (cell.pending > 0) {
-                        tbHtml += `<td class="p-2 position-relative">
-                            <input type="number" min="0" max="${cell.pending}" 
-                                   class="form-control form-control-sm text-center fw-bold matrix-cell-input" 
-                                   name="matrix[${c.id}][${s.id}][good]" 
-                                   data-color="${c.id}" 
-                                   data-size="${s.id}" 
-                                   data-pending="${cell.pending}" 
-                                   data-planned="${cell.planned}" 
-                                   value="0">
+                        tbHtml += `<td class="p-2 position-relative cell-variant" data-color="${c.id}" data-size="${s.id}" data-pending="${cell.pending}" data-planned="${cell.planned}">
+                            <div class="good-wrap">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text px-1 py-0 small bg-success-subtle text-success fw-bold quality-prefix ${isQualityModeActive ? '' : 'd-none'}" title="Good Pieces Produced">G</span>
+                                    <input type="number" min="0" max="${cell.pending}" 
+                                           class="form-control form-control-sm text-center fw-bold matrix-cell-input cell-good text-success" 
+                                           name="matrix[${c.id}][${s.id}][good]" 
+                                           data-type="good" 
+                                           data-color="${c.id}" 
+                                           data-size="${s.id}" 
+                                           data-pending="${cell.pending}" 
+                                           data-planned="${cell.planned}" 
+                                           value="0">
+                                </div>
+                            </div>
+                            
+                            <div class="quality-inputs ${isQualityModeActive ? '' : 'd-none'} mt-1 d-flex flex-column gap-1">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text px-1 py-0 small bg-danger-subtle text-danger fw-bold" title="Rejected (Scrap) Pieces">✕</span>
+                                    <input type="number" min="0" max="${cell.pending}" 
+                                           class="form-control form-control-sm text-center matrix-cell-input cell-rejected text-danger fw-semibold" 
+                                           name="matrix[${c.id}][${s.id}][rejected]" 
+                                           data-type="rejected" 
+                                           data-color="${c.id}" 
+                                           data-size="${s.id}" 
+                                           data-pending="${cell.pending}" 
+                                           data-planned="${cell.planned}" 
+                                           value="0" placeholder="0">
+                                </div>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text px-1 py-0 small bg-warning-subtle text-warning-emphasis fw-bold" title="Rework Pieces">↻</span>
+                                    <input type="number" min="0" max="${cell.pending}" 
+                                           class="form-control form-control-sm text-center matrix-cell-input cell-rework text-warning-emphasis fw-semibold" 
+                                           name="matrix[${c.id}][${s.id}][rework]" 
+                                           data-type="rework" 
+                                           data-color="${c.id}" 
+                                           data-size="${s.id}" 
+                                           data-pending="${cell.pending}" 
+                                           data-planned="${cell.planned}" 
+                                           value="0" placeholder="0">
+                                </div>
+                            </div>
+
                             <div class="cell-status small text-muted mt-1" style="font-size: 0.72rem; line-height: 1.1;">
                                 <span class="badge bg-light text-secondary border">Pending: <strong>${cell.pending}</strong>/${cell.planned}</span>
                             </div>
@@ -1063,6 +1230,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function recalculateMatrixTotals() {
+        let grandGood = 0;
+        let grandRej = 0;
+        let grandRew = 0;
         let grandTotal = 0;
         let hasError = false;
         let errorMsg = '';
@@ -1074,31 +1244,44 @@ document.addEventListener('DOMContentLoaded', function() {
         const rowSums = {};
         const colSums = {};
 
-        document.querySelectorAll('.matrix-cell-input').forEach(inp => {
-            const val = parseInt(inp.value) || 0;
-            const pending = parseInt(inp.dataset.pending) || 0;
-            const cId = inp.dataset.color;
-            const sId = inp.dataset.size;
+        // Iterate per variant cell
+        document.querySelectorAll('.cell-variant').forEach(cell => {
+            const pending = parseInt(cell.dataset.pending) || 0;
+            const cId = cell.dataset.color;
+            const sId = cell.dataset.size;
+
+            const goodInp = cell.querySelector('.cell-good');
+            const rejInp = cell.querySelector('.cell-rejected');
+            const rewInp = cell.querySelector('.cell-rework');
+
+            const goodVal = Math.max(0, parseInt(goodInp ? goodInp.value : 0) || 0);
+            const rejVal = Math.max(0, parseInt(rejInp ? rejInp.value : 0) || 0);
+            const rewVal = Math.max(0, parseInt(rewInp ? rewInp.value : 0) || 0);
+            const cellTotal = goodVal + rejVal + rewVal;
 
             if (!rowSums[cId]) rowSums[cId] = 0;
             if (!colSums[sId]) colSums[sId] = 0;
 
-            if (val < 0) {
-                inp.value = 0;
-            } else if (val > pending && pending > 0) {
-                inp.classList.add('is-invalid');
-                inp.style.backgroundColor = '#ffebee';
+            if (cellTotal > pending && pending > 0) {
+                if (goodInp) goodInp.classList.add('is-invalid');
+                if (rejInp) rejInp.classList.add('is-invalid');
+                if (rewInp) rewInp.classList.add('is-invalid');
+                cell.style.backgroundColor = '#ffebee';
                 hasError = true;
                 errorMsg = `Some cells exceed pending piece limits (highlighted in red).`;
             } else {
-                inp.classList.remove('is-invalid');
-                inp.style.backgroundColor = val > 0 ? '#ecfdf5' : '';
+                if (goodInp) goodInp.classList.remove('is-invalid');
+                if (rejInp) rejInp.classList.remove('is-invalid');
+                if (rewInp) rewInp.classList.remove('is-invalid');
+                cell.style.backgroundColor = cellTotal > 0 ? '#ecfdf5' : '';
             }
 
-            const effectiveVal = Math.max(0, val);
-            rowSums[cId] += effectiveVal;
-            colSums[sId] += effectiveVal;
-            grandTotal += effectiveVal;
+            rowSums[cId] += cellTotal;
+            colSums[sId] += cellTotal;
+            grandGood += goodVal;
+            grandRej += rejVal;
+            grandRew += rewVal;
+            grandTotal += cellTotal;
         });
 
         // Update row sums
@@ -1126,10 +1309,38 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update Summary Banner
         const batchPieces = document.getElementById('lblBatchTotalPieces');
         const submitPcs = document.getElementById('lblSubmitPcs');
-        if (batchPieces) batchPieces.textContent = grandTotal.toLocaleString();
-        if (submitPcs) submitPcs.textContent = grandTotal.toLocaleString();
+        if (batchPieces) batchPieces.textContent = grandGood.toLocaleString();
+        if (submitPcs) submitPcs.textContent = grandGood.toLocaleString();
 
-        const batchLabour = grandTotal * rate;
+        // Update Quality Pills in Summary
+        const rejPill = document.getElementById('lblBatchDefectsPills');
+        const rewPill = document.getElementById('lblBatchReworkPills');
+        const qualityDetailsCard = document.getElementById('qualityDetailsCard');
+
+        if (rejPill) {
+            if (grandRej > 0) {
+                rejPill.textContent = grandRej + ' Rej';
+                rejPill.classList.remove('d-none');
+            } else {
+                rejPill.classList.add('d-none');
+            }
+        }
+        if (rewPill) {
+            if (grandRew > 0) {
+                rewPill.textContent = grandRew + ' Rew';
+                rewPill.classList.remove('d-none');
+            } else {
+                rewPill.classList.add('d-none');
+            }
+        }
+
+        // Auto-reveal Quality Details Card if defects/rework are entered
+        if ((grandRej > 0 || grandRew > 0) && qualityDetailsCard) {
+            qualityDetailsCard.classList.remove('d-none');
+        }
+
+        // Worker Labour is calculated ONLY on good pieces
+        const batchLabour = grandGood * rate;
         const labourDisplay = document.getElementById('lblBatchTotalLabour');
         if (labourDisplay) {
             labourDisplay.textContent = 'Rs. ' + batchLabour.toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -1158,12 +1369,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 1-Click Fill All Pending Button
     btnFillAllPending.addEventListener('click', function() {
-        document.querySelectorAll('.matrix-cell-input').forEach(inp => {
-            if (!inp.readOnly) {
-                const pending = parseInt(inp.dataset.pending) || 0;
-                if (pending > 0) {
-                    inp.value = pending;
-                }
+        document.querySelectorAll('.cell-variant').forEach(cell => {
+            const pending = parseInt(cell.dataset.pending) || 0;
+            const rejInp = cell.querySelector('.cell-rejected');
+            const rewInp = cell.querySelector('.cell-rework');
+            const goodInp = cell.querySelector('.cell-good');
+            
+            const rejVal = parseInt(rejInp ? rejInp.value : 0) || 0;
+            const rewVal = parseInt(rewInp ? rewInp.value : 0) || 0;
+            const goodTarget = Math.max(0, pending - rejVal - rewVal);
+
+            if (goodInp && !goodInp.readOnly) {
+                goodInp.value = goodTarget;
             }
         });
         recalculateMatrixTotals();
@@ -1192,7 +1409,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (mode === 'matrix') {
-            const grandTotal = parseInt(document.getElementById('lblBatchTotalPieces').textContent.replace(/,/g, '')) || 0;
+            const grandTotal = parseInt(document.getElementById('grandMatrixSum').textContent.replace(/,/g, '')) || 0;
             if (grandTotal <= 0) {
                 e.preventDefault();
                 alert('Please enter at least 1 piece to record, or click "⚡ 1-Click Fill All Pending".');
