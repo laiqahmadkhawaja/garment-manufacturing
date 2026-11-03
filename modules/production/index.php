@@ -299,43 +299,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $allowed = max(0, $lotTotalPieces - $currentStageGood);
                         $error = "Production quantity exceeds lot capacity! Lot #$lotNum allows a maximum of $lotTotalPieces pieces. Already produced: $currentStageGood pcs. Maximum pieces allowed to record now is $allowed pcs (attempted to add: $totalGood pcs, exceeding by $overPcs pcs).";
                     } else {
-                        // 2. Variant-level capacity check: each variant cannot exceed planned quantity
-                        $varPlanStmt = $db->prepare("SELECT color_id, size_id, quantity FROM lot_variants WHERE lot_id = ?");
-                        $varPlanStmt->execute([$lotId]);
-                        $lotVariantsMap = [];
-                        while ($vRow = $varPlanStmt->fetch()) {
-                            $lotVariantsMap[$vRow['color_id'] . '_' . $vRow['size_id']] = (int)$vRow['quantity'];
-                        }
+                        // 2. Strict Stage-to-Stage Workflow Variant & Color Capacity Enforcement
+                        $allowanceData = get_lot_variant_stage_allowance($lotId, $operationId);
+                        $variantAllowances = $allowanceData['variants'];
+                        $colorAllowances = $allowanceData['colors'];
+                        $prevOpName = $allowanceData['prev_operation_name'];
 
-                        $varDoneStmt = $db->prepare("SELECT color_id, size_id, COALESCE(SUM(good_qty), 0) as done_qty 
-                                                     FROM production_entries 
-                                                     WHERE lot_id = ? AND operation_id = ? 
-                                                     GROUP BY color_id, size_id");
-                        $varDoneStmt->execute([$lotId, $operationId]);
-                        $varDoneMap = [];
-                        while ($dRow = $varDoneStmt->fetch()) {
-                            $varDoneMap[$dRow['color_id'] . '_' . $dRow['size_id']] = (int)$dRow['done_qty'];
-                        }
+                        // Track attempted quantities by color
+                        $colorAttemptedMap = [];
 
                         foreach ($entriesToSave as $entry) {
                             $vKey = $entry['color_id'] . '_' . $entry['size_id'];
-                            $plannedQty = $lotVariantsMap[$vKey] ?? 0;
-                            $alreadyDone = $varDoneMap[$vKey] ?? 0;
+                            $vInfo = $variantAllowances[$vKey] ?? null;
+                            $cId = $entry['color_id'];
+                            $colorAttemptedMap[$cId] = ($colorAttemptedMap[$cId] ?? 0) + $entry['good_qty'];
+
+                            $cName = $vInfo['color_name'] ?? ('Color #' . $cId);
+                            $cCode = $vInfo['color_code'] ?? $cName;
+                            $sName = $vInfo['size_name'] ?? ('Size #' . $entry['size_id']);
+
+                            $allowable = $vInfo['allowable'] ?? 0;
+                            $alreadyDone = $vInfo['current_done'] ?? 0;
                             $attemptedGood = $entry['good_qty'];
 
-                            if (($alreadyDone + $attemptedGood) > $plannedQty) {
-                                $cNameStmt = $db->prepare("SELECT name FROM colors WHERE id = ?");
-                                $cNameStmt->execute([$entry['color_id']]);
-                                $cName = $cNameStmt->fetchColumn() ?: 'Color #' . $entry['color_id'];
-
-                                $sNameStmt = $db->prepare("SELECT name FROM sizes WHERE id = ?");
-                                $sNameStmt->execute([$entry['size_id']]);
-                                $sName = $sNameStmt->fetchColumn() ?: 'Size #' . $entry['size_id'];
-
-                                $overVar = ($alreadyDone + $attemptedGood) - $plannedQty;
-                                $varRemaining = max(0, $plannedQty - $alreadyDone);
-                                $error = "Variant quantity limit exceeded for {$cName} ({$sName})! Planned: $plannedQty pcs, Already produced: $alreadyDone pcs, Remaining: $varRemaining pcs (attempted: $attemptedGood pcs, exceeding by $overVar pcs).";
+                            if (($alreadyDone + $attemptedGood) > $allowable) {
+                                $overVar = ($alreadyDone + $attemptedGood) - $allowable;
+                                $varRemaining = max(0, $allowable - $alreadyDone);
+                                if ($allowanceData['has_prev_color_stage']) {
+                                    $prevRej = $vInfo['prev_stage_rejected'] ?? 0;
+                                    $rejNote = $prevRej > 0 ? " ($prevRej piece(s) were rejected in $prevOpName)" : "";
+                                    $error = "Variant quantity limit exceeded for [{$cCode}] {$cName} ({$sName})! Preceding stage ({$prevOpName}) passed only {$allowable} good pieces{$rejNote}. Already recorded in this stage: {$alreadyDone} pcs. Remaining allowed: {$varRemaining} pcs (attempted: {$attemptedGood} pcs, exceeding by {$overVar} pcs).";
+                                } else {
+                                    $error = "Variant quantity limit exceeded for [{$cCode}] {$cName} ({$sName})! Planned: {$allowable} pcs, Already produced: {$alreadyDone} pcs, Remaining: {$varRemaining} pcs (attempted: {$attemptedGood} pcs, exceeding by {$overVar} pcs).";
+                                }
                                 break;
+                            }
+                        }
+
+                        // Also verify cumulative color limit
+                        if (empty($error)) {
+                            foreach ($colorAttemptedMap as $cId => $cAttempted) {
+                                $cInfo = $colorAllowances[$cId] ?? null;
+                                if ($cInfo) {
+                                    $cAllowable = $cInfo['allowable'];
+                                    $cDone = $cInfo['current_done'];
+                                    $cCode = $cInfo['color_code'] ?: $cInfo['color_name'];
+                                    if (($cDone + $cAttempted) > $cAllowable) {
+                                        $cOver = ($cDone + $cAttempted) - $cAllowable;
+                                        $cRem = max(0, $cAllowable - $cDone);
+                                        if ($allowanceData['has_prev_color_stage']) {
+                                            $prevRej = $cInfo['prev_stage_rejected'];
+                                            $error = "Color limit exceeded for [{$cCode}] {$cInfo['color_name']}! Preceding stage ({$prevOpName}) only passed {$cAllowable} good pieces ({$prevRej} piece(s) rejected). You cannot shift rejected pieces to other colors. Remaining allowed: {$cRem} pcs (attempted: {$cAttempted} pcs, exceeding by {$cOver} pcs).";
+                                        } else {
+                                            $error = "Color limit exceeded for [{$cCode}] {$cInfo['color_name']}! Planned: {$cAllowable} pcs, Already produced: {$cDone} pcs, Remaining allowed: {$cRem} pcs (attempted: {$cAttempted} pcs, exceeding by {$cOver} pcs).";
+                                        }
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
@@ -540,24 +560,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stageGoodStmt->execute([$lotId, $operationId]);
             $currentStageGood = (int)$stageGoodStmt->fetchColumn();
 
-            // 2. Variant-level capacity check: variant cannot exceed planned quantity
-            $pvStmt = $db->prepare("SELECT quantity FROM lot_variants WHERE lot_id = ? AND color_id = ? AND size_id = ?");
-            $pvStmt->execute([$lotId, $colorId, $sizeId]);
-            $variantPlanned = (int)$pvStmt->fetchColumn();
+            // 2. Strict Stage-to-Stage Workflow Variant & Color Capacity Enforcement
+            $allowanceData = get_lot_variant_stage_allowance($lotId, $operationId);
+            $vKey = $colorId . '_' . $sizeId;
+            $vInfo = $allowanceData['variants'][$vKey] ?? null;
+            $cInfo = $allowanceData['colors'][$colorId] ?? null;
+            $prevOpName = $allowanceData['prev_operation_name'];
 
-            // Check existing good qty for this variant & operation
-            $curDoneStmt = $db->prepare("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = ? AND operation_id = ? AND color_id = ? AND size_id = ?");
-            $curDoneStmt->execute([$lotId, $operationId, $colorId, $sizeId]);
-            $previouslyDone = (int)$curDoneStmt->fetchColumn();
+            $variantAllowable = $vInfo ? $vInfo['allowable'] : 0;
+            $previouslyDone = $vInfo ? $vInfo['current_done'] : 0;
+            $cName = $vInfo['color_name'] ?? ('Color #' . $colorId);
+            $cCode = $vInfo['color_code'] ?? $cName;
+            $sName = $vInfo['size_name'] ?? ('Size #' . $sizeId);
 
             if (($currentStageGood + $goodQty) > $lotTotalPieces) {
                 $overPcs = ($currentStageGood + $goodQty) - $lotTotalPieces;
                 $allowed = max(0, $lotTotalPieces - $currentStageGood);
                 $error = "Production quantity exceeds lot capacity! Lot #$lotNum allows up to $lotTotalPieces pieces. Already produced: $currentStageGood pcs. Maximum pieces allowed to record now is $allowed pcs (attempted: $goodQty pcs, exceeding by $overPcs pcs).";
-            } elseif (($previouslyDone + $goodQty) > $variantPlanned) {
-                $overVar = ($previouslyDone + $goodQty) - $variantPlanned;
-                $varRemaining = max(0, $variantPlanned - $previouslyDone);
-                $error = "Production quantity exceeds variant planned capacity! Planned: $variantPlanned pcs, Already produced: $previouslyDone pcs, Remaining: $varRemaining pcs (attempted: $goodQty pcs, exceeding by $overVar pcs).";
+            } elseif (($previouslyDone + $goodQty) > $variantAllowable) {
+                $overVar = ($previouslyDone + $goodQty) - $variantAllowable;
+                $varRemaining = max(0, $variantAllowable - $previouslyDone);
+                if ($allowanceData['has_prev_color_stage']) {
+                    $prevRej = $vInfo['prev_stage_rejected'] ?? 0;
+                    $rejNote = $prevRej > 0 ? " ($prevRej piece(s) were rejected in $prevOpName)" : "";
+                    $error = "Production quantity exceeds passed quantity for [{$cCode}] {$cName} ({$sName})! Preceding stage ({$prevOpName}) passed only {$variantAllowable} good pieces{$rejNote}. Already recorded: {$previouslyDone} pcs, Remaining: {$varRemaining} pcs (attempted: {$goodQty} pcs).";
+                } else {
+                    $error = "Production quantity exceeds variant capacity! Planned: {$variantAllowable} pcs, Already produced: {$previouslyDone} pcs, Remaining: {$varRemaining} pcs (attempted: {$goodQty} pcs, exceeding by {$overVar} pcs).";
+                }
             } else {
                 if ($qtyReceived <= 0) {
                     $qtyReceived = $goodQty + $rejectedQty + $reworkQty;
@@ -1846,6 +1875,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 subBtn.classList.remove('btn-primary');
                 subBtn.classList.add('btn-secondary');
             }
+        } else if (data.has_prev_color_stage && data.total_prev_rejected > 0) {
+            stageNoticeEl.className = 'alert alert-warning d-flex flex-wrap align-items-center justify-content-between p-3 mb-3 border border-warning rounded-3 shadow-sm';
+            stageNoticeEl.innerHTML = `
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-shield-exclamation text-warning fs-3"></i>
+                    <div>
+                        <div class="fw-bold text-dark">Stage Reconciliation: Preceding Defect Exclusion Enforced</div>
+                        <div class="small text-muted">
+                            Preceding stage (<strong>${data.prev_operation_name}</strong>) had ${data.total_prev_rejected} rejected piece(s). 
+                            In this stage, quantities are strictly restricted to good pieces passed per color. Defective pieces cannot be shifted to other colors.
+                        </div>
+                    </div>
+                </div>
+                <span class="badge bg-warning text-dark fs-6 px-3 py-2">${totals.allowable} / ${totals.planned} Passed</span>
+            `;
+            stageNoticeEl.classList.remove('d-none');
+            const fillBtn = document.getElementById('btnFillAllPending');
+            if (fillBtn) fillBtn.disabled = false;
         } else {
             stageNoticeEl.classList.add('d-none');
             const fillBtn = document.getElementById('btnFillAllPending');
@@ -1866,7 +1913,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Body: Rows of Colors
         let tbHtml = '';
         colors.forEach(c => {
-            let colorPlannedTotal = 0;
+            let colorAllowableTotal = 0;
             tbHtml += `<tr>
                 <td class="text-start ps-3 fw-semibold text-dark">
                     <span class="d-inline-block rounded-circle me-1 border" style="width: 12px; height: 12px; background-color: ${c.hex_code || '#6c757d'}; vertical-align: middle;"></span>
@@ -1876,9 +1923,10 @@ document.addEventListener('DOMContentLoaded', function() {
             sizes.forEach(s => {
                 const cell = (grid[c.id] && grid[c.id][s.id]) ? grid[c.id][s.id] : null;
                 if (cell && cell.planned > 0) {
-                    colorPlannedTotal += cell.planned;
+                    const effectiveAllowable = (cell.allowable !== undefined ? cell.allowable : cell.planned);
+                    colorAllowableTotal += effectiveAllowable;
                     if (cell.pending > 0) {
-                        tbHtml += `<td class="p-2 position-relative cell-variant" data-color="${c.id}" data-size="${s.id}" data-pending="${cell.pending}" data-planned="${cell.planned}">
+                        tbHtml += `<td class="p-2 position-relative cell-variant" data-color="${c.id}" data-size="${s.id}" data-pending="${cell.pending}" data-planned="${effectiveAllowable}">
                             <div class="good-wrap">
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text px-1 py-0 small bg-success-subtle text-success fw-bold quality-prefix ${isQualityModeActive ? '' : 'd-none'}" title="Good Pieces Produced">G</span>
@@ -1889,7 +1937,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                            data-color="${c.id}" 
                                            data-size="${s.id}" 
                                            data-pending="${cell.pending}" 
-                                           data-planned="${cell.planned}" 
+                                           data-planned="${effectiveAllowable}" 
                                            value="0">
                                 </div>
                             </div>
@@ -1904,7 +1952,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                            data-color="${c.id}" 
                                            data-size="${s.id}" 
                                            data-pending="${cell.pending}" 
-                                           data-planned="${cell.planned}" 
+                                           data-planned="${effectiveAllowable}" 
                                            value="0" placeholder="0">
                                 </div>
                                 <div class="input-group input-group-sm">
@@ -1916,13 +1964,18 @@ document.addEventListener('DOMContentLoaded', function() {
                                            data-color="${c.id}" 
                                            data-size="${s.id}" 
                                            data-pending="${cell.pending}" 
-                                           data-planned="${cell.planned}" 
+                                           data-planned="${effectiveAllowable}" 
                                            value="0" placeholder="0">
                                 </div>
                             </div>
 
                             <div class="cell-status small text-muted mt-1" style="font-size: 0.72rem; line-height: 1.1;">
-                                <span class="badge bg-light text-secondary border">Pending: <strong>${cell.pending}</strong>/${cell.planned}</span>
+                                ${cell.has_prev_stage && cell.allowable < cell.planned ? 
+                                    `<span class="badge bg-danger-subtle text-danger border border-danger-subtle" title="${cell.prev_rejected} rejected in ${cell.prev_stage_name}">
+                                        <i class="bi bi-shield-exclamation"></i> Max: <strong>${cell.pending}</strong>/${cell.allowable} (${cell.prev_rejected} rej in ${cell.prev_stage_name})
+                                    </span>` : 
+                                    `<span class="badge bg-light text-secondary border">Pending: <strong>${cell.pending}</strong>/${effectiveAllowable}</span>`
+                                }
                             </div>
                         </td>`;
                     } else {
@@ -1933,7 +1986,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                    data-color="${c.id}" 
                                    data-size="${s.id}" 
                                    data-pending="0" 
-                                   data-planned="${cell.planned}" 
+                                   data-planned="${effectiveAllowable}" 
                                    value="0" readonly>
                             <div class="mt-1" style="font-size: 0.7rem;">
                                 <span class="badge bg-success-subtle text-success"><i class="bi bi-check-circle-fill"></i> Done (${cell.good_done})</span>
@@ -1945,8 +1998,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
 
-            tbHtml += `<td class="fw-bold text-primary bg-light" id="row_tot_${c.id}" data-planned="${colorPlannedTotal}">
-                <span class="row-sum">0</span> <small class="text-muted fw-normal">/ ${colorPlannedTotal}</small>
+            tbHtml += `<td class="fw-bold text-primary bg-light" id="row_tot_${c.id}" data-planned="${colorAllowableTotal}">
+                <span class="row-sum">0</span> <small class="text-muted fw-normal">/ ${colorAllowableTotal}</small>
             </td></tr>`;
         });
         matrixTbody.innerHTML = tbHtml;

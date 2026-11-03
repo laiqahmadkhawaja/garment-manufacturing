@@ -703,6 +703,96 @@ $persistedOk = ($savedLot['has_anatomy_variants'] == 1 && $savedAnatomy['total_c
 
 assert_test("32. Auto Cutting Parts Allocation (80 Sleeved x 2 = 160 Sleeves)", ($scenario32Passed && $persistedOk), "100 pcs lot (80 with sleeves, 20 sleeveless): exactly 160 sleeves ($80x2), 100 fronts, 100 backs calculated & tracked");
 
+// =========================================================================
+// SCENARIO 33: WORKFLOW STAGE-TO-STAGE QUALITY RECONCILIATION & COLOR RESTRICTION
+// =========================================================================
+echo "\n--- TESTING SCENARIO 33: STAGE-TO-STAGE DEFECT EXCLUSION ENFORCED PER COLOR ---\n";
+
+// Ensure test colors 1192 and 1193 exist
+$c1Stmt = $db->query("SELECT id FROM colors WHERE color_code = '1192'");
+$cId1 = $c1Stmt->fetchColumn();
+if (!$cId1) {
+    $db->prepare("INSERT INTO colors (name, color_code, hex_code) VALUES ('Red 1192', '1192', '#e11d48')")->execute();
+    $cId1 = (int)$db->lastInsertId();
+} else {
+    $cId1 = (int)$cId1;
+}
+
+$c2Stmt = $db->query("SELECT id FROM colors WHERE color_code = '1193'");
+$cId2 = $c2Stmt->fetchColumn();
+if (!$cId2) {
+    $db->prepare("INSERT INTO colors (name, color_code, hex_code) VALUES ('Green 1193', '1193', '#10b981')")->execute();
+    $cId2 = (int)$db->lastInsertId();
+} else {
+    $cId2 = (int)$cId2;
+}
+
+// 1. Create Lot with 100 pcs: 50 pcs of 1192, 50 pcs of 1193
+$lotNum33 = 'LOT-TEST-WORKFLOW-DEFECT-' . time();
+$db->prepare("INSERT INTO lots (lot_number, lot_date, product_id, total_pieces, total_colors, total_sizes, status, created_by)
+              VALUES (?, CURDATE(), 1, 100, 2, 1, 'In Production', 1)")
+   ->execute([$lotNum33]);
+$lotId33 = (int)$db->lastInsertId();
+
+// Assign 3 workflow steps: Step 1 (Op 1: Operator), Step 2 (Op 4: Stitching), Step 3 (Op 5: Buttons/Overlock)
+$db->exec("INSERT INTO lot_workflow_steps (lot_id, operation_id, sequence, is_mandatory, status) VALUES 
+    ($lotId33, 1, 1, 1, 'Completed'),
+    ($lotId33, 4, 2, 1, 'Completed'),
+    ($lotId33, 5, 3, 1, 'Pending')");
+
+// Lot variants: 50 of 1192, 50 of 1193
+$db->exec("INSERT INTO lot_variants (lot_id, color_id, color_code, size_id, quantity) VALUES 
+    ($lotId33, $cId1, '1192', 1, 50),
+    ($lotId33, $cId2, '1193', 1, 50)");
+
+// Stage 1 (Operator): Produced 100 pcs
+$pe1Num = 'PE-OP1-' . time();
+$db->prepare("INSERT INTO production_entries (entry_number, entry_date, lot_id, operation_id, worker_id, shift, color_id, size_id, qty_received, good_qty, rate, labour_amount)
+              VALUES (?, CURDATE(), $lotId33, 1, 1, 'Day Shift', NULL, 1, 100, 100, 3.00, 300.00)")
+   ->execute([$pe1Num]);
+
+// Stage 2 (Stitching): Color 1192 had 1 piece rejected (49 good, 1 rejected). Color 1193 had 50 good (0 rejected)
+$pe2Num1 = 'PE-STITCH-1192-' . time();
+$db->prepare("INSERT INTO production_entries (entry_number, entry_date, lot_id, operation_id, worker_id, color_id, size_id, qty_received, good_qty, rejected_qty, rate, labour_amount)
+              VALUES (?, CURDATE(), $lotId33, 4, 1, $cId1, 1, 50, 49, 1, 5.00, 245.00)")
+   ->execute([$pe2Num1]);
+
+$pe2Num2 = 'PE-STITCH-1193-' . time();
+$db->prepare("INSERT INTO production_entries (entry_number, entry_date, lot_id, operation_id, worker_id, color_id, size_id, qty_received, good_qty, rejected_qty, rate, labour_amount)
+              VALUES (?, CURDATE(), $lotId33, 4, 1, $cId2, 1, 50, 50, 0, 5.00, 250.00)")
+   ->execute([$pe2Num2]);
+
+// Now test Stage 3 (Operation 5): Calculate allowance
+$allowance33 = get_lot_variant_stage_allowance($lotId33, 5);
+
+$hasPrevStage = $allowance33['has_prev_color_stage'];
+$c1Allowable = $allowance33['colors'][$cId1]['allowable'] ?? 0;
+$c1Rejected = $allowance33['colors'][$cId1]['prev_stage_rejected'] ?? 0;
+$c2Allowable = $allowance33['colors'][$cId2]['allowable'] ?? 0;
+$c2Rejected = $allowance33['colors'][$cId2]['prev_stage_rejected'] ?? 0;
+
+// Verify: Color 1192 is restricted to 49 pieces; Color 1193 has 50 pieces.
+$correctRestricted = ($hasPrevStage && $c1Allowable === 49 && $c1Rejected === 1 && $c2Allowable === 50 && $c2Rejected === 0);
+
+// Verify blocking: Attempting to record 50 good pieces for 1192 in Stage 3 exceeds allowable (49)
+$attemptedGoodC1 = 50;
+$exceedsBlocked = (($allowance33['colors'][$cId1]['current_done'] + $attemptedGoodC1) > $c1Allowable);
+
+// Verify valid entry: 49 good pieces for 1192 and 50 for 1193 are permitted
+$attemptValidC1 = 49;
+$attemptValidC2 = 50;
+$validPermitted = (
+    ($allowance33['colors'][$cId1]['current_done'] + $attemptValidC1) <= $c1Allowable &&
+    ($allowance33['colors'][$cId2]['current_done'] + $attemptValidC2) <= $c2Allowable
+);
+
+// Verify shifting block: Attempting to shift rejected piece to 1193 (51 pcs) is blocked
+$attemptShiftedC2 = 51;
+$shiftBlocked = (($allowance33['colors'][$cId2]['current_done'] + $attemptShiftedC2) > $c2Allowable);
+
+$scenario33Passed = ($correctRestricted && $exceedsBlocked && $validPermitted && $shiftBlocked);
+assert_test("33. Stage-to-Stage Defect Exclusion per Color", $scenario33Passed, "Color 1192 restricted to 49 pcs (1 rejected in Stitching); Color 1193 allowed 50 pcs; shifting rejected piece across colors strictly blocked");
+
 echo "\n========================================================================\n";
 echo "TEST SUITE SUMMARY: $passCount PASSED, $failCount FAILED\n";
 echo "========================================================================\n";

@@ -75,7 +75,6 @@ if ($action === 'get_lot_operations_and_variants') {
         'variants' => $variants,
         'sizes' => $lotSizes
     ]);
-    ]);
 }
 
 if ($action === 'get_variant_stage_balance') {
@@ -84,24 +83,15 @@ if ($action === 'get_variant_stage_balance') {
     $colorId = (int)($_GET['color_id'] ?? 0);
     $sizeId = (int)($_GET['size_id'] ?? 0);
 
-    // Get planned qty for this variant
-    $vStmt = $db->prepare("SELECT quantity FROM lot_variants WHERE lot_id = ? AND color_id = ? AND size_id = ?");
-    $vStmt->execute([$lotId, $colorId, $sizeId]);
-    $planned = (int)$vStmt->fetchColumn();
+    $allowanceData = get_lot_variant_stage_allowance($lotId, $opId);
+    $vKey = $colorId . '_' . $sizeId;
+    $vInfo = $allowanceData['variants'][$vKey] ?? null;
 
-    // Completed good qty for this variant & operation
-    $doneStmt = $db->prepare("SELECT COALESCE(SUM(good_qty), 0) AS good_done, 
-                                     COALESCE(SUM(rejected_qty), 0) AS rejected_done, 
-                                     COALESCE(SUM(rework_qty), 0) AS rework_done 
-                              FROM production_entries 
-                              WHERE lot_id = ? AND operation_id = ? AND color_id = ? AND size_id = ?");
-    $doneStmt->execute([$lotId, $opId, $colorId, $sizeId]);
-    $counts = $doneStmt->fetch();
-
-    $goodDone = (int)$counts['good_done'];
-    $rejectedDone = (int)$counts['rejected_done'];
-    $reworkDone = (int)$counts['rework_done'];
-    $pending = max(0, $planned - $goodDone);
+    $planned = $vInfo ? $vInfo['planned'] : 0;
+    $allowable = $vInfo ? $vInfo['allowable'] : $planned;
+    $goodDone = $vInfo ? $vInfo['current_done'] : 0;
+    $rejectedDone = $vInfo ? $vInfo['current_rejected'] : 0;
+    $pending = max(0, $allowable - $goodDone);
 
     // Get default rate for operation
     $rStmt = $db->prepare("SELECT default_rate FROM operations WHERE id = ?");
@@ -111,9 +101,13 @@ if ($action === 'get_variant_stage_balance') {
     json_response([
         'status' => 'success',
         'planned' => $planned,
+        'allowable' => $allowable,
+        'has_prev_color_stage' => $allowanceData['has_prev_color_stage'],
+        'prev_operation_name' => $allowanceData['prev_operation_name'],
+        'prev_rejected' => $vInfo['prev_stage_rejected'] ?? 0,
         'good_done' => $goodDone,
         'rejected_done' => $rejectedDone,
-        'rework_done' => $reworkDone,
+        'rework_done' => 0,
         'pending' => $pending,
         'default_rate' => $defaultRate
     ]);
@@ -131,9 +125,13 @@ if ($action === 'get_lot_stage_matrix') {
         json_response(['status' => 'error', 'message' => 'Lot not found'], 404);
     }
 
+    // Get strict stage-to-stage workflow allowances
+    $allowanceData = get_lot_variant_stage_allowance($lotId, $opId);
+    $variantAllowances = $allowanceData['variants'];
+
     // Fetch all variants with completed good & rejected qty for this operation
     $sql = "SELECT lv.color_id, lv.size_id, lv.quantity AS planned,
-                   c.name AS color_name, c.hex_code,
+                   c.name AS color_name, COALESCE(c.color_code, c.name) AS color_code, c.hex_code,
                    s.name AS size_name, s.code AS size_code, s.sort_order,
                    COALESCE((
                        SELECT SUM(good_qty) FROM production_entries 
@@ -156,19 +154,28 @@ if ($action === 'get_lot_stage_matrix') {
     $sizes = [];
     $grid = [];
     $totalPlanned = 0;
+    $totalAllowable = 0;
     $totalDone = 0;
     $totalPending = 0;
+    $totalPrevRejected = 0;
 
     foreach ($rawVariants as $v) {
         $cId = (int)$v['color_id'];
         $sId = (int)$v['size_id'];
+        $k = $cId . '_' . $sId;
+        $vInfo = $variantAllowances[$k] ?? null;
+
         $planned = (int)$v['planned'];
+        $allowable = $vInfo ? $vInfo['allowable'] : $planned;
         $goodDone = (int)$v['good_done'];
-        $pending = max(0, $planned - $goodDone);
+        $pending = max(0, $allowable - $goodDone);
+        $prevRejected = $vInfo ? (int)$vInfo['prev_stage_rejected'] : 0;
+        $totalPrevRejected += $prevRejected;
 
         $colors[$cId] = [
             'id' => $cId,
             'name' => $v['color_name'],
+            'color_code' => $v['color_code'],
             'hex_code' => $v['hex_code']
         ];
 
@@ -181,12 +188,17 @@ if ($action === 'get_lot_stage_matrix') {
 
         $grid[$cId][$sId] = [
             'planned' => $planned,
+            'allowable' => $allowable,
+            'has_prev_stage' => $allowanceData['has_prev_color_stage'],
+            'prev_stage_name' => $allowanceData['prev_operation_name'],
+            'prev_rejected' => $prevRejected,
             'good_done' => $goodDone,
             'rejected_done' => (int)$v['rejected_done'],
             'pending' => $pending
         ];
 
         $totalPlanned += $planned;
+        $totalAllowable += $allowable;
         $totalDone += $goodDone;
         $totalPending += $pending;
     }
@@ -194,11 +206,15 @@ if ($action === 'get_lot_stage_matrix') {
     json_response([
         'status' => 'success',
         'lot' => $lot,
+        'has_prev_color_stage' => $allowanceData['has_prev_color_stage'],
+        'prev_operation_name' => $allowanceData['prev_operation_name'],
+        'total_prev_rejected' => $totalPrevRejected,
         'colors' => array_values($colors),
         'sizes' => array_values($sizes),
         'grid' => $grid,
         'totals' => [
             'planned' => $totalPlanned,
+            'allowable' => $totalAllowable,
             'good_done' => $totalDone,
             'pending' => $totalPending
         ]

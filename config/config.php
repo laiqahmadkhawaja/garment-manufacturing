@@ -439,3 +439,178 @@ function calculate_lot_element_requirements(array $productElements, int $totalPi
         'sleeveless_qty' => $sleevelessQty
     ];
 }
+
+/**
+ * Calculate allowable pieces per variant and per color for a given workflow stage on a lot.
+ * Strictly guarantees that if a color had rejections in a preceding stage (e.g., 1 piece of 1192 rejected in Stitching),
+ * subsequent stages automatically restrict that exact color to the passed good quantity (e.g., 49 instead of 50),
+ * preventing users from shifting defective pieces across colors.
+ *
+ * @param int $lotId
+ * @param int $operationId
+ * @return array
+ */
+function get_lot_variant_stage_allowance(int $lotId, int $operationId): array {
+    $db = get_db();
+
+    // 1. Get current operation sequence in this lot
+    $seqStmt = $db->prepare("SELECT sequence FROM lot_workflow_steps WHERE lot_id = ? AND operation_id = ?");
+    $seqStmt->execute([$lotId, $operationId]);
+    $currSeq = $seqStmt->fetchColumn();
+
+    if ($currSeq === false) {
+        // Fallback for sub-operations
+        $subStmt = $db->prepare("SELECT lws.sequence FROM operations o JOIN lot_workflow_steps lws ON o.parent_id = lws.operation_id WHERE o.id = ? AND lws.lot_id = ?");
+        $subStmt->execute([$operationId, $lotId]);
+        $currSeq = $subStmt->fetchColumn();
+        if ($currSeq === false) {
+            $currSeq = (int)$db->query("SELECT sequence FROM operations WHERE id = $operationId")->fetchColumn();
+        }
+    }
+    $currSeq = (float)$currSeq;
+
+    // 2. Fetch all variants planned for this lot
+    $vStmt = $db->prepare("SELECT lv.color_id, lv.size_id, lv.quantity AS planned, 
+                                  c.name AS color_name, COALESCE(c.color_code, c.name) AS color_code,
+                                  s.name AS size_name, s.code AS size_code
+                           FROM lot_variants lv
+                           JOIN colors c ON lv.color_id = c.id
+                           JOIN sizes s ON lv.size_id = s.id
+                           WHERE lv.lot_id = ?");
+    $vStmt->execute([$lotId]);
+    $lotVariants = $vStmt->fetchAll();
+
+    // 3. Find preceding workflow steps with sequence < currSeq
+    $prevStepsStmt = $db->prepare("SELECT lws.operation_id, o.name AS op_name, lws.sequence
+                                   FROM lot_workflow_steps lws
+                                   JOIN operations o ON lws.operation_id = o.id
+                                   WHERE lws.lot_id = ? AND lws.sequence < ?
+                                   ORDER BY lws.sequence DESC");
+    $prevStepsStmt->execute([$lotId, $currSeq]);
+    $prevSteps = $prevStepsStmt->fetchAll();
+
+    $prevColorOpId = null;
+    $prevColorOpName = null;
+
+    // Find the closest preceding step that has color-tracked production entries
+    foreach ($prevSteps as $ps) {
+        $chkStmt = $db->prepare("SELECT COUNT(*) FROM production_entries WHERE lot_id = ? AND operation_id = ? AND color_id IS NOT NULL");
+        $chkStmt->execute([$lotId, $ps['operation_id']]);
+        if ((int)$chkStmt->fetchColumn() > 0) {
+            $prevColorOpId = (int)$ps['operation_id'];
+            $prevColorOpName = $ps['op_name'];
+            break;
+        }
+    }
+
+    // 4. Query already recorded good quantities in current operation
+    $curDoneStmt = $db->prepare("SELECT color_id, size_id, COALESCE(SUM(good_qty), 0) AS good_done, COALESCE(SUM(rejected_qty), 0) AS rejected_done
+                                 FROM production_entries 
+                                 WHERE lot_id = ? AND operation_id = ? AND color_id IS NOT NULL
+                                 GROUP BY color_id, size_id");
+    $curDoneStmt->execute([$lotId, $operationId]);
+    $currentDoneMap = [];
+    while ($cd = $curDoneStmt->fetch()) {
+        $currentDoneMap[$cd['color_id'] . '_' . $cd['size_id']] = [
+            'good_done' => (int)$cd['good_done'],
+            'rejected_done' => (int)$cd['rejected_done']
+        ];
+    }
+
+    // 5. Query previous operation's outputs per variant if preceding color stage exists
+    $prevGoodMap = [];
+    $prevColorGoodTotals = [];
+    $prevColorRejTotals = [];
+    if ($prevColorOpId !== null) {
+        $pStmt = $db->prepare("SELECT color_id, size_id, 
+                                      COALESCE(SUM(good_qty), 0) AS good_done,
+                                      COALESCE(SUM(rejected_qty), 0) AS rejected_done
+                               FROM production_entries
+                               WHERE lot_id = ? AND operation_id = ? AND color_id IS NOT NULL
+                               GROUP BY color_id, size_id");
+        $pStmt->execute([$lotId, $prevColorOpId]);
+        while ($pRow = $pStmt->fetch()) {
+            $k = $pRow['color_id'] . '_' . $pRow['size_id'];
+            $prevGoodMap[$k] = [
+                'good_done' => (int)$pRow['good_done'],
+                'rejected_done' => (int)$pRow['rejected_done']
+            ];
+            $cId = (int)$pRow['color_id'];
+            $prevColorGoodTotals[$cId] = ($prevColorGoodTotals[$cId] ?? 0) + (int)$pRow['good_done'];
+            $prevColorRejTotals[$cId] = ($prevColorRejTotals[$cId] ?? 0) + (int)$pRow['rejected_done'];
+        }
+    }
+
+    // 6. Build allowance matrix
+    $variantAllowances = [];
+    $colorAllowances = [];
+
+    foreach ($lotVariants as $lv) {
+        $cId = (int)$lv['color_id'];
+        $sId = (int)$lv['size_id'];
+        $k = $cId . '_' . $sId;
+        $planned = (int)$lv['planned'];
+
+        $curDone = (int)($currentDoneMap[$k]['good_done'] ?? 0);
+        $curRej = (int)($currentDoneMap[$k]['rejected_done'] ?? 0);
+
+        if ($prevColorOpId !== null) {
+            // Preceding color stage exists: allowable is good pieces passed from prev stage
+            $prevGood = (int)($prevGoodMap[$k]['good_done'] ?? 0);
+            $prevRej = (int)($prevGoodMap[$k]['rejected_done'] ?? 0);
+            $allowable = $prevGood; // strictly bounded by what passed preceding stage
+        } else {
+            // First color stage: bounded by lot_variants planned quantity
+            $prevGood = $planned;
+            $prevRej = 0;
+            $allowable = $planned;
+        }
+
+        $pending = max(0, $allowable - $curDone);
+
+        $variantAllowances[$k] = [
+            'color_id' => $cId,
+            'color_name' => $lv['color_name'],
+            'color_code' => $lv['color_code'],
+            'size_id' => $sId,
+            'size_name' => $lv['size_name'],
+            'size_code' => $lv['size_code'],
+            'planned' => $planned,
+            'prev_stage_good' => $prevGood,
+            'prev_stage_rejected' => $prevRej,
+            'allowable' => $allowable,
+            'current_done' => $curDone,
+            'current_rejected' => $curRej,
+            'pending' => $pending
+        ];
+
+        // Color aggregated allowances
+        if (!isset($colorAllowances[$cId])) {
+            $colorAllowances[$cId] = [
+                'color_id' => $cId,
+                'color_name' => $lv['color_name'],
+                'color_code' => $lv['color_code'],
+                'planned' => 0,
+                'prev_stage_good' => 0,
+                'prev_stage_rejected' => 0,
+                'allowable' => 0,
+                'current_done' => 0,
+                'pending' => 0
+            ];
+        }
+        $colorAllowances[$cId]['planned'] += $planned;
+        $colorAllowances[$cId]['prev_stage_good'] += $prevGood;
+        $colorAllowances[$cId]['prev_stage_rejected'] += $prevRej;
+        $colorAllowances[$cId]['allowable'] += $allowable;
+        $colorAllowances[$cId]['current_done'] += $curDone;
+        $colorAllowances[$cId]['pending'] += $pending;
+    }
+
+    return [
+        'has_prev_color_stage' => ($prevColorOpId !== null),
+        'prev_operation_id' => $prevColorOpId,
+        'prev_operation_name' => $prevColorOpName,
+        'variants' => $variantAllowances,
+        'colors' => $colorAllowances
+    ];
+}
