@@ -45,7 +45,13 @@ foreach ($variants as $v) {
 
 // Workflow steps
 $wStmt = $db->prepare("SELECT lws.*, o.name AS op_name, o.code AS op_code, o.default_rate, dep.name AS dept_name,
-                       (SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = lws.lot_id AND operation_id = lws.operation_id) AS good_done
+                       (SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = lws.lot_id AND operation_id = lws.operation_id) AS good_done,
+                       (SELECT COALESCE(SUM(rejected_qty), 0) FROM production_entries WHERE lot_id = lws.lot_id AND operation_id = lws.operation_id) AS rej_done,
+                       (SELECT MAX(entry_date) FROM production_entries WHERE lot_id = lws.lot_id AND operation_id = lws.operation_id) AS last_entry_date,
+                       (SELECT GROUP_CONCAT(DISTINCT w.name ORDER BY w.name ASC SEPARATOR ', ') 
+                        FROM production_entries pe 
+                        JOIN workers w ON pe.worker_id = w.id 
+                        WHERE pe.lot_id = lws.lot_id AND pe.operation_id = lws.operation_id) AS worker_names
                        FROM lot_workflow_steps lws
                        JOIN operations o ON lws.operation_id = o.id
                        LEFT JOIN departments dep ON o.department_id = dep.id
@@ -203,11 +209,17 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
                             <div class="small text-muted" style="font-size: 10px;"><?= clean($st['dept_name']) ?></div>
                         </td>
                         <td class="text-center">Rs. <?= number_format($st['default_rate'], 2) ?></td>
-                        <td>____________________</td>
+                        <td>
+                            <?php if (!empty($st['worker_names'])): ?>
+                                <span class="fw-bold text-dark"><?= clean($st['worker_names']) ?></span>
+                            <?php else: ?>
+                                <span class="text-muted">____________________</span>
+                            <?php endif; ?>
+                        </td>
                         <td class="text-center fw-bold"><?= (int)$st['good_done'] > 0 ? number_format($st['good_done']) : '' ?></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
+                        <td class="text-center text-danger fw-semibold"><?= (int)($st['rej_done'] ?? 0) > 0 ? number_format($st['rej_done']) : '' ?></td>
+                        <td class="text-center small"><?= !empty($st['last_entry_date']) ? format_date($st['last_entry_date']) : '' ?></td>
+                        <td class="text-center"><span class="text-muted">________________</span></td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
