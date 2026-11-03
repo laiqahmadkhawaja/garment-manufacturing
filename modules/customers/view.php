@@ -23,7 +23,7 @@ $pageTitle = $customer['name'] . ' - Customer Ledger & Profile';
 $activeNav = 'customers';
 
 // Handle Customer Payment Collection
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'receive_payment') {
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['action']) && $_POST['action'] === 'receive_payment') {
     $payDate = trim($_POST['payment_date'] ?? date('Y-m-d'));
     $amount = (float)($_POST['amount'] ?? 0);
     $method = trim($_POST['payment_method'] ?? 'Cash');
@@ -132,23 +132,34 @@ $totalCredit = (float)$totals['total_credit'];
 $netBalance = $totalDebit - $totalCredit;
 
 // Dispatches history
-$dispStmt = $db->prepare("SELECT d.*, l.lot_number, p.name AS product_name 
-                          FROM dispatches d 
-                          JOIN lots l ON d.lot_id = l.id 
-                          JOIN products p ON l.product_id = p.id 
-                          WHERE d.customer_id = ? 
-                          ORDER BY d.dispatch_date DESC, d.id DESC");
+$dispStmt = $db->prepare("SELECT d.*, wh.name AS warehouse_name,
+       (SELECT GROUP_CONCAT(DISTINCT l.lot_number SEPARATOR ', ') 
+        FROM dispatch_items di JOIN lots l ON di.lot_id = l.id 
+        WHERE di.dispatch_id = d.id) AS lot_numbers,
+       (SELECT GROUP_CONCAT(DISTINCT p.name SEPARATOR ', ') 
+        FROM dispatch_items di JOIN products p ON di.product_id = p.id 
+        WHERE di.dispatch_id = d.id) AS product_names
+FROM dispatches d
+JOIN warehouses wh ON d.warehouse_id = wh.id
+WHERE d.customer_id = ?
+ORDER BY d.dispatch_date DESC, d.id DESC");
 $dispStmt->execute([$customerId]);
 $dispatches = $dispStmt->fetchAll();
 
 // Returns history
-$retStmt = $db->prepare("SELECT dr.*, d.dispatch_number, l.lot_number, p.name AS product_name 
-                         FROM dispatch_returns dr 
-                         JOIN dispatches d ON dr.dispatch_id = d.id 
-                         JOIN lots l ON d.lot_id = l.id 
-                         JOIN products p ON l.product_id = p.id 
-                         WHERE d.customer_id = ? 
-                         ORDER BY dr.return_date DESC, dr.id DESC");
+$retStmt = $db->prepare("SELECT dr.*, d.dispatch_number,
+       COALESCE((SELECT SUM(quantity) FROM dispatch_return_items WHERE return_id = dr.id), 0) AS total_pieces,
+       COALESCE((SELECT SUM(total_amount) FROM dispatch_return_items WHERE return_id = dr.id), 0) AS credit_amount,
+       (SELECT GROUP_CONCAT(DISTINCT l.lot_number SEPARATOR ', ') 
+        FROM dispatch_return_items dri JOIN lots l ON dri.lot_id = l.id 
+        WHERE dri.return_id = dr.id) AS lot_numbers,
+       (SELECT GROUP_CONCAT(DISTINCT p.name SEPARATOR ', ') 
+        FROM dispatch_return_items dri JOIN products p ON dri.product_id = p.id 
+        WHERE dri.return_id = dr.id) AS product_names
+FROM dispatch_returns dr
+JOIN dispatches d ON dr.dispatch_id = d.id
+WHERE dr.customer_id = ?
+ORDER BY dr.return_date DESC, dr.id DESC");
 $retStmt->execute([$customerId]);
 $returns = $retStmt->fetchAll();
 
@@ -380,32 +391,30 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <th>Challan / Inv #</th>
                                         <th>Date</th>
                                         <th>Lot / Garment</th>
+                                        <th>Warehouse</th>
                                         <th class="text-center">Dispatched Pcs</th>
-                                        <th class="text-end">Rate / Pc</th>
-                                        <th class="text-end">Gross Amount</th>
-                                        <th class="text-end">Net Invoiced</th>
-                                        <th class="text-center">Status</th>
-                                        <th class="text-end">Challan</th>
+                                        <th class="text-end">Total Billed</th>
+                                        <th class="text-center">Challan Ref</th>
+                                        <th class="text-end">Slip</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($dispatches)): ?>
-                                        <tr><td colspan="9" class="text-center py-4 text-muted">No dispatches found for this customer.</td></tr>
+                                        <tr><td colspan="8" class="text-center py-4 text-muted">No dispatches found for this customer.</td></tr>
                                     <?php else: ?>
                                         <?php foreach ($dispatches as $dsp): ?>
                                             <tr>
                                                 <td class="fw-bold text-primary">#<?= clean($dsp['dispatch_number']) ?></td>
                                                 <td><?= format_date($dsp['dispatch_date']) ?></td>
                                                 <td>
-                                                    <span class="fw-semibold">Lot #<?= clean($dsp['lot_number']) ?></span>
-                                                    <div class="text-muted small"><?= clean($dsp['product_name']) ?></div>
+                                                    <span class="fw-semibold">Lot #<?= clean($dsp['lot_numbers'] ?: 'N/A') ?></span>
+                                                    <div class="text-muted small"><?= clean($dsp['product_names'] ?: 'Garments') ?></div>
                                                 </td>
+                                                <td><span class="badge bg-light text-secondary border"><?= clean($dsp['warehouse_name']) ?></span></td>
                                                 <td class="text-center fw-bold"><?= number_format($dsp['total_pieces']) ?> pcs</td>
-                                                <td class="text-end"><?= format_currency($dsp['price_per_piece']) ?></td>
-                                                <td class="text-end"><?= format_currency($dsp['total_amount']) ?></td>
-                                                <td class="text-end fw-bold text-dark"><?= format_currency($dsp['net_amount']) ?></td>
+                                                <td class="text-end fw-bold text-dark"><?= format_currency($dsp['total_value']) ?></td>
                                                 <td class="text-center">
-                                                    <span class="badge bg-success-subtle text-success"><?= clean($dsp['payment_status'] ?? 'Billed') ?></span>
+                                                    <span class="badge bg-success-subtle text-success"><?= clean($dsp['challan_no'] ?: 'Challan Issued') ?></span>
                                                 </td>
                                                 <td class="text-end">
                                                     <a href="<?= BASE_URL ?>modules/dispatch/challan.php?id=<?= $dsp['id'] ?>" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2" title="Print Delivery Challan">
@@ -433,14 +442,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <th>Original Dispatch</th>
                                         <th>Product / Lot</th>
                                         <th class="text-center">Returned Pcs</th>
-                                        <th class="text-end">Unit Rate</th>
                                         <th class="text-end">Credit Amount</th>
-                                        <th>Reason / Notes</th>
+                                        <th>Reason / Type</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($returns)): ?>
-                                        <tr><td colspan="8" class="text-center py-4 text-muted">No sales returns recorded from this customer.</td></tr>
+                                        <tr><td colspan="7" class="text-center py-4 text-muted">No sales returns recorded from this customer.</td></tr>
                                     <?php else: ?>
                                         <?php foreach ($returns as $ret): ?>
                                             <tr>
@@ -448,13 +456,17 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <td><?= format_date($ret['return_date']) ?></td>
                                                 <td class="text-primary fw-semibold">#<?= clean($ret['dispatch_number']) ?></td>
                                                 <td>
-                                                    <span><?= clean($ret['product_name']) ?></span>
-                                                    <div class="text-muted small">Lot #<?= clean($ret['lot_number']) ?></div>
+                                                    <span><?= clean($ret['product_names'] ?: 'Returned Garments') ?></span>
+                                                    <div class="text-muted small">Lot #<?= clean($ret['lot_numbers'] ?: 'N/A') ?></div>
                                                 </td>
                                                 <td class="text-center fw-bold text-danger"><?= number_format($ret['total_pieces']) ?> pcs</td>
-                                                <td class="text-end"><?= format_currency($ret['credit_amount'] / max(1, $ret['total_pieces'])) ?></td>
                                                 <td class="text-end fw-bold text-success"><?= format_currency($ret['credit_amount']) ?></td>
-                                                <td class="small text-muted"><?= clean($ret['reason'] ?: 'Customer Return') ?></td>
+                                                <td>
+                                                    <span class="badge bg-warning-subtle text-dark"><?= clean($ret['return_type']) ?></span>
+                                                    <?php if ($ret['remarks']): ?>
+                                                        <div class="small text-muted"><?= clean($ret['remarks']) ?></div>
+                                                    <?php endif; ?>
+                                                </td>
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php endif; ?>
