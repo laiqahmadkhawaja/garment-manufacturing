@@ -30,6 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $lotNumber = trim($_POST['lot_number'] ?? '');
     $lotDate = trim($_POST['lot_date'] ?? date('Y-m-d'));
     $productId = (int)($_POST['product_id'] ?? 0);
+    $designNumber = trim($_POST['design_number'] ?? '');
     $designId = !empty($_POST['design_id']) ? (int)$_POST['design_id'] : null;
     $supervisor = trim($_POST['supervisor_name'] ?? '');
     $expectedDate = !empty($_POST['expected_date']) ? trim($_POST['expected_date']) : null;
@@ -147,12 +148,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     // Insert Lot Master
                     $stmt = $db->prepare("INSERT INTO lots 
-                        (lot_number, lot_date, product_id, design_id, supervisor_name, expected_date, instructions, total_pieces, total_colors, total_sizes, status, created_by) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft', ?)");
+                        (lot_number, lot_date, product_id, design_number, design_id, supervisor_name, expected_date, instructions, total_pieces, total_colors, total_sizes, status, created_by) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft', ?)");
                     $stmt->execute([
                         $lotNumber,
                         $lotDate,
                         $productId,
+                        $designNumber ?: null,
                         $designId,
                         $supervisor,
                         $expectedDate,
@@ -282,23 +284,35 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <label class="form-label fw-semibold">
                                 Design Number <span class="badge bg-light text-secondary border fw-normal">Optional</span>
                             </label>
-                            <select name="design_id" id="design_id" class="form-select">
-                                <option value="">-- No Design / Add Later --</option>
-                            </select>
-                            <div class="form-text small">Can be assigned or updated anytime later</div>
+                            <input type="text" name="design_number" id="lot_design_number" class="form-control" placeholder="e.g. 904 or D-101 (Optional)" value="<?= clean($_POST['design_number'] ?? '') ?>">
+                            <div class="form-text small">Enter design # or article code (can be edited anytime)</div>
                         </div>
 
-                        <!-- Live Design Pattern Elements Preview -->
-                        <div class="col-12 d-none" id="designElementsPreview">
-                            <div class="p-3 bg-light border border-primary-subtle rounded-3">
-                                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <i class="bi bi-puzzle-fill text-primary fs-5"></i>
-                                        <span class="fw-bold text-dark" id="previewDesignTitle">Design Pattern Breakdown (اجزاء)</span>
+                        <!-- Live Product Pattern Elements & BOM Recipe Preview -->
+                        <div class="col-12 d-none" id="productSpecsPreview">
+                            <div class="row g-2">
+                                <!-- Elements preview -->
+                                <div class="col-12 col-lg-6">
+                                    <div class="p-3 bg-light border border-primary-subtle rounded-3 h-100">
+                                        <div class="d-flex align-items-center justify-content-between mb-2">
+                                            <span class="small fw-bold text-dark"><i class="bi bi-puzzle-fill text-primary me-1"></i> Product Cutting Elements (اجزاء):</span>
+                                            <span class="small text-muted" id="lblProdElementsBadge">0 parts</span>
+                                        </div>
+                                        <div class="d-flex flex-wrap gap-1 align-items-center" id="prodElementsBadges"></div>
                                     </div>
-                                    <div class="small text-muted" id="previewDesignStats">0 components</div>
                                 </div>
-                                <div class="d-flex flex-wrap gap-2 align-items-center" id="previewBadgesContainer"></div>
+                                <!-- Recipe / Estimated Raw Materials preview -->
+                                <div class="col-12 col-lg-6">
+                                    <div class="p-3 bg-light border border-warning-subtle rounded-3 h-100">
+                                        <div class="d-flex align-items-center justify-content-between mb-2">
+                                            <span class="small fw-bold text-dark"><i class="bi bi-file-earmark-spreadsheet-fill text-warning me-1"></i> Recipe / Raw Materials Consumption:</span>
+                                            <span class="small text-muted" id="lblRecipeStatus"></span>
+                                        </div>
+                                        <div id="prodRecipeDetails">
+                                            <span class="text-muted small fst-italic">Select a product to view recipe requirements</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -613,57 +627,79 @@ document.addEventListener('DOMContentLoaded', function() {
         btnLotNum.textContent = this.value || '...';
     });
 
-    // Dynamic Designs Loader with Pattern Elements Preview
-    let currentLoadedDesigns = [];
+    // Dynamic Product Elements & BOM Recipe Loader
+    let currentProductData = null;
 
-    function updateElementsPreview(designId) {
-        const previewBox = document.getElementById('designElementsPreview');
-        const titleEl = document.getElementById('previewDesignTitle');
-        const statsEl = document.getElementById('previewDesignStats');
-        const container = document.getElementById('previewBadgesContainer');
+    function updateProductSpecsPreview() {
+        const previewBox = document.getElementById('productSpecsPreview');
+        const elementsContainer = document.getElementById('prodElementsBadges');
+        const elementsBadge = document.getElementById('lblProdElementsBadge');
+        const recipeContainer = document.getElementById('prodRecipeDetails');
+        const recipeStatus = document.getElementById('lblRecipeStatus');
 
-        if (!designId || !previewBox) {
+        if (!currentProductData || !previewBox) {
             if (previewBox) previewBox.classList.add('d-none');
             return;
         }
 
-        const d = currentLoadedDesigns.find(item => item.id == designId);
-        if (!d || !d.elements || d.elements.length === 0) {
-            if (previewBox) previewBox.classList.add('d-none');
-            return;
-        }
+        const elements = currentProductData.elements || [];
+        const recipeItems = currentProductData.recipe_items || [];
+        const currentTotalPcs = parseInt(document.getElementById('grandPiecesTotal').textContent.replace(/,/g, '')) || 0;
 
-        let totalPcs = 0;
+        // 1. Render Elements
+        elementsContainer.innerHTML = '';
+        let totalPcsPerUnit = 0;
         let hasSleeves = false;
-        container.innerHTML = '';
 
-        d.elements.forEach(el => {
-            const q = parseInt(el.quantity) || 1;
-            totalPcs += q;
-            if (el.element_name.toLowerCase().includes('sleeve') || el.element_name.includes('بازو')) {
-                hasSleeves = true;
-            }
+        if (elements.length > 0) {
+            elements.forEach(el => {
+                const q = parseInt(el.quantity) || 1;
+                totalPcsPerUnit += q;
+                if (el.element_name.toLowerCase().includes('sleeve') || el.element_name.includes('بازو')) {
+                    hasSleeves = true;
+                }
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-white text-dark border p-1 shadow-xs';
+                badge.style.fontSize = '0.78rem';
+                badge.innerHTML = `<i class="bi bi-puzzle text-primary me-1"></i>${escapeHtml(el.element_name)}: <strong class="text-primary">×${q}</strong>`;
+                elementsContainer.appendChild(badge);
+            });
 
-            const badge = document.createElement('span');
-            badge.className = 'badge bg-white text-dark border p-2 shadow-xs';
-            badge.style.fontSize = '0.82rem';
-            badge.innerHTML = `<i class="bi bi-puzzle text-primary me-1"></i>${escapeHtml(el.element_name)}: <strong class="text-primary fs-6">×${q}</strong> ${el.notes ? '<small class="text-muted ms-1">(' + escapeHtml(el.notes) + ')</small>' : ''}`;
-            container.appendChild(badge);
-        });
+            const pill = document.createElement('span');
+            pill.className = hasSleeves ? 'badge bg-primary-subtle text-primary border p-1 ms-auto' : 'badge bg-warning-subtle text-warning-emphasis border p-1 ms-auto';
+            pill.style.fontSize = '0.75rem';
+            pill.innerHTML = hasSleeves ? '<i class="bi bi-check-circle-fill me-1"></i>With Sleeves' : '<i class="bi bi-dash-circle-fill me-1"></i>Sleeveless';
+            elementsContainer.appendChild(pill);
 
-        // Add style indicator pill (e.g. Sleeveless vs Full Sleeves)
-        const stylePill = document.createElement('span');
-        if (hasSleeves) {
-            stylePill.className = 'badge bg-primary-subtle text-primary border p-2 ms-auto';
-            stylePill.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>With Sleeves (بازو دار)';
+            elementsBadge.textContent = `${elements.length} components (${totalPcsPerUnit} pcs/unit)`;
         } else {
-            stylePill.className = 'badge bg-warning-subtle text-warning-emphasis border p-2 ms-auto';
-            stylePill.innerHTML = '<i class="bi bi-dash-circle-fill me-1"></i>Sleeveless / Vest (بغیر بازو)';
+            elementsContainer.innerHTML = '<span class="text-muted small fst-italic">No pattern elements specified for this product.</span>';
+            elementsBadge.textContent = '0 components';
         }
-        container.appendChild(stylePill);
 
-        titleEl.textContent = `Design #${d.design_number} - ${d.name} Pattern Breakdown (اجزاء)`;
-        statsEl.textContent = `${d.elements.length} components • ${totalPcs} total pieces per garment`;
+        // 2. Render Recipe (BOM) Requirements
+        recipeContainer.innerHTML = '';
+        if (recipeItems.length > 0) {
+            recipeStatus.innerHTML = `<span class="badge bg-success-subtle text-success border">Recipe Active</span>`;
+            let recHtml = '<div class="d-flex flex-wrap gap-1">';
+            recipeItems.forEach(it => {
+                const perPiece = parseFloat(it.quantity_per_piece) || 0;
+                const batchEst = currentTotalPcs > 0 ? (perPiece * currentTotalPcs).toFixed(currentTotalPcs % 1 === 0 && perPiece >= 1 ? 0 : 2) : 0;
+                recHtml += `
+                    <div class="badge bg-white text-dark border p-1 shadow-xs" style="font-size: 0.78rem;">
+                        <span class="text-secondary">${escapeHtml(it.material_name)}:</span>
+                        <strong class="text-primary">${perPiece} ${escapeHtml(it.unit_of_measure)}/pc</strong>
+                        ${currentTotalPcs > 0 ? '<span class="text-success ms-1">[' + batchEst + ' ' + escapeHtml(it.unit_of_measure) + ' for batch]</span>' : ''}
+                    </div>
+                `;
+            });
+            recHtml += '</div>';
+            recipeContainer.innerHTML = recHtml;
+        } else {
+            recipeStatus.innerHTML = `<span class="badge bg-secondary-subtle text-secondary border">No Recipe</span>`;
+            recipeContainer.innerHTML = '<span class="text-muted small fst-italic">No raw material recipe configured for this product.</span>';
+        }
+
         previewBox.classList.remove('d-none');
     }
 
@@ -674,43 +710,28 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function loadDesigns(productId, selectedDesign = '') {
-        designSelect.innerHTML = '<option value="">-- No Design / Add Later --</option>';
-        currentLoadedDesigns = [];
-        updateElementsPreview(null);
+    function loadProductDetails(productId) {
+        currentProductData = null;
+        updateProductSpecsPreview();
         if (!productId) return;
 
-        fetch('<?= BASE_URL ?>modules/lots/ajax.php?action=get_designs&product_id=' + productId)
+        fetch('<?= BASE_URL ?>modules/lots/ajax.php?action=get_product_details&product_id=' + productId)
             .then(res => res.json())
             .then(data => {
-                if (data.designs && data.designs.length > 0) {
-                    currentLoadedDesigns = data.designs;
-                    data.designs.forEach(d => {
-                        const opt = document.createElement('option');
-                        opt.value = d.id;
-                        opt.textContent = 'Design #' + d.design_number + ' - ' + d.name;
-                        if (selectedDesign && selectedDesign == d.id) opt.selected = true;
-                        designSelect.appendChild(opt);
-                    });
-
-                    if (selectedDesign) {
-                        updateElementsPreview(selectedDesign);
-                    }
+                if (data.status === 'success' && data.product) {
+                    currentProductData = data.product;
+                    updateProductSpecsPreview();
                 }
             })
             .catch(err => console.error(err));
     }
 
-    designSelect.addEventListener('change', function() {
-        updateElementsPreview(this.value);
-    });
-
     productSelect.addEventListener('change', function() {
-        loadDesigns(this.value);
+        loadProductDetails(this.value);
     });
 
     if (productSelect.value) {
-        loadDesigns(productSelect.value, '<?= clean($_POST['design_id'] ?? '') ?>');
+        loadProductDetails(productSelect.value);
     }
 
     // Toggle Modes

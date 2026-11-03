@@ -12,7 +12,8 @@ $db = get_db();
 
 // Fetch Lot Master
 $stmt = $db->prepare("SELECT l.*, p.name AS product_name, p.code AS product_code, p.product_type,
-                             d.design_number, d.name AS design_name, u.full_name AS creator_name 
+                             COALESCE(l.design_number, d.design_number) AS design_number, 
+                             d.name AS design_name, u.full_name AS creator_name 
                       FROM lots l
                       JOIN products p ON l.product_id = p.id
                       LEFT JOIN designs d ON l.design_id = d.id
@@ -25,11 +26,27 @@ if (!$lot) {
     redirect('modules/lots/index.php', 'Lot not found.', 'danger');
 }
 
-$designElements = [];
-if (!empty($lot['design_id'])) {
-    $deStmt = $db->prepare("SELECT * FROM design_elements WHERE design_id = ? ORDER BY sort_order ASC, id ASC");
-    $deStmt->execute([$lot['design_id']]);
-    $designElements = $deStmt->fetchAll();
+// Product Pattern Elements
+$productElements = [];
+$peStmt = $db->prepare("SELECT * FROM product_elements WHERE product_id = ? ORDER BY sort_order ASC, id ASC");
+$peStmt->execute([$lot['product_id']]);
+$productElements = $peStmt->fetchAll();
+
+// Product BOM Recipe
+$bomStmt = $db->prepare("SELECT * FROM bom_headers WHERE product_id = ? AND is_active = 1 ORDER BY id DESC LIMIT 1");
+$bomStmt->execute([$lot['product_id']]);
+$productBom = $bomStmt->fetch();
+
+$bomItems = [];
+if ($productBom) {
+    $biStmt = $db->prepare("SELECT bi.*, m.name AS material_name, m.code AS material_code, u.code AS unit_code, m.cost_per_unit
+                           FROM bom_items bi
+                           JOIN materials m ON bi.material_id = m.id
+                           JOIN units u ON m.unit_id = u.id
+                           WHERE bi.bom_id = ?
+                           ORDER BY bi.id ASC");
+    $biStmt->execute([$productBom['id']]);
+    $bomItems = $biStmt->fetchAll();
 }
 
 $pageTitle = "Lot #" . $lot['lot_number'] . " Details";
@@ -349,8 +366,8 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <div class="tab-content">
             <!-- TAB 1: OVERVIEW & VARIANTS -->
             <div class="tab-pane fade show active" id="tab-overview">
-                <?php if (!empty($lot['design_id']) && !empty($designElements)): 
-                    $totalElemPcs = array_sum(array_column($designElements, 'quantity'));
+                <?php if (!empty($productElements)): 
+                    $totalElemPcs = array_sum(array_column($productElements, 'quantity'));
                     $batchTotalPcs = $totalElemPcs * $lot['total_pieces'];
                 ?>
                     <div class="card-modern mb-4">
@@ -358,16 +375,16 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <div class="d-flex align-items-center gap-2">
                                 <span class="badge bg-primary p-2 rounded-2"><i class="bi bi-puzzle-fill text-white fs-6"></i></span>
                                 <div>
-                                    <h6 class="fw-bold mb-0 text-dark">Design Structural Elements & Pattern Breakdown (اجزاء اور کٹنگ کے حصے)</h6>
-                                    <span class="text-muted small">Design #<?= clean($lot['design_number']) ?> — <?= clean($lot['design_name']) ?></span>
+                                    <h6 class="fw-bold mb-0 text-dark">Product Pattern Elements & Structure (اجزاء اور کٹنگ کے حصے)</h6>
+                                    <span class="text-muted small">Pattern anatomy for <?= clean($lot['product_name']) ?> (<?= clean($lot['product_type']) ?>)</span>
                                 </div>
                             </div>
                             <div class="d-flex align-items-center gap-3">
                                 <span class="small text-muted">Per Garment: <strong class="text-dark"><?= $totalElemPcs ?> pieces</strong></span>
                                 <span class="vr"></span>
                                 <span class="small text-muted">Total Batch Cutting Pieces: <strong class="text-primary fw-bold"><?= number_format($batchTotalPcs) ?> pieces</strong></span>
-                                <a href="<?= BASE_URL ?>modules/settings/design_edit.php?id=<?= $lot['design_id'] ?>" class="btn btn-sm btn-outline-primary py-0 px-2 small">
-                                    <i class="bi bi-pencil me-1"></i>Edit Elements
+                                <a href="<?= BASE_URL ?>modules/settings/product_edit.php?id=<?= $lot['product_id'] ?>" class="btn btn-sm btn-outline-primary py-0 px-2 small">
+                                    <i class="bi bi-pencil me-1"></i>Configure Product Elements
                                 </a>
                             </div>
                         </div>
@@ -384,22 +401,22 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <?php foreach ($designElements as $eIdx => $de): 
-                                            $reqCut = $de['quantity'] * $lot['total_pieces'];
+                                        <?php foreach ($productElements as $eIdx => $pe): 
+                                            $reqCut = $pe['quantity'] * $lot['total_pieces'];
                                         ?>
                                             <tr>
                                                 <td class="text-center text-muted fw-bold"><?= $eIdx + 1 ?></td>
                                                 <td class="fw-bold text-dark">
                                                     <i class="bi bi-scissors text-primary me-1"></i>
-                                                    <?= clean($de['element_name']) ?>
+                                                    <?= clean($pe['element_name']) ?>
                                                 </td>
                                                 <td class="text-center fw-bold text-primary">
-                                                    <?= (int)$de['quantity'] ?> pcs
+                                                    <?= (int)$pe['quantity'] ?> pcs
                                                 </td>
                                                 <td class="text-center fw-bold text-success">
                                                     <?= number_format($reqCut) ?> pcs
                                                 </td>
-                                                <td class="text-muted"><?= clean($de['notes'] ?: '—') ?></td>
+                                                <td class="text-muted"><?= clean($pe['notes'] ?: '—') ?></td>
                                             </tr>
                                         <?php endforeach; ?>
                                     </tbody>
@@ -602,6 +619,101 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
             <!-- TAB 4: MATERIALS -->
             <div class="tab-pane fade" id="tab-materials">
+                <?php if ($productBom && !empty($bomItems)): 
+                    $estTotalRecipeCost = 0;
+                ?>
+                    <div class="card-modern mb-4">
+                        <div class="card-modern-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-success p-2 rounded-2"><i class="bi bi-card-checklist text-white fs-6"></i></span>
+                                <div>
+                                    <h6 class="fw-bold mb-0 text-dark">Production Recipe / BOM Allocation (پروڈکٹ ریسیپی اور خام مال کا تخمینہ)</h6>
+                                    <span class="text-muted small">Standard recipe configured for <?= clean($lot['product_name']) ?> &bull; Wastage allowance: <?= (float)$productBom['wastage_percent'] ?>%</span>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <a href="<?= BASE_URL ?>modules/settings/products.php?tab=recipes&product_id=<?= $lot['product_id'] ?>" class="btn btn-sm btn-outline-success py-1 px-2">
+                                    <i class="bi bi-pencil me-1"></i>Configure Product Recipe
+                                </a>
+                            </div>
+                        </div>
+                        <div class="card-modern-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-modern align-middle mb-0" style="font-size: 0.85rem;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Raw Material / خام مال</th>
+                                            <th class="text-center">Per Piece Qty</th>
+                                            <th class="text-center">Batch Required (w/ Wastage)</th>
+                                            <th class="text-end">Est. Unit Cost</th>
+                                            <th class="text-end">Est. Batch Cost</th>
+                                            <th class="text-center">Actual Issued</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php 
+                                        foreach ($bomItems as $bi): 
+                                            $baseRequired = $bi['quantity_per_piece'] * $lot['total_pieces'];
+                                            $wastageMult = 1 + (($productBom['wastage_percent'] ?? 0) / 100);
+                                            $batchRequired = $baseRequired * $wastageMult;
+                                            $estCost = $batchRequired * (float)$bi['cost_per_unit'];
+                                            $estTotalRecipeCost += $estCost;
+
+                                            // Calculate actual issued so far for this material
+                                            $issuedQty = 0;
+                                            foreach ($materialIssues as $mi) {
+                                                if ($mi['material_id'] == $bi['material_id']) {
+                                                    $issuedQty += (float)$mi['quantity'];
+                                                }
+                                            }
+                                        ?>
+                                            <tr>
+                                                <td class="fw-bold text-dark">
+                                                    <?= clean($bi['material_name']) ?>
+                                                    <span class="badge bg-light text-secondary border ms-1"><?= clean($bi['material_code']) ?></span>
+                                                </td>
+                                                <td class="text-center fw-semibold text-muted">
+                                                    <?= (float)$bi['quantity_per_piece'] ?> <?= clean($bi['unit_code']) ?>
+                                                </td>
+                                                <td class="text-center fw-bold text-primary">
+                                                    <?= number_format($batchRequired, 2) ?> <?= clean($bi['unit_code']) ?>
+                                                </td>
+                                                <td class="text-end text-muted">
+                                                    Rs. <?= number_format($bi['cost_per_unit'], 2) ?>
+                                                </td>
+                                                <td class="text-end fw-bold text-dark">
+                                                    Rs. <?= number_format($estCost, 2) ?>
+                                                </td>
+                                                <td class="text-center">
+                                                    <?php if ($issuedQty >= $batchRequired): ?>
+                                                        <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                                                            <i class="bi bi-check-circle me-1"></i><?= number_format($issuedQty, 2) ?> <?= clean($bi['unit_code']) ?> Issued
+                                                        </span>
+                                                    <?php elseif ($issuedQty > 0): ?>
+                                                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-2 py-1">
+                                                            <?= number_format($issuedQty, 2) ?> / <?= number_format($batchRequired, 2) ?> <?= clean($bi['unit_code']) ?>
+                                                        </span>
+                                                    <?php else: ?>
+                                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+                                                            0.00 <?= clean($bi['unit_code']) ?> Issued (Pending)
+                                                        </span>
+                                                    <?php endif; ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                    <tfoot class="table-light">
+                                        <tr>
+                                            <td colspan="4" class="text-end fw-bold">Estimated Raw Material Budget (بجٹ خام مال):</td>
+                                            <td class="text-end fw-bold text-success fs-6">Rs. <?= number_format($estTotalRecipeCost, 2) ?></td>
+                                            <td></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
                 <div class="row g-4">
                     <div class="col-12 col-lg-7">
                         <div class="card-modern">

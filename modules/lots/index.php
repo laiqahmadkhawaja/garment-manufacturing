@@ -16,7 +16,9 @@ $statusFilter = trim($_GET['status'] ?? '');
 $productFilter = (int)($_GET['product_id'] ?? 0);
 $search = trim($_GET['search'] ?? '');
 
-$sql = "SELECT l.*, p.name AS product_name, p.code AS product_code, d.design_number, d.name AS design_name,
+$sql = "SELECT l.*, p.name AS product_name, p.code AS product_code, 
+        COALESCE(l.design_number, d.design_number) AS design_number, 
+        d.name AS design_name,
         (SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = l.id) AS completed_good,
         (SELECT COALESCE(SUM(packed_qty), 0) FROM packing_entries WHERE lot_id = l.id) AS total_packed,
         (SELECT COALESCE(SUM(quantity), 0) FROM dispatch_items WHERE lot_id = l.id) AS total_dispatched
@@ -35,7 +37,8 @@ if ($productFilter > 0) {
     $params[] = $productFilter;
 }
 if (!empty($search)) {
-    $sql .= " AND (l.lot_number LIKE ? OR l.instructions LIKE ? OR d.design_number LIKE ?)";
+    $sql .= " AND (l.lot_number LIKE ? OR l.instructions LIKE ? OR l.design_number LIKE ? OR d.design_number LIKE ?)";
+    $params[] = "%$search%";
     $params[] = "%$search%";
     $params[] = "%$search%";
     $params[] = "%$search%";

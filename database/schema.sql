@@ -131,6 +131,18 @@ CREATE TABLE `products` (
     FOREIGN KEY (`default_workflow_template_id`) REFERENCES `workflow_templates`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+DROP TABLE IF EXISTS `product_elements`;
+CREATE TABLE `product_elements` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `product_id` INT NOT NULL,
+    `element_name` VARCHAR(100) NOT NULL,
+    `quantity` INT NOT NULL DEFAULT 1,
+    `notes` VARCHAR(255) NULL,
+    `sort_order` INT NOT NULL DEFAULT 0,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 DROP TABLE IF EXISTS `designs`;
 CREATE TABLE `designs` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -247,6 +259,7 @@ CREATE TABLE `lots` (
     `lot_number` VARCHAR(50) NOT NULL UNIQUE,
     `lot_date` DATE NOT NULL,
     `product_id` INT NOT NULL,
+    `design_number` VARCHAR(100) NULL,
     `design_id` INT NULL,
     `supervisor_name` VARCHAR(100) NULL,
     `expected_date` DATE NULL,
@@ -553,6 +566,7 @@ CREATE TABLE `bom_headers` (
     `product_id` INT NOT NULL,
     `design_id` INT NULL,
     `description` TEXT NULL,
+    `wastage_percent` DECIMAL(5,2) NOT NULL DEFAULT 0.00,
     `is_active` TINYINT(1) NOT NULL DEFAULT 1,
     FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE CASCADE,
     FOREIGN KEY (`design_id`) REFERENCES `designs`(`id`) ON DELETE CASCADE

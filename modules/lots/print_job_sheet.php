@@ -11,7 +11,8 @@ $lotId = (int)($_GET['id'] ?? 0);
 $db = get_db();
 
 $stmt = $db->prepare("SELECT l.*, p.name AS product_name, p.code AS product_code, p.product_type,
-                             d.design_number, d.name AS design_name 
+                             COALESCE(l.design_number, d.design_number) AS design_number, 
+                             d.name AS design_name 
                       FROM lots l
                       JOIN products p ON l.product_id = p.id
                       LEFT JOIN designs d ON l.design_id = d.id
@@ -23,12 +24,27 @@ if (!$lot) {
     die("Lot not found.");
 }
 
-// Design Pattern Elements
-$designElements = [];
-if (!empty($lot['design_id'])) {
-    $deStmt = $db->prepare("SELECT * FROM design_elements WHERE design_id = ? ORDER BY sort_order ASC, id ASC");
-    $deStmt->execute([$lot['design_id']]);
-    $designElements = $deStmt->fetchAll();
+// Product Pattern Elements
+$productElements = [];
+$peStmt = $db->prepare("SELECT * FROM product_elements WHERE product_id = ? ORDER BY sort_order ASC, id ASC");
+$peStmt->execute([$lot['product_id']]);
+$productElements = $peStmt->fetchAll();
+
+// Product BOM Recipe
+$bomStmt = $db->prepare("SELECT * FROM bom_headers WHERE product_id = ? AND is_active = 1 ORDER BY id DESC LIMIT 1");
+$bomStmt->execute([$lot['product_id']]);
+$productBom = $bomStmt->fetch();
+
+$bomItems = [];
+if ($productBom) {
+    $biStmt = $db->prepare("SELECT bi.*, m.name AS material_name, m.code AS material_code, u.code AS unit_code
+                           FROM bom_items bi
+                           JOIN materials m ON bi.material_id = m.id
+                           JOIN units u ON m.unit_id = u.id
+                           WHERE bi.bom_id = ?
+                           ORDER BY bi.id ASC");
+    $biStmt->execute([$productBom['id']]);
+    $bomItems = $biStmt->fetchAll();
 }
 
 // Variants
@@ -151,9 +167,11 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
             </tbody>
         </table>
 
-        <!-- Design Pattern Components Breakdown (If assigned) -->
-        <?php if (!empty($designElements)): ?>
-            <h6 class="fw-bold text-uppercase border-bottom pb-1 mb-2">1. Garment Pattern Elements & Cutting Parts (کٹنگ کے اجزاء)</h6>
+        <?php $secNum = 1; ?>
+
+        <!-- Garment Pattern Components Breakdown -->
+        <?php if (!empty($productElements)): ?>
+            <h6 class="fw-bold text-uppercase border-bottom pb-1 mb-2"><?= $secNum++ ?>. Garment Pattern Elements & Cutting Parts (کٹنگ کے اجزاء)</h6>
             <table class="table table-bordered mb-4" style="font-size: 0.85rem;">
                 <thead class="bg-light text-center">
                     <tr>
@@ -168,17 +186,17 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
                     <?php 
                     $sumPerGarment = 0;
                     $sumBatchCut = 0;
-                    foreach ($designElements as $eIdx => $de): 
-                        $bCut = $de['quantity'] * $lot['total_pieces'];
-                        $sumPerGarment += $de['quantity'];
+                    foreach ($productElements as $eIdx => $pe): 
+                        $bCut = $pe['quantity'] * $lot['total_pieces'];
+                        $sumPerGarment += $pe['quantity'];
                         $sumBatchCut += $bCut;
                     ?>
                         <tr>
                             <td class="text-center fw-bold"><?= $eIdx + 1 ?></td>
-                            <td class="text-start fw-semibold"><?= clean($de['element_name']) ?></td>
-                            <td class="text-center fw-bold"><?= (int)$de['quantity'] ?></td>
+                            <td class="text-start fw-semibold"><?= clean($pe['element_name']) ?></td>
+                            <td class="text-center fw-bold"><?= (int)$pe['quantity'] ?></td>
                             <td class="text-center fw-bold"><?= number_format($bCut) ?></td>
-                            <td class="text-start text-muted"><?= clean($de['notes'] ?: '—') ?></td>
+                            <td class="text-start text-muted"><?= clean($pe['notes'] ?: '—') ?></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -194,7 +212,7 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
         <?php endif; ?>
 
         <!-- Color & Size Matrix -->
-        <h6 class="fw-bold text-uppercase border-bottom pb-1 mb-2"><?= !empty($designElements) ? '2' : '1' ?>. Color & Size Distribution</h6>
+        <h6 class="fw-bold text-uppercase border-bottom pb-1 mb-2"><?= $secNum++ ?>. Color & Size Distribution</h6>
         <table class="table table-bordered text-center mb-4">
             <thead>
                 <tr class="bg-light">
@@ -237,8 +255,41 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
             </tfoot>
         </table>
 
+        <!-- Raw Material Recipe / Store Requisition -->
+        <?php if ($productBom && !empty($bomItems)): ?>
+            <h6 class="fw-bold text-uppercase border-bottom pb-1 mb-2"><?= $secNum++ ?>. Raw Material Recipe & Store Allocation (خام مال اور ریسیپی)</h6>
+            <table class="table table-bordered mb-4" style="font-size: 0.85rem;">
+                <thead class="bg-light text-center">
+                    <tr>
+                        <th style="width: 5%;">#</th>
+                        <th class="text-start" style="width: 40%;">Raw Material Name / Code</th>
+                        <th style="width: 25%;">Per Piece Standard</th>
+                        <th style="width: 30%;">Total Batch Required (w/ <?= (float)$productBom['wastage_percent'] ?>% Wastage)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php 
+                    foreach ($bomItems as $bIdx => $bi): 
+                        $baseReq = $bi['quantity_per_piece'] * $lot['total_pieces'];
+                        $wastageMult = 1 + (($productBom['wastage_percent'] ?? 0) / 100);
+                        $totReq = $baseReq * $wastageMult;
+                    ?>
+                        <tr>
+                            <td class="text-center fw-bold"><?= $bIdx + 1 ?></td>
+                            <td class="text-start fw-semibold">
+                                <?= clean($bi['material_name']) ?>
+                                <span class="text-muted small ms-1">(<?= clean($bi['material_code']) ?>)</span>
+                            </td>
+                            <td class="text-center"><?= (float)$bi['quantity_per_piece'] ?> <?= clean($bi['unit_code']) ?></td>
+                            <td class="text-center fw-bold"><?= number_format($totReq, 2) ?> <?= clean($bi['unit_code']) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+
         <!-- Floor Traveller Operations Table -->
-        <h6 class="fw-bold text-uppercase border-bottom pb-1 mb-2">2. Sequential Production Stages & Artisan Work Log</h6>
+        <h6 class="fw-bold text-uppercase border-bottom pb-1 mb-2"><?= $secNum++ ?>. Sequential Production Stages & Artisan Work Log</h6>
         <table class="table table-bordered align-middle mb-4">
             <thead>
                 <tr class="bg-light text-center">

@@ -27,7 +27,12 @@ $stmt->execute([$designId]);
 $design = $stmt->fetch();
 
 if (!$design) {
-    redirect('modules/settings/products.php#designs', 'Design record not found.', 'danger');
+    redirect('modules/settings/products.php', 'Design record not found.', 'danger');
+}
+
+// Redirect to modernized Product Edit page
+if (!empty($design['product_id'])) {
+    redirect('modules/settings/product_edit.php?id=' . $design['product_id'], 'Pattern elements and specifications are now managed directly under Products & Recipes.', 'info');
 }
 
 // Handle Form Submission

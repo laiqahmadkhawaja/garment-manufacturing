@@ -10,6 +10,45 @@ require_login();
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $db = get_db();
 
+if ($action === 'get_product_details') {
+    $productId = (int)($_GET['product_id'] ?? 0);
+    $stmt = $db->prepare("SELECT p.*, c.name AS category_name, wt.name AS template_name 
+                          FROM products p 
+                          LEFT JOIN product_categories c ON p.category_id = c.id 
+                          LEFT JOIN workflow_templates wt ON p.default_workflow_template_id = wt.id 
+                          WHERE p.id = ?");
+    $stmt->execute([$productId]);
+    $product = $stmt->fetch();
+
+    if (!$product) {
+        json_response(['status' => 'error', 'message' => 'Product not found'], 404);
+    }
+
+    // Get product pattern elements
+    $eStmt = $db->prepare("SELECT * FROM product_elements WHERE product_id = ? ORDER BY sort_order ASC, id ASC");
+    $eStmt->execute([$productId]);
+    $product['elements'] = $eStmt->fetchAll();
+
+    // Get product BOM recipe
+    $bStmt = $db->prepare("SELECT b.* FROM bom_headers b WHERE b.product_id = ? AND b.is_active = 1 ORDER BY b.id DESC LIMIT 1");
+    $bStmt->execute([$productId]);
+    $recipe = $bStmt->fetch();
+
+    $recipeItems = [];
+    if ($recipe) {
+        $biStmt = $db->prepare("SELECT bi.*, m.name AS material_name, m.code AS material_code, m.unit_of_measure, m.cost_price 
+                                FROM bom_items bi 
+                                JOIN materials m ON bi.material_id = m.id 
+                                WHERE bi.bom_id = ?");
+        $biStmt->execute([$recipe['id']]);
+        $recipeItems = $biStmt->fetchAll();
+    }
+    $product['recipe'] = $recipe;
+    $product['recipe_items'] = $recipeItems;
+
+    json_response(['status' => 'success', 'product' => $product]);
+}
+
 if ($action === 'get_designs') {
     $productId = (int)($_GET['product_id'] ?? 0);
     $stmt = $db->prepare("SELECT id, design_number, name, specifications FROM designs WHERE product_id = ? AND is_active = 1 ORDER BY design_number ASC");

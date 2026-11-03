@@ -374,6 +374,44 @@ $elemCount = (int)$db->query("SELECT COUNT(*) FROM design_elements WHERE design_
 $totalElemPcs = (int)$db->query("SELECT SUM(quantity) FROM design_elements WHERE design_id = $testDesignId")->fetchColumn();
 assert_test("22. Design structural elements (Jacket parts)", $elemCount === 5 && $totalElemPcs === 8, "5 parts (Front 2, Back 1, Sleeves 2, Pockets 2, Collar 1 = 8 pcs)");
 
+// ------------------------------------------------------------------------
+// Test 23: Product Pattern Elements (Product anatomy linked to product)
+// ------------------------------------------------------------------------
+$db->beginTransaction();
+$db->prepare("DELETE FROM product_elements WHERE product_id = 1")->execute();
+$insPe = $db->prepare("INSERT INTO product_elements (product_id, element_name, quantity, notes, sort_order) VALUES (?, ?, ?, ?, ?)");
+$insPe->execute([1, 'Front Panel', 1, 'Front body', 1]);
+$insPe->execute([1, 'Back Panel', 1, 'Back body', 2]);
+$insPe->execute([1, 'Sleeves', 2, 'Left & right', 3]);
+$insPe->execute([1, 'Neck Rib / Collar', 1, 'V-Neck rib', 4]);
+$db->commit();
+
+$pElemCount = (int)$db->query("SELECT COUNT(*) FROM product_elements WHERE product_id = 1")->fetchColumn();
+$pElemTotal = (int)$db->query("SELECT SUM(quantity) FROM product_elements WHERE product_id = 1")->fetchColumn();
+assert_test("23. Product pattern elements (Product anatomy)", $pElemCount === 4 && $pElemTotal === 5, "4 elements configured (Front 1, Back 1, Sleeves 2, Neck 1 = 5 pcs)");
+
+// ------------------------------------------------------------------------
+// Test 24: Product Recipe / BOM (Yarn, Zipper, Buttons consumption with wastage)
+// ------------------------------------------------------------------------
+$db->beginTransaction();
+$db->prepare("DELETE FROM bom_headers WHERE product_id = 1")->execute();
+$insBomH = $db->prepare("INSERT INTO bom_headers (product_id, description, wastage_percent, is_active) VALUES (?, ?, ?, ?)");
+$insBomH->execute([1, 'Standard V-Neck Sweater Recipe', 5.0, 1]);
+$bomId = (int)$db->lastInsertId();
+
+$insBomI = $db->prepare("INSERT INTO bom_items (bom_id, material_id, quantity_per_piece) VALUES (?, ?, ?)");
+$insBomI->execute([$bomId, 1, 0.450]); // 0.45 KG Yarn
+$insBomI->execute([$bomId, 2, 0.050]); // 0.05 Spool
+$db->commit();
+
+$bomItemCount = (int)$db->query("SELECT COUNT(*) FROM bom_items WHERE bom_id = $bomId")->fetchColumn();
+// For 100 pieces with 5% wastage: 100 * 0.45 * 1.05 = 47.25 KG yarn
+$yarnPerPiece = (float)$db->query("SELECT quantity_per_piece FROM bom_items WHERE bom_id = $bomId AND material_id = 1")->fetchColumn();
+$lotPcs = 100;
+$calculatedYarn = $lotPcs * $yarnPerPiece * 1.05;
+
+assert_test("24. Product Recipe BOM & Batch Material Estimation", $bomItemCount === 2 && abs($calculatedYarn - 47.25) < 0.01, "Recipe with 2 raw materials: 100 pcs = 47.25 KG Yarn (incl 5% wastage)");
+
 echo "\n========================================================================\n";
 echo "TEST SUITE SUMMARY: $passCount PASSED, $failCount FAILED\n";
 echo "========================================================================\n";
