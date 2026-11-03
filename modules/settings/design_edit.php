@@ -347,7 +347,6 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             </div>
         </form>
     </div>
-</div>
 
 <!-- Datalist for autocomplete -->
 <datalist id="garmentElementsDatalist">
