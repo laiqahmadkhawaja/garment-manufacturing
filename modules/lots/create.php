@@ -35,8 +35,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $expectedDate = !empty($_POST['expected_date']) ? trim($_POST['expected_date']) : null;
     $instructions = trim($_POST['instructions'] ?? '');
     
-    // Matrix quantities: variants[color_id][size_id] = qty
+    // Support both Itemized Rows and Matrix mode
+    $entryMode = trim($_POST['entry_mode'] ?? 'itemized');
     $matrix = $_POST['matrix'] ?? [];
+    $items = $_POST['items'] ?? [];
 
     if (empty($lotNumber) || $productId <= 0) {
         $error = 'Lot number and product are required.';
@@ -47,30 +49,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($stmt->fetch()) {
             $error = "Lot number '$lotNumber' already exists. Please choose a unique lot number.";
         } else {
-            // Calculate total pieces, total colors, total sizes
             $totalPieces = 0;
             $usedColors = [];
             $usedSizes = [];
             $validVariants = [];
+            $aggregated = [];
 
-            foreach ($matrix as $cId => $sizesArr) {
-                foreach ($sizesArr as $sId => $qty) {
-                    $q = (int)$qty;
-                    if ($q > 0) {
-                        $totalPieces += $q;
+            // 1. Process Itemized Rows
+            if ($entryMode === 'itemized' && !empty($items) && is_array($items)) {
+                foreach ($items as $item) {
+                    $cId = (int)($item['color_id'] ?? 0);
+                    $sId = (int)($item['size_id'] ?? 0);
+                    $q = (int)($item['quantity'] ?? 0);
+
+                    if ($cId > 0 && $sId > 0 && $q > 0) {
+                        $key = $cId . '_' . $sId;
+                        if (isset($aggregated[$key])) {
+                            $aggregated[$key]['quantity'] += $q;
+                        } else {
+                            $aggregated[$key] = [
+                                'color_id' => $cId,
+                                'size_id' => $sId,
+                                'quantity' => $q
+                            ];
+                        }
                         $usedColors[$cId] = true;
                         $usedSizes[$sId] = true;
-                        $validVariants[] = [
-                            'color_id' => (int)$cId,
-                            'size_id' => (int)$sId,
-                            'quantity' => $q
-                        ];
+                        $totalPieces += $q;
+                    }
+                }
+                $validVariants = array_values($aggregated);
+            }
+
+            // 2. Fallback / Matrix Grid Mode
+            if (empty($validVariants) && !empty($matrix) && is_array($matrix)) {
+                foreach ($matrix as $cId => $sizesArr) {
+                    if (!is_array($sizesArr)) continue;
+                    foreach ($sizesArr as $sId => $qty) {
+                        $q = (int)$qty;
+                        if ($q > 0) {
+                            $totalPieces += $q;
+                            $usedColors[$cId] = true;
+                            $usedSizes[$sId] = true;
+                            $validVariants[] = [
+                                'color_id' => (int)$cId,
+                                'size_id' => (int)$sId,
+                                'quantity' => $q
+                            ];
+                        }
                     }
                 }
             }
 
             if ($totalPieces <= 0 || empty($validVariants)) {
-                $error = 'Please enter valid quantities for at least one color and size variant.';
+                $error = 'Please enter valid planned quantities for at least one color and size variant.';
             } else {
                 $db->beginTransaction();
                 try {
@@ -164,7 +196,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-4">
             <div>
                 <h4 class="fw-bold mb-1 text-dark">Create New Production Lot</h4>
-                <p class="text-muted small mb-0">Initial batch setup with color/size matrix & workflow</p>
+                <p class="text-muted small mb-0">Initial batch setup with planned color/size variants & workflow</p>
             </div>
             <a href="<?= BASE_URL ?>modules/lots/index.php" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-arrow-left me-1"></i> Back to Lots
@@ -180,28 +212,29 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
         <form method="POST" action="" id="lotForm">
             <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+            <input type="hidden" name="entry_mode" id="entry_mode" value="itemized">
 
             <!-- Lot Master Details Card -->
-            <div class="card-modern mb-4">
+            <div class="card-modern mb-4 shadow-sm">
                 <div class="card-modern-header">
                     <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-info-circle me-1 text-primary"></i> 1. Lot Master Information</h6>
                 </div>
                 <div class="card-modern-body">
                     <div class="row g-3">
                         <div class="col-12 col-md-3">
-                            <label class="form-label">Lot Number *</label>
+                            <label class="form-label fw-semibold">Lot Number *</label>
                             <input type="text" name="lot_number" id="lot_number" class="form-control fw-bold text-primary" value="<?= clean($_POST['lot_number'] ?? $suggestedLotNumber) ?>" required>
-                            <div class="form-text">Unique factory batch number</div>
+                            <div class="form-text small">Unique factory batch number</div>
                         </div>
 
                         <div class="col-12 col-md-3">
-                            <label class="form-label">Lot Date *</label>
+                            <label class="form-label fw-semibold">Lot Date *</label>
                             <input type="date" name="lot_date" class="form-control" value="<?= clean($_POST['lot_date'] ?? date('Y-m-d')) ?>" required>
                         </div>
 
                         <div class="col-12 col-md-3">
-                            <label class="form-label">Product *</label>
-                            <select name="product_id" id="product_id" class="form-select" required>
+                            <label class="form-label fw-semibold">Product *</label>
+                            <select name="product_id" id="product_id" class="form-select fw-semibold" required>
                                 <option value="">-- Select Product --</option>
                                 <?php foreach ($products as $p): ?>
                                     <option value="<?= $p['id'] ?>" <?= (isset($_POST['product_id']) && $_POST['product_id'] == $p['id']) ? 'selected' : '' ?>>
@@ -212,46 +245,179 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         </div>
 
                         <div class="col-12 col-md-3">
-                            <label class="form-label">
+                            <label class="form-label fw-semibold">
                                 Design Number <span class="badge bg-light text-secondary border fw-normal">Optional</span>
                             </label>
                             <select name="design_id" id="design_id" class="form-select">
                                 <option value="">-- No Design / Add Later --</option>
-                                <!-- Populated dynamically or options -->
                             </select>
-                            <div class="form-text">Can be assigned or updated anytime later</div>
+                            <div class="form-text small">Can be assigned or updated anytime later</div>
                         </div>
 
                         <div class="col-12 col-md-4">
-                            <label class="form-label">Assigned Supervisor</label>
+                            <label class="form-label fw-semibold">Assigned Supervisor</label>
                             <input type="text" name="supervisor_name" class="form-control" placeholder="e.g. Master Shabbir" value="<?= clean($_POST['supervisor_name'] ?? '') ?>">
                         </div>
 
                         <div class="col-12 col-md-4">
-                            <label class="form-label">Expected Completion Date</label>
+                            <label class="form-label fw-semibold">Expected Completion Date</label>
                             <input type="date" name="expected_date" class="form-control" value="<?= clean($_POST['expected_date'] ?? '') ?>">
                         </div>
 
                         <div class="col-12 col-md-4">
-                            <label class="form-label">Production Instructions / Notes</label>
-                            <input type="text" name="instructions" class="form-control" placeholder="Thread color, wash instructions, packaging details" value="<?= clean($_POST['instructions'] ?? '') ?>">
+                            <label class="form-label fw-semibold">Production Instructions / Notes</label>
+                            <input type="text" name="instructions" class="form-control" placeholder="Thread color, wash specs, packaging notes" value="<?= clean($_POST['instructions'] ?? '') ?>">
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Color & Size Quantity Matrix Card -->
-            <div class="card-modern mb-4">
-                <div class="card-modern-header d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-grid-3x3-gap-fill me-1 text-primary"></i> 2. Color & Size Planned Quantities (Matrix)</h6>
-                        <span class="text-muted small">Enter quantities for each color and size variant</span>
+            <!-- Color & Size Quantity Section -->
+            <div class="card-modern mb-4 shadow-sm">
+                <div class="card-modern-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-primary p-2 rounded-2"><i class="bi bi-grid-3x3-gap-fill text-white fs-6"></i></span>
+                        <div>
+                            <h6 class="fw-bold mb-0 text-dark">2. Color & Size Planned Quantities</h6>
+                            <span class="text-muted small">Select which colors and sizes you are producing for this batch</span>
+                        </div>
                     </div>
-                    <div class="badge bg-primary fs-6 px-3 py-2 shadow-sm">
-                        Total: <span id="matrixGrandTotal">0</span> Pieces
+
+                    <div class="d-flex align-items-center gap-2">
+                        <!-- Mode toggle buttons -->
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-primary fw-semibold" id="btnModeItemized">
+                                <i class="bi bi-list-check me-1"></i> Row Selection
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary fw-semibold" id="btnModeMatrix">
+                                <i class="bi bi-grid-3x3-gap me-1"></i> Full Matrix
+                            </button>
+                        </div>
+                        <div class="badge bg-primary fs-6 px-3 py-2 shadow-sm">
+                            Total: <span id="matrixGrandTotal">0</span> Pieces
+                        </div>
                     </div>
                 </div>
-                <div class="card-modern-body p-0">
+
+                <!-- ============================================================= -->
+                <!-- MODE 1: ITEMIZED ROWS WITH COLOR & SIZE DROPDOWNS (DEFAULT) -->
+                <!-- ============================================================= -->
+                <div id="itemizedContainer" class="card-modern-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-bordered align-middle text-center mb-0" id="itemizedTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 50px;">#</th>
+                                    <th class="text-start" style="width: 35%;">Select Color *</th>
+                                    <th class="text-start" style="width: 35%;">Select Size *</th>
+                                    <th style="width: 20%;">Planned Quantity *</th>
+                                    <th style="width: 10%;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="itemizedTbody">
+                                <!-- Default Row 1 -->
+                                <tr class="variant-row" data-row-index="0">
+                                    <td class="text-center fw-bold text-muted row-num">1</td>
+                                    <td>
+                                        <div class="input-group">
+                                            <span class="input-group-text p-1 px-2 color-preview">
+                                                <span class="d-inline-block rounded-circle border swatch-dot" style="width: 14px; height: 14px; background-color: #adb5bd;"></span>
+                                            </span>
+                                            <select name="items[0][color_id]" class="form-select color-select fw-semibold" required>
+                                                <option value="">-- Choose Color --</option>
+                                                <?php foreach ($colors as $c): ?>
+                                                    <option value="<?= $c['id'] ?>" data-hex="<?= clean($c['hex_code']) ?>">
+                                                        <?= clean($c['name']) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <select name="items[0][size_id]" class="form-select size-select fw-semibold" required>
+                                            <option value="">-- Choose Size --</option>
+                                            <?php foreach ($sizes as $s): ?>
+                                                <option value="<?= $s['id'] ?>" data-code="<?= clean($s['code']) ?>">
+                                                    <?= clean($s['name']) ?> (<?= clean($s['code']) ?>)
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <div class="input-group">
+                                            <input type="number" name="items[0][quantity]" class="form-control text-center fw-bold row-qty-input" min="1" placeholder="0" required>
+                                            <span class="input-group-text small text-muted">pcs</span>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-outline-danger btn-sm btn-remove-row" title="Remove Row">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+
+                                <!-- Default Row 2 -->
+                                <tr class="variant-row" data-row-index="1">
+                                    <td class="text-center fw-bold text-muted row-num">2</td>
+                                    <td>
+                                        <div class="input-group">
+                                            <span class="input-group-text p-1 px-2 color-preview">
+                                                <span class="d-inline-block rounded-circle border swatch-dot" style="width: 14px; height: 14px; background-color: #adb5bd;"></span>
+                                            </span>
+                                            <select name="items[1][color_id]" class="form-select color-select fw-semibold" required>
+                                                <option value="">-- Choose Color --</option>
+                                                <?php foreach ($colors as $c): ?>
+                                                    <option value="<?= $c['id'] ?>" data-hex="<?= clean($c['hex_code']) ?>">
+                                                        <?= clean($c['name']) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <select name="items[1][size_id]" class="form-select size-select fw-semibold" required>
+                                            <option value="">-- Choose Size --</option>
+                                            <?php foreach ($sizes as $s): ?>
+                                                <option value="<?= $s['id'] ?>" data-code="<?= clean($s['code']) ?>">
+                                                    <?= clean($s['name']) ?> (<?= clean($s['code']) ?>)
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <div class="input-group">
+                                            <input type="number" name="items[1][quantity]" class="form-control text-center fw-bold row-qty-input" min="1" placeholder="0" required>
+                                            <span class="input-group-text small text-muted">pcs</span>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-outline-danger btn-sm btn-remove-row" title="Remove Row">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Toolbar to Add Rows -->
+                    <div class="p-3 bg-light border-top d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <button type="button" class="btn btn-primary btn-sm fw-semibold shadow-sm" id="btnAddRow">
+                                <i class="bi bi-plus-circle me-1"></i> Add Row
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm fw-semibold" id="btnDuplicateRow">
+                                <i class="bi bi-copy me-1"></i> Duplicate Last Color
+                            </button>
+                        </div>
+                        <span class="text-muted small">Select your target color & size; add as many rows as needed for this lot.</span>
+                    </div>
+                </div>
+
+                <!-- ============================================================= -->
+                <!-- MODE 2: FULL MATRIX GRID (OPTIONAL) -->
+                <!-- ============================================================= -->
+                <div id="matrixContainer" class="card-modern-body p-0 d-none">
                     <div class="table-responsive">
                         <table class="table table-modern table-bordered align-middle text-center mb-0">
                             <thead>
@@ -277,7 +443,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             <td>
                                                 <input type="number" 
                                                        name="matrix[<?= $c['id'] ?>][<?= $s['id'] ?>]" 
-                                                       class="form-control form-control-sm text-center matrix-input" 
+                                                       class="form-control form-control-sm text-center matrix-grid-input" 
                                                        min="0" 
                                                        placeholder="0"
                                                        data-color="<?= $c['id'] ?>"
@@ -303,8 +469,8 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 </div>
             </div>
 
-            <!-- Summary & Actions -->
-            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-3 p-3 bg-white border rounded-3 shadow-sm">
+            <!-- Summary & Actions Bar -->
+            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-3 p-3 bg-white border rounded-3 shadow-sm mb-4">
                 <div class="d-flex align-items-center gap-4 text-muted small">
                     <div>Selected Colors: <strong id="summaryColors" class="text-dark">0</strong></div>
                     <div>Selected Sizes: <strong id="summarySizes" class="text-dark">0</strong></div>
@@ -322,16 +488,24 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Dynamic designs loader when product is chosen
     const productSelect = document.getElementById('product_id');
     const designSelect = document.getElementById('design_id');
     const lotNumberInput = document.getElementById('lot_number');
     const btnLotNum = document.getElementById('btnLotNum');
+    const entryModeInput = document.getElementById('entry_mode');
 
+    // Mode Toggle Elements
+    const btnModeItemized = document.getElementById('btnModeItemized');
+    const btnModeMatrix = document.getElementById('btnModeMatrix');
+    const itemizedContainer = document.getElementById('itemizedContainer');
+    const matrixContainer = document.getElementById('matrixContainer');
+
+    // Dynamic Lot Number on Button
     lotNumberInput.addEventListener('input', function() {
         btnLotNum.textContent = this.value || '...';
     });
 
+    // Dynamic Designs Loader
     function loadDesigns(productId, selectedDesign = '') {
         designSelect.innerHTML = '<option value="">-- No Design / Add Later --</option>';
         if (!productId) return;
@@ -360,11 +534,184 @@ document.addEventListener('DOMContentLoaded', function() {
         loadDesigns(productSelect.value, '<?= clean($_POST['design_id'] ?? '') ?>');
     }
 
-    // Matrix calculations
-    const inputs = document.querySelectorAll('.matrix-input');
+    // Toggle Modes
+    btnModeItemized.addEventListener('click', function() {
+        entryModeInput.value = 'itemized';
+        btnModeItemized.className = 'btn btn-primary fw-semibold';
+        btnModeMatrix.className = 'btn btn-outline-secondary fw-semibold';
+        itemizedContainer.classList.remove('d-none');
+        matrixContainer.classList.add('d-none');
+        recalculateItemized();
+    });
+
+    btnModeMatrix.addEventListener('click', function() {
+        entryModeInput.value = 'matrix';
+        btnModeMatrix.className = 'btn btn-primary fw-semibold';
+        btnModeItemized.className = 'btn btn-outline-secondary fw-semibold';
+        matrixContainer.classList.remove('d-none');
+        itemizedContainer.classList.add('d-none');
+        recalculateMatrix();
+    });
+
+    // =========================================================================
+    // ITEM DATA TEMPLATES FOR DYNAMIC ROW ADDITION
+    // =========================================================================
+    const colorOptionsHtml = `<?php foreach ($colors as $c): ?><option value="<?= $c['id'] ?>" data-hex="<?= clean($c['hex_code']) ?>"><?= clean($c['name']) ?></option><?php endforeach; ?>`;
+    const sizeOptionsHtml = `<?php foreach ($sizes as $s): ?><option value="<?= $s['id'] ?>" data-code="<?= clean($s['code']) ?>"><?= clean($s['name']) ?> (<?= clean($s['code']) ?>)</option><?php endforeach; ?>`;
+
+    const itemizedTbody = document.getElementById('itemizedTbody');
+    const btnAddRow = document.getElementById('btnAddRow');
+    const btnDuplicateRow = document.getElementById('btnDuplicateRow');
+
+    function createRow(colorId = '', sizeId = '', qty = '') {
+        const rowCount = itemizedTbody.querySelectorAll('.variant-row').length;
+        const newIndex = Date.now() + Math.floor(Math.random() * 1000);
+
+        const tr = document.createElement('tr');
+        tr.className = 'variant-row';
+        tr.dataset.rowIndex = newIndex;
+        tr.innerHTML = `
+            <td class="text-center fw-bold text-muted row-num">${rowCount + 1}</td>
+            <td>
+                <div class="input-group">
+                    <span class="input-group-text p-1 px-2 color-preview">
+                        <span class="d-inline-block rounded-circle border swatch-dot" style="width: 14px; height: 14px; background-color: #adb5bd;"></span>
+                    </span>
+                    <select name="items[${newIndex}][color_id]" class="form-select color-select fw-semibold" required>
+                        <option value="">-- Choose Color --</option>
+                        ${colorOptionsHtml}
+                    </select>
+                </div>
+            </td>
+            <td>
+                <select name="items[${newIndex}][size_id]" class="form-select size-select fw-semibold" required>
+                    <option value="">-- Choose Size --</option>
+                    ${sizeOptionsHtml}
+                </select>
+            </td>
+            <td>
+                <div class="input-group">
+                    <input type="number" name="items[${newIndex}][quantity]" class="form-control text-center fw-bold row-qty-input" min="1" placeholder="0" value="${qty}" required>
+                    <span class="input-group-text small text-muted">pcs</span>
+                </div>
+            </td>
+            <td class="text-center">
+                <button type="button" class="btn btn-outline-danger btn-sm btn-remove-row" title="Remove Row">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        `;
+
+        if (colorId) {
+            const cSel = tr.querySelector('.color-select');
+            cSel.value = colorId;
+            updateSwatch(cSel);
+        }
+        if (sizeId) {
+            tr.querySelector('.size-select').value = sizeId;
+        }
+
+        bindRowEvents(tr);
+        itemizedTbody.appendChild(tr);
+        renumberRows();
+        recalculateItemized();
+    }
+
+    function updateSwatch(colorSelect) {
+        const selected = colorSelect.options[colorSelect.selectedIndex];
+        const hex = selected ? selected.dataset.hex : '';
+        const dot = colorSelect.closest('.input-group').querySelector('.swatch-dot');
+        if (dot) {
+            dot.style.backgroundColor = hex || '#adb5bd';
+        }
+    }
+
+    function bindRowEvents(row) {
+        const colorSel = row.querySelector('.color-select');
+        const sizeSel = row.querySelector('.size-select');
+        const qtyInp = row.querySelector('.row-qty-input');
+        const removeBtn = row.querySelector('.btn-remove-row');
+
+        colorSel.addEventListener('change', function() {
+            updateSwatch(this);
+            recalculateItemized();
+        });
+
+        sizeSel.addEventListener('change', recalculateItemized);
+        qtyInp.addEventListener('input', recalculateItemized);
+
+        removeBtn.addEventListener('click', function() {
+            const rows = itemizedTbody.querySelectorAll('.variant-row');
+            if (rows.length <= 1) {
+                alert('At least one color and size row is required.');
+                return;
+            }
+            row.remove();
+            renumberRows();
+            recalculateItemized();
+        });
+    }
+
+    function renumberRows() {
+        const rows = itemizedTbody.querySelectorAll('.variant-row');
+        rows.forEach((r, idx) => {
+            const numEl = r.querySelector('.row-num');
+            if (numEl) numEl.textContent = idx + 1;
+        });
+    }
+
+    // Attach listeners on initial 2 rows
+    itemizedTbody.querySelectorAll('.variant-row').forEach(row => {
+        bindRowEvents(row);
+        const cSel = row.querySelector('.color-select');
+        if (cSel) updateSwatch(cSel);
+    });
+
+    btnAddRow.addEventListener('click', function() {
+        createRow();
+    });
+
+    btnDuplicateRow.addEventListener('click', function() {
+        const rows = itemizedTbody.querySelectorAll('.variant-row');
+        if (rows.length > 0) {
+            const lastRow = rows[rows.length - 1];
+            const lastColor = lastRow.querySelector('.color-select').value;
+            createRow(lastColor, '', '');
+        } else {
+            createRow();
+        }
+    });
+
+    // =========================================================================
+    // RECALCULATION ENGINES
+    // =========================================================================
+    function recalculateItemized() {
+        if (entryModeInput.value !== 'itemized') return;
+
+        let totalPcs = 0;
+        const activeColors = new Set();
+        const activeSizes = new Set();
+
+        itemizedTbody.querySelectorAll('.variant-row').forEach(row => {
+            const cVal = row.querySelector('.color-select').value;
+            const sVal = row.querySelector('.size-select').value;
+            const qVal = parseInt(row.querySelector('.row-qty-input').value) || 0;
+
+            if (cVal) activeColors.add(cVal);
+            if (sVal) activeSizes.add(sVal);
+            if (qVal > 0) totalPcs += qVal;
+        });
+
+        document.getElementById('matrixGrandTotal').textContent = totalPcs.toLocaleString();
+        document.getElementById('summaryColors').textContent = activeColors.size;
+        document.getElementById('summarySizes').textContent = activeSizes.size;
+        document.getElementById('summaryPieces').textContent = totalPcs.toLocaleString();
+    }
+
     function recalculateMatrix() {
+        if (entryModeInput.value !== 'matrix') return;
+
         let grandTotal = 0;
-        let colorCount = 0;
         const activeSizes = new Set();
         const activeColors = new Set();
         const sizeTotals = {};
@@ -377,7 +724,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const colorId = row.dataset.colorId;
             let rowTotal = 0;
 
-            row.querySelectorAll('.matrix-input').forEach(input => {
+            row.querySelectorAll('.matrix-grid-input').forEach(input => {
                 const val = parseInt(input.value) || 0;
                 const sizeId = input.dataset.size;
                 if (val > 0) {
@@ -392,24 +739,48 @@ document.addEventListener('DOMContentLoaded', function() {
             grandTotal += rowTotal;
         });
 
-        // Update size totals in footer
         for (const [sizeId, total] of Object.entries(sizeTotals)) {
             const cell = document.getElementById('size_total_' + sizeId);
             if (cell) cell.textContent = total;
         }
 
-        document.getElementById('matrixGrandTotal').textContent = grandTotal;
-        document.getElementById('footerGrandTotal').textContent = grandTotal;
+        document.getElementById('matrixGrandTotal').textContent = grandTotal.toLocaleString();
+        document.getElementById('footerGrandTotal').textContent = grandTotal.toLocaleString();
         document.getElementById('summaryColors').textContent = activeColors.size;
         document.getElementById('summarySizes').textContent = activeSizes.size;
-        document.getElementById('summaryPieces').textContent = grandTotal;
+        document.getElementById('summaryPieces').textContent = grandTotal.toLocaleString();
     }
 
-    inputs.forEach(inp => {
+    document.querySelectorAll('.matrix-grid-input').forEach(inp => {
         inp.addEventListener('input', recalculateMatrix);
     });
 
-    recalculateMatrix();
+    // Form submit validation
+    document.getElementById('lotForm').addEventListener('submit', function(e) {
+        const mode = entryModeInput.value;
+        let total = 0;
+
+        if (mode === 'itemized') {
+            itemizedTbody.querySelectorAll('.variant-row').forEach(row => {
+                const q = parseInt(row.querySelector('.row-qty-input').value) || 0;
+                const c = row.querySelector('.color-select').value;
+                const s = row.querySelector('.size-select').value;
+                if (c && s && q > 0) total += q;
+            });
+        } else {
+            document.querySelectorAll('.matrix-grid-input').forEach(inp => {
+                const q = parseInt(inp.value) || 0;
+                if (q > 0) total += q;
+            });
+        }
+
+        if (total <= 0) {
+            e.preventDefault();
+            alert('Please enter at least 1 planned piece before creating the lot.');
+        }
+    });
+
+    recalculateItemized();
 });
 </script>
 

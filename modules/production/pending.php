@@ -183,7 +183,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             </td>
                                             <td class="text-end">
                                                 <?php if (!$isComplete): ?>
-                                                    <a href="<?= BASE_URL ?>modules/production/index.php?lot_id=<?= $info['lot_id'] ?>" class="btn btn-sm btn-outline-warning py-1 px-2">
+                                                    <a href="<?= BASE_URL ?>modules/production/index.php?lot_id=<?= $info['lot_id'] ?>&operation_id=<?= $st['operation_id'] ?>" class="btn btn-sm btn-outline-warning py-1 px-2">
                                                         <i class="bi bi-plus-lg me-1"></i> Record Work
                                                     </a>
                                                 <?php else: ?>

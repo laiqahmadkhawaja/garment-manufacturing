@@ -13,6 +13,7 @@ $activeNav = 'production_entry';
 $db = get_db();
 
 $preselectedLotId = (int)($_GET['lot_id'] ?? 0);
+$preselectedOpId = (int)($_GET['operation_id'] ?? 0);
 $error = '';
 
 // Handle Production Work Submission
@@ -683,6 +684,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const workerSelect = document.getElementById('pe_worker_id');
     const workerBadge = document.getElementById('workerCountBadge');
     const rateInput = document.getElementById('pe_rate');
+    const preselectedOpId = <?= (int)$preselectedOpId ?>;
 
     // Mode Toggle Elements
     const btnModeMatrix = document.getElementById('btnModeMatrix');
@@ -793,6 +795,19 @@ document.addEventListener('DOMContentLoaded', function() {
                         opt.textContent = v.color_name + ' / ' + v.size_name + ' (' + v.size_code + ') — Planned: ' + v.quantity + ' pcs';
                         varSelect.appendChild(opt);
                     });
+
+                    // Auto-select operation if preselected in URL
+                    if (preselectedOpId && data.operations.some(op => op.operation_id == preselectedOpId)) {
+                        opSelect.value = preselectedOpId;
+                        const selectedOpt = opSelect.options[opSelect.selectedIndex];
+                        if (selectedOpt && selectedOpt.dataset.rate) {
+                            rateInput.value = selectedOpt.dataset.rate;
+                            calculateSingleLabour();
+                        }
+                        loadWorkersForOperation(preselectedOpId);
+                        loadMatrixGrid(lotId, preselectedOpId);
+                        checkBalance();
+                    }
 
                     if (callback) callback();
                 }

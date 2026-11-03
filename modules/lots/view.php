@@ -414,6 +414,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <th class="text-center">Pending / Short</th>
                                         <th class="text-end">Labour Cost</th>
                                         <th>Status</th>
+                                        <th class="text-end">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -454,6 +455,15 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                     <span class="badge-status badge-progress"><i class="bi bi-arrow-repeat"></i> In Progress</span>
                                                 <?php else: ?>
                                                     <span class="badge-status badge-draft"><i class="bi bi-hourglass"></i> Not Started</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="text-end">
+                                                <?php if ($pending > 0): ?>
+                                                    <a href="<?= BASE_URL ?>modules/production/index.php?lot_id=<?= $lot['id'] ?>&operation_id=<?= $ws['operation_id'] ?>" class="btn btn-sm btn-outline-warning py-0 px-2 fw-semibold" style="font-size: 0.78rem;">
+                                                        <i class="bi bi-plus-lg me-1"></i> Record
+                                                    </a>
+                                                <?php else: ?>
+                                                    <i class="bi bi-check-circle-fill text-success"></i>
                                                 <?php endif; ?>
                                             </td>
                                         </tr>
