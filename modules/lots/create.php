@@ -288,6 +288,20 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <div class="form-text small">Can be assigned or updated anytime later</div>
                         </div>
 
+                        <!-- Live Design Pattern Elements Preview -->
+                        <div class="col-12 d-none" id="designElementsPreview">
+                            <div class="p-3 bg-light border border-primary-subtle rounded-3">
+                                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="bi bi-puzzle-fill text-primary fs-5"></i>
+                                        <span class="fw-bold text-dark" id="previewDesignTitle">Design Pattern Breakdown (اجزاء)</span>
+                                    </div>
+                                    <div class="small text-muted" id="previewDesignStats">0 components</div>
+                                </div>
+                                <div class="d-flex flex-wrap gap-2 align-items-center" id="previewBadgesContainer"></div>
+                            </div>
+                        </div>
+
                         <div class="col-12 col-md-4">
                             <label class="form-label fw-semibold">Assigned Supervisor</label>
                             <input type="text" name="supervisor_name" class="form-control" placeholder="e.g. Master Shabbir" value="<?= clean($_POST['supervisor_name'] ?? '') ?>">
@@ -599,15 +613,78 @@ document.addEventListener('DOMContentLoaded', function() {
         btnLotNum.textContent = this.value || '...';
     });
 
-    // Dynamic Designs Loader
+    // Dynamic Designs Loader with Pattern Elements Preview
+    let currentLoadedDesigns = [];
+
+    function updateElementsPreview(designId) {
+        const previewBox = document.getElementById('designElementsPreview');
+        const titleEl = document.getElementById('previewDesignTitle');
+        const statsEl = document.getElementById('previewDesignStats');
+        const container = document.getElementById('previewBadgesContainer');
+
+        if (!designId || !previewBox) {
+            if (previewBox) previewBox.classList.add('d-none');
+            return;
+        }
+
+        const d = currentLoadedDesigns.find(item => item.id == designId);
+        if (!d || !d.elements || d.elements.length === 0) {
+            if (previewBox) previewBox.classList.add('d-none');
+            return;
+        }
+
+        let totalPcs = 0;
+        let hasSleeves = false;
+        container.innerHTML = '';
+
+        d.elements.forEach(el => {
+            const q = parseInt(el.quantity) || 1;
+            totalPcs += q;
+            if (el.element_name.toLowerCase().includes('sleeve') || el.element_name.includes('بازو')) {
+                hasSleeves = true;
+            }
+
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-white text-dark border p-2 shadow-xs';
+            badge.style.fontSize = '0.82rem';
+            badge.innerHTML = `<i class="bi bi-puzzle text-primary me-1"></i>${escapeHtml(el.element_name)}: <strong class="text-primary fs-6">×${q}</strong> ${el.notes ? '<small class="text-muted ms-1">(' + escapeHtml(el.notes) + ')</small>' : ''}`;
+            container.appendChild(badge);
+        });
+
+        // Add style indicator pill (e.g. Sleeveless vs Full Sleeves)
+        const stylePill = document.createElement('span');
+        if (hasSleeves) {
+            stylePill.className = 'badge bg-primary-subtle text-primary border p-2 ms-auto';
+            stylePill.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>With Sleeves (بازو دار)';
+        } else {
+            stylePill.className = 'badge bg-warning-subtle text-warning-emphasis border p-2 ms-auto';
+            stylePill.innerHTML = '<i class="bi bi-dash-circle-fill me-1"></i>Sleeveless / Vest (بغیر بازو)';
+        }
+        container.appendChild(stylePill);
+
+        titleEl.textContent = `Design #${d.design_number} - ${d.name} Pattern Breakdown (اجزاء)`;
+        statsEl.textContent = `${d.elements.length} components • ${totalPcs} total pieces per garment`;
+        previewBox.classList.remove('d-none');
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        return text.replace(/[&<>"']/g, function(m) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+        });
+    }
+
     function loadDesigns(productId, selectedDesign = '') {
         designSelect.innerHTML = '<option value="">-- No Design / Add Later --</option>';
+        currentLoadedDesigns = [];
+        updateElementsPreview(null);
         if (!productId) return;
 
         fetch('<?= BASE_URL ?>modules/lots/ajax.php?action=get_designs&product_id=' + productId)
             .then(res => res.json())
             .then(data => {
                 if (data.designs && data.designs.length > 0) {
+                    currentLoadedDesigns = data.designs;
                     data.designs.forEach(d => {
                         const opt = document.createElement('option');
                         opt.value = d.id;
@@ -615,10 +692,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (selectedDesign && selectedDesign == d.id) opt.selected = true;
                         designSelect.appendChild(opt);
                     });
+
+                    if (selectedDesign) {
+                        updateElementsPreview(selectedDesign);
+                    }
                 }
             })
             .catch(err => console.error(err));
     }
+
+    designSelect.addEventListener('change', function() {
+        updateElementsPreview(this.value);
+    });
 
     productSelect.addEventListener('change', function() {
         loadDesigns(this.value);

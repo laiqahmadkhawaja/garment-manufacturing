@@ -25,6 +25,17 @@ $designs = $db->prepare("SELECT id, design_number, name FROM designs WHERE produ
 $designs->execute([$lot['product_id']]);
 $availableDesigns = $designs->fetchAll();
 
+$designElementsMap = [];
+if (!empty($availableDesigns)) {
+    $dIds = array_column($availableDesigns, 'id');
+    $placeholders = implode(',', array_fill(0, count($dIds), '?'));
+    $eStmt = $db->prepare("SELECT * FROM design_elements WHERE design_id IN ($placeholders) ORDER BY sort_order ASC, id ASC");
+    $eStmt->execute($dIds);
+    foreach ($eStmt->fetchAll() as $el) {
+        $designElementsMap[$el['design_id']][] = $el;
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $designId = !empty($_POST['design_id']) ? (int)$_POST['design_id'] : null;
     $supervisor = trim($_POST['supervisor_name'] ?? '');
@@ -81,7 +92,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <div class="row g-3">
                         <div class="col-12 col-md-6">
                             <label class="form-label">Assign / Change Design Number</label>
-                            <select name="design_id" class="form-select">
+                            <select name="design_id" id="edit_design_id" class="form-select">
                                 <option value="">-- No Design (Pending) --</option>
                                 <?php foreach ($availableDesigns as $d): ?>
                                     <option value="<?= $d['id'] ?>" <?= $lot['design_id'] == $d['id'] ? 'selected' : '' ?>>
@@ -90,6 +101,28 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <?php endforeach; ?>
                             </select>
                             <div class="form-text">Existing worker entries and production logs are preserved.</div>
+                        </div>
+
+                        <!-- Elements preview container -->
+                        <div class="col-12 <?= empty($lot['design_id']) ? 'd-none' : '' ?>" id="editDesignElementsPreview">
+                            <div class="p-3 bg-light border border-primary-subtle rounded-3">
+                                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                                    <span class="small fw-bold text-dark"><i class="bi bi-puzzle text-primary me-1"></i> Pattern Elements for Selected Design:</span>
+                                    <span class="small text-muted" id="lblEditElementsStats"></span>
+                                </div>
+                                <div class="d-flex flex-wrap gap-2 align-items-center" id="editBadgesContainer">
+                                    <?php 
+                                    $currElems = $designElementsMap[$lot['design_id']] ?? [];
+                                    foreach ($currElems as $ce): ?>
+                                        <span class="badge bg-white text-dark border p-2">
+                                            <?= clean($ce['element_name']) ?>: <strong class="text-primary">×<?= (int)$ce['quantity'] ?></strong>
+                                            <?php if ($ce['notes']): ?>
+                                                <small class="text-muted ms-1">(<?= clean($ce['notes']) ?>)</small>
+                                            <?php endif; ?>
+                                        </span>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="col-12 col-md-6">
@@ -117,5 +150,49 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         </div>
 
     </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const designMap = <?= json_encode($designElementsMap) ?>;
+    const select = document.getElementById('edit_design_id');
+    const preview = document.getElementById('editDesignElementsPreview');
+    const container = document.getElementById('editBadgesContainer');
+    const stats = document.getElementById('lblEditElementsStats');
+
+    select.addEventListener('change', function() {
+        const dId = this.value;
+        if (!dId || !designMap[dId] || designMap[dId].length === 0) {
+            preview.classList.add('d-none');
+            return;
+        }
+
+        const elems = designMap[dId];
+        container.innerHTML = '';
+        let totalPcs = 0;
+        let hasSleeves = false;
+
+        elems.forEach(el => {
+            const q = parseInt(el.quantity) || 1;
+            totalPcs += q;
+            if (el.element_name.toLowerCase().includes('sleeve') || el.element_name.includes('بازو')) {
+                hasSleeves = true;
+            }
+
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-white text-dark border p-2 shadow-xs';
+            badge.innerHTML = `${el.element_name}: <strong class="text-primary">×${q}</strong> ${el.notes ? '<small class="text-muted ms-1">(' + el.notes + ')</small>' : ''}`;
+            container.appendChild(badge);
+        });
+
+        const pill = document.createElement('span');
+        pill.className = hasSleeves ? 'badge bg-primary-subtle text-primary border p-2 ms-auto' : 'badge bg-warning-subtle text-warning-emphasis border p-2 ms-auto';
+        pill.innerHTML = hasSleeves ? '<i class="bi bi-check-circle-fill me-1"></i>With Sleeves' : '<i class="bi bi-dash-circle-fill me-1"></i>Sleeveless';
+        container.appendChild(pill);
+
+        stats.textContent = `${elems.length} components • ${totalPcs} pcs / garment`;
+        preview.classList.remove('d-none');
+    });
+});
+</script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

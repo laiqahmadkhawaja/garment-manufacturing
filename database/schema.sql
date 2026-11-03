@@ -147,6 +147,18 @@ CREATE TABLE `designs` (
     FOREIGN KEY (`workflow_template_id`) REFERENCES `workflow_templates`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+DROP TABLE IF EXISTS `design_elements`;
+CREATE TABLE `design_elements` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `design_id` INT NOT NULL,
+    `element_name` VARCHAR(100) NOT NULL,
+    `quantity` INT NOT NULL DEFAULT 1,
+    `notes` VARCHAR(255) NULL,
+    `sort_order` INT NOT NULL DEFAULT 0,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (`design_id`) REFERENCES `designs`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- --------------------------------------------------------
 -- Operations & Rates
 -- --------------------------------------------------------
@@ -995,6 +1007,26 @@ INSERT INTO `designs` (`id`, `design_number`, `name`, `product_id`, `picture`, `
 (1, '901', 'Ladies Cable V-Neck 901', 1, '', 'Ribbed cuffs and hem, premium finish', 2, 1),
 (2, '902', 'Classic Executive Coat 902', 2, '', 'Double breasted, 6 horn buttons, deep pockets', 1, 1),
 (3, '903', 'Urban Active Jacket 903', 3, '', 'Lightweight thermal fill, inner lining', 3, 1);
+
+-- Design Elements (Structural Pattern Components)
+INSERT INTO `design_elements` (`id`, `design_id`, `element_name`, `quantity`, `notes`, `sort_order`) VALUES
+(1, 1, 'Front', 1, 'Cable knit pattern', 1),
+(2, 1, 'Back', 1, 'Plain knit', 2),
+(3, 1, 'Sleeves', 2, 'Ribbed cuffs', 3),
+(4, 1, 'V-Neck Collar', 1, 'V-neck ribbed trim', 4),
+(5, 1, 'Bottom Hem', 1, 'Elasticated rib', 5),
+(6, 2, 'Front Panels', 2, 'Left & right overlap panels', 1),
+(7, 2, 'Back', 1, 'Center back seam with vent', 2),
+(8, 2, 'Sleeves', 2, 'Two-piece sleeve', 3),
+(9, 2, 'Collar & Lapel', 1, 'Notched lapel', 4),
+(10, 2, 'Pockets', 2, 'Flap side pockets', 5),
+(11, 2, 'Inner Lining', 1, 'Silk poly lining', 6),
+(12, 3, 'Front Panels', 2, 'Zipper opening', 1),
+(13, 3, 'Back', 1, 'Quilted panel', 2),
+(14, 3, 'Sleeves', 2, 'Elastic cuff bands', 3),
+(15, 3, 'Side Pockets', 2, 'Zipper welt pockets', 4),
+(16, 3, 'Stand Collar', 1, 'Padded collar', 5),
+(17, 3, 'Detachable Hood', 1, 'Drawstring hood', 6);
 
 -- Workers (Demo Artisans)
 INSERT INTO `workers` (`id`, `code`, `name`, `phone`, `address`, `cnic`, `worker_type`, `department_id`, `default_rate`, `joining_date`, `opening_balance`, `is_active`) VALUES

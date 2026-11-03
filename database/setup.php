@@ -34,7 +34,7 @@ try {
     }
     echo "[✓] Database tables and seed data created successfully!\n";
 
-    $tables = ['users', 'roles', 'departments', 'operations', 'workflow_templates', 'products', 'designs', 'colors', 'sizes', 'workers', 'materials', 'customers', 'warehouses'];
+    $tables = ['users', 'roles', 'departments', 'operations', 'workflow_templates', 'products', 'designs', 'design_elements', 'colors', 'sizes', 'workers', 'materials', 'customers', 'warehouses'];
     foreach ($tables as $tbl) {
         $stmt = $pdo->query("SELECT COUNT(*) AS cnt FROM `$tbl`");
         $cnt = $stmt->fetchColumn();

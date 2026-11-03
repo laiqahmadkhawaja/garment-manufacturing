@@ -25,6 +25,13 @@ if (!$lot) {
     redirect('modules/lots/index.php', 'Lot not found.', 'danger');
 }
 
+$designElements = [];
+if (!empty($lot['design_id'])) {
+    $deStmt = $db->prepare("SELECT * FROM design_elements WHERE design_id = ? ORDER BY sort_order ASC, id ASC");
+    $deStmt->execute([$lot['design_id']]);
+    $designElements = $deStmt->fetchAll();
+}
+
 $pageTitle = "Lot #" . $lot['lot_number'] . " Details";
 $activeNav = 'lots';
 
@@ -342,6 +349,66 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <div class="tab-content">
             <!-- TAB 1: OVERVIEW & VARIANTS -->
             <div class="tab-pane fade show active" id="tab-overview">
+                <?php if (!empty($lot['design_id']) && !empty($designElements)): 
+                    $totalElemPcs = array_sum(array_column($designElements, 'quantity'));
+                    $batchTotalPcs = $totalElemPcs * $lot['total_pieces'];
+                ?>
+                    <div class="card-modern mb-4">
+                        <div class="card-modern-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-primary p-2 rounded-2"><i class="bi bi-puzzle-fill text-white fs-6"></i></span>
+                                <div>
+                                    <h6 class="fw-bold mb-0 text-dark">Design Structural Elements & Pattern Breakdown (اجزاء اور کٹنگ کے حصے)</h6>
+                                    <span class="text-muted small">Design #<?= clean($lot['design_number']) ?> — <?= clean($lot['design_name']) ?></span>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-3">
+                                <span class="small text-muted">Per Garment: <strong class="text-dark"><?= $totalElemPcs ?> pieces</strong></span>
+                                <span class="vr"></span>
+                                <span class="small text-muted">Total Batch Cutting Pieces: <strong class="text-primary fw-bold"><?= number_format($batchTotalPcs) ?> pieces</strong></span>
+                                <a href="<?= BASE_URL ?>modules/settings/design_edit.php?id=<?= $lot['design_id'] ?>" class="btn btn-sm btn-outline-primary py-0 px-2 small">
+                                    <i class="bi bi-pencil me-1"></i>Edit Elements
+                                </a>
+                            </div>
+                        </div>
+                        <div class="card-modern-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-modern align-middle mb-0" style="font-size: 0.84rem;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width: 50px;" class="text-center">#</th>
+                                            <th>Component / Element Name</th>
+                                            <th class="text-center" style="width: 140px;">Qty Per Unit</th>
+                                            <th class="text-center" style="width: 180px;">Batch Required to Cut</th>
+                                            <th>Pattern & Fabrication Notes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($designElements as $eIdx => $de): 
+                                            $reqCut = $de['quantity'] * $lot['total_pieces'];
+                                        ?>
+                                            <tr>
+                                                <td class="text-center text-muted fw-bold"><?= $eIdx + 1 ?></td>
+                                                <td class="fw-bold text-dark">
+                                                    <i class="bi bi-scissors text-primary me-1"></i>
+                                                    <?= clean($de['element_name']) ?>
+                                                </td>
+                                                <td class="text-center fw-bold text-primary">
+                                                    <?= (int)$de['quantity'] ?> pcs
+                                                </td>
+                                                <td class="text-center fw-bold text-success">
+                                                    <?= number_format($reqCut) ?> pcs
+                                                </td>
+                                                <td class="text-muted"><?= clean($de['notes'] ?: '—') ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
                 <div class="card-modern">
                     <div class="card-modern-header">
                         <h6 class="fw-bold mb-0 text-dark">Color & Size Planned Quantities</h6>

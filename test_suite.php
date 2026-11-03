@@ -33,6 +33,7 @@ $db->exec("DELETE FROM dispatch_items");
 $db->exec("DELETE FROM dispatches");
 $db->exec("DELETE FROM finished_goods_stock");
 $db->exec("DELETE FROM packing_entries");
+$db->exec("DELETE FROM designs WHERE design_number LIKE '%TEST%'");
 $db->exec("DELETE FROM material_return_items");
 $db->exec("DELETE FROM material_returns");
 $db->exec("DELETE FROM material_issue_items");
@@ -45,7 +46,18 @@ $db->exec("DELETE FROM lot_variants");
 $db->exec("DELETE FROM lots");
 $db->exec("DELETE FROM worker_ledger WHERE transaction_type != 'Opening Balance'");
 $db->exec("DELETE FROM worker_payments");
+$db->exec("DELETE FROM customer_ledger");
 $db->exec("UPDATE materials SET current_stock = opening_stock");
+$db->exec("UPDATE operations SET default_rate = 3.00 WHERE id = 1");
+// Restore workflow template 2 standard steps
+$db->exec("DELETE FROM workflow_template_steps WHERE template_id = 2");
+$db->exec("INSERT INTO workflow_template_steps (template_id, operation_id, sequence, is_mandatory) VALUES 
+    (2, 1, 1, 1),
+    (2, 4, 2, 1),
+    (2, 5, 3, 1),
+    (2, 3, 4, 1),
+    (2, 8, 5, 1),
+    (2, 9, 6, 1)");
 $db->exec("SET FOREIGN_KEY_CHECKS=1");
 
 // ------------------------------------------------------------------------
@@ -340,6 +352,27 @@ if (!is_dir($bDir)) mkdir($bDir, 0777, true);
 $testBkp = "$bDir/test_suite_backup.sql";
 file_put_contents($testBkp, "-- Test Backup\n");
 assert_test("21. Database backup generation", file_exists($testBkp) && count($tables) >= 25, count($tables) . " tables verified & backup directory accessible");
+
+// ------------------------------------------------------------------------
+// Test 22: Dynamic Garment Design Elements (Front, Back, Sleeves, Pockets, Collar)
+// ------------------------------------------------------------------------
+// Create custom design with real-time elements
+$db->beginTransaction();
+$db->prepare("INSERT INTO designs (design_number, name, product_id, specifications, is_active) 
+              VALUES ('JKT-TEST-100', 'Test Active Jacket', 3, 'Winter jacket test specifications', 1)")->execute();
+$testDesignId = (int)$db->lastInsertId();
+
+$insElem = $db->prepare("INSERT INTO design_elements (design_id, element_name, quantity, notes, sort_order) VALUES (?, ?, ?, ?, ?)");
+$insElem->execute([$testDesignId, 'Front Panels', 2, 'With zipper fly', 1]);
+$insElem->execute([$testDesignId, 'Back', 1, 'Main back body', 2]);
+$insElem->execute([$testDesignId, 'Sleeves', 2, 'Left & right ribbed sleeves', 3]);
+$insElem->execute([$testDesignId, 'Pockets', 2, 'Side welt pockets', 4]);
+$insElem->execute([$testDesignId, 'Collar', 1, 'Stand collar', 5]);
+$db->commit();
+
+$elemCount = (int)$db->query("SELECT COUNT(*) FROM design_elements WHERE design_id = $testDesignId")->fetchColumn();
+$totalElemPcs = (int)$db->query("SELECT SUM(quantity) FROM design_elements WHERE design_id = $testDesignId")->fetchColumn();
+assert_test("22. Design structural elements (Jacket parts)", $elemCount === 5 && $totalElemPcs === 8, "5 parts (Front 2, Back 1, Sleeves 2, Pockets 2, Collar 1 = 8 pcs)");
 
 echo "\n========================================================================\n";
 echo "TEST SUITE SUMMARY: $passCount PASSED, $failCount FAILED\n";

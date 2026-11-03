@@ -12,10 +12,45 @@ $db = get_db();
 
 if ($action === 'get_designs') {
     $productId = (int)($_GET['product_id'] ?? 0);
-    $stmt = $db->prepare("SELECT id, design_number, name FROM designs WHERE product_id = ? AND is_active = 1 ORDER BY design_number ASC");
+    $stmt = $db->prepare("SELECT id, design_number, name, specifications FROM designs WHERE product_id = ? AND is_active = 1 ORDER BY design_number ASC");
     $stmt->execute([$productId]);
     $designs = $stmt->fetchAll();
+
+    if (!empty($designs)) {
+        $designIds = array_column($designs, 'id');
+        $placeholders = implode(',', array_fill(0, count($designIds), '?'));
+        $eStmt = $db->prepare("SELECT * FROM design_elements WHERE design_id IN ($placeholders) ORDER BY sort_order ASC, id ASC");
+        $eStmt->execute($designIds);
+        $elements = $eStmt->fetchAll();
+
+        $elementsMap = [];
+        foreach ($elements as $el) {
+            $elementsMap[$el['design_id']][] = $el;
+        }
+
+        foreach ($designs as &$d) {
+            $d['elements'] = $elementsMap[$d['id']] ?? [];
+        }
+    }
+
     json_response(['status' => 'success', 'designs' => $designs]);
+}
+
+if ($action === 'get_design_details') {
+    $designId = (int)($_GET['design_id'] ?? 0);
+    $stmt = $db->prepare("SELECT d.*, p.name AS product_name FROM designs d JOIN products p ON d.product_id = p.id WHERE d.id = ?");
+    $stmt->execute([$designId]);
+    $design = $stmt->fetch();
+
+    if (!$design) {
+        json_response(['status' => 'error', 'message' => 'Design not found'], 404);
+    }
+
+    $eStmt = $db->prepare("SELECT * FROM design_elements WHERE design_id = ? ORDER BY sort_order ASC, id ASC");
+    $eStmt->execute([$designId]);
+    $design['elements'] = $eStmt->fetchAll();
+
+    json_response(['status' => 'success', 'design' => $design]);
 }
 
 if ($action === 'get_lot_details') {

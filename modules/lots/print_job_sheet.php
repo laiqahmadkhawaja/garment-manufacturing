@@ -23,6 +23,14 @@ if (!$lot) {
     die("Lot not found.");
 }
 
+// Design Pattern Elements
+$designElements = [];
+if (!empty($lot['design_id'])) {
+    $deStmt = $db->prepare("SELECT * FROM design_elements WHERE design_id = ? ORDER BY sort_order ASC, id ASC");
+    $deStmt->execute([$lot['design_id']]);
+    $designElements = $deStmt->fetchAll();
+}
+
 // Variants
 $vStmt = $db->prepare("SELECT lv.*, c.name AS color_name, s.name AS size_name, s.code AS size_code 
                        FROM lot_variants lv 
@@ -143,8 +151,50 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
             </tbody>
         </table>
 
+        <!-- Design Pattern Components Breakdown (If assigned) -->
+        <?php if (!empty($designElements)): ?>
+            <h6 class="fw-bold text-uppercase border-bottom pb-1 mb-2">1. Garment Pattern Elements & Cutting Parts (کٹنگ کے اجزاء)</h6>
+            <table class="table table-bordered mb-4" style="font-size: 0.85rem;">
+                <thead class="bg-light text-center">
+                    <tr>
+                        <th style="width: 5%;">#</th>
+                        <th class="text-start" style="width: 35%;">Component / Element Name</th>
+                        <th style="width: 15%;">Qty / Garment</th>
+                        <th style="width: 20%;">Total Batch Cut Pcs</th>
+                        <th class="text-start">Cutting / Fabric Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php 
+                    $sumPerGarment = 0;
+                    $sumBatchCut = 0;
+                    foreach ($designElements as $eIdx => $de): 
+                        $bCut = $de['quantity'] * $lot['total_pieces'];
+                        $sumPerGarment += $de['quantity'];
+                        $sumBatchCut += $bCut;
+                    ?>
+                        <tr>
+                            <td class="text-center fw-bold"><?= $eIdx + 1 ?></td>
+                            <td class="text-start fw-semibold"><?= clean($de['element_name']) ?></td>
+                            <td class="text-center fw-bold"><?= (int)$de['quantity'] ?></td>
+                            <td class="text-center fw-bold"><?= number_format($bCut) ?></td>
+                            <td class="text-start text-muted"><?= clean($de['notes'] ?: '—') ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+                <tfoot class="bg-light fw-bold text-center">
+                    <tr>
+                        <td colspan="2" class="text-start">Total Pieces to Cut per Unit</td>
+                        <td><?= $sumPerGarment ?> pcs</td>
+                        <td><?= number_format($sumBatchCut) ?> pcs</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        <?php endif; ?>
+
         <!-- Color & Size Matrix -->
-        <h6 class="fw-bold text-uppercase border-bottom pb-1 mb-2">1. Color & Size Distribution</h6>
+        <h6 class="fw-bold text-uppercase border-bottom pb-1 mb-2"><?= !empty($designElements) ? '2' : '1' ?>. Color & Size Distribution</h6>
         <table class="table table-bordered text-center mb-4">
             <thead>
                 <tr class="bg-light">
