@@ -72,6 +72,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('modules/settings/products.php#variants', "Size '$name' saved!");
         }
     }
+
+    if ($action === 'create_category') {
+        $name = trim($_POST['name'] ?? '');
+        $desc = trim($_POST['description'] ?? '');
+
+        if (empty($name)) {
+            set_flash('danger', 'Category name is required.');
+        } else {
+            try {
+                $stmt = $db->prepare("INSERT INTO product_categories (name, description, is_active) VALUES (?, ?, 1)");
+                $stmt->execute([$name, $desc]);
+                log_audit('CREATE', 'product_categories', (int)$db->lastInsertId(), null, ['name' => $name]);
+                redirect('modules/settings/products.php#categories', "Category '$name' created successfully!");
+            } catch (PDOException $e) {
+                set_flash('danger', 'Category name already exists or could not be saved.');
+            }
+        }
+    }
 }
 
 // Fetch all data
@@ -88,7 +106,7 @@ $designs = $db->query("SELECT d.*, p.name AS product_name, p.code AS product_cod
                        LEFT JOIN workflow_templates wt ON d.workflow_template_id = wt.id
                        ORDER BY d.id DESC")->fetchAll();
 
-$categories = $db->query("SELECT * FROM product_categories ORDER BY name ASC")->fetchAll();
+$categories = $db->query("SELECT c.*, (SELECT COUNT(*) FROM products WHERE category_id = c.id) AS product_count FROM product_categories c ORDER BY c.name ASC")->fetchAll();
 $templates = $db->query("SELECT * FROM workflow_templates WHERE is_active = 1 ORDER BY name ASC")->fetchAll();
 $colors = $db->query("SELECT * FROM colors ORDER BY name ASC")->fetchAll();
 $sizes = $db->query("SELECT * FROM sizes ORDER BY sort_order ASC")->fetchAll();
@@ -113,6 +131,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             <li class="nav-item">
                 <button class="nav-link active fw-semibold" data-bs-toggle="pill" data-bs-target="#productsTab" type="button">
                     <i class="bi bi-tag-fill me-1"></i> Products (<?= count($products) ?>)
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link fw-semibold" data-bs-toggle="pill" data-bs-target="#categoriesTab" type="button">
+                    <i class="bi bi-folder-fill me-1"></i> Categories (<?= count($categories) ?>)
                 </button>
             </li>
             <li class="nav-item">
@@ -150,7 +173,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <input type="text" name="name" class="form-control" placeholder="e.g. Mens Cardigan Sweater" required>
                                 </div>
                                 <div class="col-12 col-md-3">
-                                    <label class="form-label">Category</label>
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <label class="form-label mb-0">Category</label>
+                                        <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none fw-semibold" data-bs-toggle="modal" data-bs-target="#addCategoryModal">
+                                            <i class="bi bi-plus-circle"></i> New
+                                        </button>
+                                    </div>
                                     <select name="category_id" class="form-select">
                                         <option value="">-- Select Category --</option>
                                         <?php foreach ($categories as $cat): ?>
@@ -227,6 +255,84 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CATEGORIES TAB -->
+            <div class="tab-pane fade" id="categoriesTab">
+                <div class="card-modern mb-4">
+                    <div class="card-modern-header">
+                        <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-plus-circle me-1 text-primary"></i> Add Product Category</h6>
+                    </div>
+                    <div class="card-modern-body">
+                        <form method="POST" action="">
+                            <input type="hidden" name="action" value="create_category">
+                            <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+                            
+                            <div class="row g-3 align-items-end">
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label">Category Name *</label>
+                                    <input type="text" name="name" class="form-control" placeholder="e.g. Knitwear & Sweaters" required>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">Description</label>
+                                    <input type="text" name="description" class="form-control" placeholder="Brief description of product category">
+                                </div>
+                                <div class="col-12 col-md-2">
+                                    <button type="submit" class="btn btn-primary w-100 fw-semibold">
+                                        Save Category
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card-modern">
+                    <div class="card-modern-header">
+                        <h6 class="fw-bold mb-0 text-dark">Configured Product Categories</h6>
+                    </div>
+                    <div class="card-modern-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-modern align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 60px;">ID</th>
+                                        <th>Category Name</th>
+                                        <th>Description</th>
+                                        <th>Associated Products</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($categories)): ?>
+                                        <tr>
+                                            <td colspan="5" class="text-center py-4 text-muted">No product categories created yet.</td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($categories as $cat): ?>
+                                            <tr>
+                                                <td class="text-muted fw-bold">#<?= $cat['id'] ?></td>
+                                                <td class="fw-bold text-dark">
+                                                    <i class="bi bi-folder2 text-primary me-1"></i>
+                                                    <?= clean($cat['name']) ?>
+                                                </td>
+                                                <td class="text-muted"><?= clean($cat['description'] ?: '—') ?></td>
+                                                <td>
+                                                    <span class="badge bg-primary-subtle text-primary fw-semibold">
+                                                        <?= $cat['product_count'] ?? 0 ?> products
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-success-subtle text-success fw-semibold">Active</span>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
@@ -432,5 +538,35 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         </div>
 
     </div>
+
+<!-- Quick Add Category Modal -->
+<div class="modal fade" id="addCategoryModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" action="">
+                <input type="hidden" name="action" value="create_category">
+                <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-folder-plus text-primary me-2"></i>Add Product Category</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Category Name *</label>
+                        <input type="text" name="name" class="form-control" placeholder="e.g. Knitwear & Sweaters" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea name="description" class="form-control" rows="3" placeholder="Category notes or details..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary fw-semibold">Save Category</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

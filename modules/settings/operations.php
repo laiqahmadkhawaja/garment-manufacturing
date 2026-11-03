@@ -45,6 +45,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('modules/settings/operations.php', 'Operation default rate updated.');
         }
     }
+
+    if ($action === 'create_department') {
+        $name = trim($_POST['name'] ?? '');
+        $desc = trim($_POST['description'] ?? '');
+
+        if (empty($name)) {
+            set_flash('danger', 'Department name is required.');
+        } else {
+            try {
+                $stmt = $db->prepare("INSERT INTO departments (name, description, is_active) VALUES (?, ?, 1)");
+                $stmt->execute([$name, $desc]);
+                log_audit('CREATE', 'departments', (int)$db->lastInsertId(), null, ['name' => $name]);
+                redirect('modules/settings/operations.php#departments', "Department '$name' created successfully!");
+            } catch (PDOException $e) {
+                set_flash('danger', 'Department name already exists or could not be saved.');
+            }
+        }
+    }
 }
 
 $operations = $db->query("SELECT o.*, d.name AS department_name,
@@ -54,7 +72,12 @@ $operations = $db->query("SELECT o.*, d.name AS department_name,
                           LEFT JOIN departments d ON o.department_id = d.id
                           ORDER BY o.sequence ASC")->fetchAll();
 
-$departments = $db->query("SELECT * FROM departments WHERE is_active = 1 ORDER BY name ASC")->fetchAll();
+$departments = $db->query("SELECT d.*, 
+                           (SELECT COUNT(*) FROM operations WHERE department_id = d.id) AS ops_count,
+                           (SELECT COUNT(*) FROM workers WHERE department_id = d.id) AS workers_count
+                           FROM departments d 
+                           WHERE d.is_active = 1 
+                           ORDER BY d.name ASC")->fetchAll();
 
 require_once __DIR__ . '/../../includes/header.php';
 require_once __DIR__ . '/../../includes/sidebar.php';
@@ -71,8 +94,25 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             </div>
         </div>
 
-        <!-- Add Operation Inline Form -->
-        <div class="card-modern mb-4">
+        <!-- Navigation Tabs for Sections -->
+        <ul class="nav nav-pills mb-4 gap-2" id="opsTabs" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active fw-semibold" data-bs-toggle="pill" data-bs-target="#operationsTab" type="button">
+                    <i class="bi bi-gear-wide-connected me-1"></i> Operations (<?= count($operations) ?>)
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link fw-semibold" data-bs-toggle="pill" data-bs-target="#departmentsTab" type="button">
+                    <i class="bi bi-building me-1"></i> Departments (<?= count($departments) ?>)
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <!-- OPERATIONS TAB -->
+            <div class="tab-pane fade show active" id="operationsTab">
+                <!-- Add Operation Inline Form -->
+                <div class="card-modern mb-4">
             <div class="card-modern-header">
                 <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-plus-circle me-1 text-primary"></i> Create Dynamic Operation</h6>
             </div>
@@ -91,7 +131,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <input type="text" name="name" class="form-control" placeholder="e.g. Thread Trimming" required>
                         </div>
                         <div class="col-12 col-sm-6 col-md-2">
-                            <label class="form-label">Department</label>
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label mb-0">Department</label>
+                                <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none fw-semibold" data-bs-toggle="modal" data-bs-target="#addDeptModal">
+                                    <i class="bi bi-plus-circle"></i> New
+                                </button>
+                            </div>
                             <select name="department_id" class="form-select">
                                 <option value="">-- None --</option>
                                 <?php foreach ($departments as $dept): ?>
@@ -186,7 +231,122 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 </div>
             </div>
         </div>
+    </div> <!-- end operationsTab -->
+
+    <!-- DEPARTMENTS TAB -->
+    <div class="tab-pane fade" id="departmentsTab">
+        <div class="card-modern mb-4">
+            <div class="card-modern-header">
+                <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-plus-circle me-1 text-primary"></i> Create Factory Department</h6>
+            </div>
+            <div class="card-modern-body">
+                <form method="POST" action="">
+                    <input type="hidden" name="action" value="create_department">
+                    <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-12 col-md-4">
+                            <label class="form-label">Department Name *</label>
+                            <input type="text" name="name" class="form-control" placeholder="e.g. Embroidery / Printing" required>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Description / Scope</label>
+                            <input type="text" name="description" class="form-control" placeholder="Responsibilities and equipment of department">
+                        </div>
+                        <div class="col-12 col-md-2">
+                            <button type="submit" class="btn btn-primary w-100 fw-semibold">
+                                Add Department
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card-modern">
+            <div class="card-modern-header">
+                <h6 class="fw-bold mb-0 text-dark">Configured Factory Departments</h6>
+            </div>
+            <div class="card-modern-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-modern align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px;">ID</th>
+                                <th>Department Name</th>
+                                <th>Description</th>
+                                <th>Associated Operations</th>
+                                <th>Active Artisans</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($departments)): ?>
+                                <tr>
+                                    <td colspan="6" class="text-center py-4 text-muted">No departments configured yet.</td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($departments as $dept): ?>
+                                    <tr>
+                                        <td class="text-muted fw-bold">#<?= $dept['id'] ?></td>
+                                        <td class="fw-bold text-dark">
+                                            <i class="bi bi-building text-primary me-1"></i>
+                                            <?= clean($dept['name']) ?>
+                                        </td>
+                                        <td class="text-muted"><?= clean($dept['description'] ?: '—') ?></td>
+                                        <td>
+                                            <span class="badge bg-primary-subtle text-primary fw-semibold">
+                                                <?= $dept['ops_count'] ?? 0 ?> operations
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info-subtle text-info fw-semibold">
+                                                <?= $dept['workers_count'] ?? 0 ?> workers
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-success-subtle text-success fw-semibold">Active</span>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div> <!-- end departmentsTab -->
+</div> <!-- end tab-content -->
 
     </div>
+
+<!-- Quick Add Department Modal -->
+<div class="modal fade" id="addDeptModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" action="">
+                <input type="hidden" name="action" value="create_department">
+                <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-building-add text-primary me-2"></i>Add Factory Department</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Department Name *</label>
+                        <input type="text" name="name" class="form-control" placeholder="e.g. Quality Control, Embroidery" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description / Scope</label>
+                        <textarea name="description" class="form-control" rows="3" placeholder="Department notes or details..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary fw-semibold">Save Department</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

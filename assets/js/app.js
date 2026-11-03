@@ -39,6 +39,22 @@ $(document).ready(function() {
             'X-CSRF-Token': $('meta[name="csrf-token"]').attr('content')
         }
     });
+
+    // Hash-based Tab Switching
+    function activateTabFromHash() {
+        const hash = window.location.hash;
+        if (hash) {
+            const cleanHash = hash.replace('#', '');
+            const targetButton = document.querySelector(`[data-bs-target="#${cleanHash}Tab"]`) || 
+                                 document.querySelector(`[data-bs-target="#${cleanHash}"]`) ||
+                                 document.querySelector(`[href="#${cleanHash}"]`);
+            if (targetButton && window.bootstrap && bootstrap.Tab) {
+                bootstrap.Tab.getOrCreateInstance(targetButton).show();
+            }
+        }
+    }
+    activateTabFromHash();
+    $(window).on('hashchange', activateTabFromHash);
 });
 
 /**

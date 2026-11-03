@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $templates = $db->query("SELECT wt.*, 
                          (SELECT COUNT(*) FROM workflow_template_steps WHERE template_id = wt.id) AS steps_count,
-                         (SELECT COUNT(*) FROM lots WHERE id IN (SELECT lot_id FROM lot_workflows WHERE template_id = wt.id)) AS lots_count
+                         (SELECT COUNT(*) FROM lots l JOIN products p ON l.product_id = p.id LEFT JOIN designs d ON l.design_id = d.id WHERE COALESCE(d.workflow_template_id, p.default_workflow_template_id) = wt.id) AS lots_count
                          FROM workflow_templates wt
                          ORDER BY wt.id ASC")->fetchAll();
 
