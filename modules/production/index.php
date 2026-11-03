@@ -281,14 +281,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     </select>
                                 </div>
                                 <div class="col-12 col-md-6">
-                                    <label class="form-label">Worker / Operator *</label>
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <label class="form-label mb-0">Worker / Operator *</label>
+                                        <span id="workerCountBadge" class="badge bg-light text-secondary border small d-none">0 matching</span>
+                                    </div>
                                     <select name="worker_id" id="pe_worker_id" class="form-select" required>
-                                        <option value="">-- Choose Artisan --</option>
-                                        <?php foreach ($workers as $w): ?>
-                                            <option value="<?= $w['id'] ?>" data-rate="<?= $w['default_rate'] ?>">
-                                                <?= clean($w['name']) ?> (<?= clean($w['code']) ?>) — <?= clean($w['department_name'] ?? 'Worker') ?>
-                                            </option>
-                                        <?php endforeach; ?>
+                                        <option value="">-- Select Operation First --</option>
                                     </select>
                                 </div>
 
@@ -422,6 +420,8 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 document.addEventListener('DOMContentLoaded', function() {
     const lotSelect = document.getElementById('pe_lot_id');
     const opSelect = document.getElementById('pe_operation_id');
+    const workerSelect = document.getElementById('pe_worker_id');
+    const workerBadge = document.getElementById('workerCountBadge');
     const varSelect = document.getElementById('pe_variant_key');
     const rateInput = document.getElementById('pe_rate');
     const goodInput = document.getElementById('pe_good_qty');
@@ -452,9 +452,14 @@ document.addEventListener('DOMContentLoaded', function() {
     function loadLotData(lotId) {
         if (!lotId) {
             opSelect.innerHTML = '<option value="">-- Select Lot First --</option>';
+            workerSelect.innerHTML = '<option value="">-- Select Operation First --</option>';
+            if (workerBadge) workerBadge.classList.add('d-none');
             varSelect.innerHTML = '<option value="">-- Select Operation First --</option>';
             return;
         }
+
+        workerSelect.innerHTML = '<option value="">-- Select Operation First --</option>';
+        if (workerBadge) workerBadge.classList.add('d-none');
 
         fetch('<?= BASE_URL ?>modules/production/ajax.php?action=get_lot_operations_and_variants&lot_id=' + lotId)
             .then(res => res.json())
@@ -494,13 +499,72 @@ document.addEventListener('DOMContentLoaded', function() {
         loadLotData(lotSelect.value);
     }
 
-    // When operation changes, update default rate
+    function loadWorkersForOperation(opId) {
+        if (!opId) {
+            workerSelect.innerHTML = '<option value="">-- Select Operation First --</option>';
+            if (workerBadge) workerBadge.classList.add('d-none');
+            return;
+        }
+
+        workerSelect.innerHTML = '<option value="">Loading related artisans...</option>';
+        if (workerBadge) {
+            workerBadge.textContent = 'Loading...';
+            workerBadge.className = 'badge bg-light text-secondary border small';
+            workerBadge.classList.remove('d-none');
+        }
+
+        fetch('<?= BASE_URL ?>modules/production/ajax.php?action=get_operation_workers&operation_id=' + opId)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    workerSelect.innerHTML = '<option value="">-- Choose Artisan --</option>';
+                    const count = data.workers ? data.workers.length : 0;
+                    if (workerBadge) {
+                        workerBadge.textContent = count + ' related artisan' + (count === 1 ? '' : 's');
+                        workerBadge.className = 'badge bg-primary-subtle text-primary border small';
+                        workerBadge.classList.remove('d-none');
+                    }
+
+                    data.workers.forEach(w => {
+                        const opt = document.createElement('option');
+                        opt.value = w.id;
+                        opt.dataset.rate = w.effective_rate || '';
+                        opt.textContent = w.name + ' (' + w.code + ') — ' + (w.department_name || 'Worker');
+                        workerSelect.appendChild(opt);
+                    });
+
+                    // Auto-select if exactly 1 matching artisan
+                    if (count === 1) {
+                        workerSelect.value = data.workers[0].id;
+                        if (data.workers[0].effective_rate && parseFloat(data.workers[0].effective_rate) > 0) {
+                            rateInput.value = parseFloat(data.workers[0].effective_rate).toFixed(2);
+                            calculateLabour();
+                        }
+                    }
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                workerSelect.innerHTML = '<option value="">-- Choose Artisan --</option>';
+            });
+    }
+
+    workerSelect.addEventListener('change', function() {
+        const opt = this.options[this.selectedIndex];
+        if (opt && opt.dataset.rate && parseFloat(opt.dataset.rate) > 0) {
+            rateInput.value = parseFloat(opt.dataset.rate).toFixed(2);
+            calculateLabour();
+        }
+    });
+
+    // When operation changes, update default rate and load related workers
     opSelect.addEventListener('change', function() {
         const selectedOpt = this.options[this.selectedIndex];
         if (selectedOpt && selectedOpt.dataset.rate) {
             rateInput.value = selectedOpt.dataset.rate;
             calculateLabour();
         }
+        loadWorkersForOperation(this.value);
         checkBalance();
     });
 

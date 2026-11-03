@@ -96,4 +96,49 @@ if ($action === 'get_variant_stage_balance') {
     ]);
 }
 
+if ($action === 'get_operation_workers') {
+    $opId = (int)($_GET['operation_id'] ?? 0);
+
+    // Fetch operation details
+    $opStmt = $db->prepare("SELECT id, name, department_id, default_rate FROM operations WHERE id = ?");
+    $opStmt->execute([$opId]);
+    $operation = $opStmt->fetch();
+
+    if (!$operation) {
+        json_response(['status' => 'error', 'message' => 'Operation not found'], 404);
+    }
+
+    // Workers mapped via worker_operations OR via department
+    $stmt = $db->prepare("SELECT w.id, w.name, w.code, w.worker_type, dep.name AS department_name,
+                          COALESCE(
+                              (SELECT op_r.rate FROM operation_rates op_r WHERE op_r.operation_id = ? AND op_r.worker_id = w.id ORDER BY op_r.id DESC LIMIT 1),
+                              ?
+                          ) AS effective_rate
+                          FROM workers w
+                          LEFT JOIN worker_operations wo ON wo.worker_id = w.id AND wo.operation_id = ?
+                          LEFT JOIN departments dep ON w.department_id = dep.id
+                          WHERE w.is_active = 1 
+                            AND (wo.worker_id IS NOT NULL OR w.department_id = ?)
+                          ORDER BY (wo.worker_id IS NOT NULL) DESC, w.name ASC");
+    $stmt->execute([$opId, $operation['default_rate'], $opId, $operation['department_id']]);
+    $relatedWorkers = $stmt->fetchAll();
+
+    // Fallback: If no workers match the operation or department, return all active workers
+    if (empty($relatedWorkers)) {
+        $allStmt = $db->prepare("SELECT w.id, w.name, w.code, w.worker_type, dep.name AS department_name, ? AS effective_rate
+                                 FROM workers w
+                                 LEFT JOIN departments dep ON w.department_id = dep.id
+                                 WHERE w.is_active = 1
+                                 ORDER BY w.name ASC");
+        $allStmt->execute([$operation['default_rate']]);
+        $relatedWorkers = $allStmt->fetchAll();
+    }
+
+    json_response([
+        'status' => 'success',
+        'operation' => $operation,
+        'workers' => $relatedWorkers
+    ]);
+}
+
 json_response(['status' => 'error', 'message' => 'Unknown action'], 400);
