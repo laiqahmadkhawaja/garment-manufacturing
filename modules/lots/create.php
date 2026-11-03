@@ -286,7 +286,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ]);
 
                     $db->commit();
-                    redirect("modules/lots/view.php?id=$lotId", "Production Lot #$lotNumber created successfully ($totalPieces pieces)!");
+
+                    // Automatically issue / allocate raw materials based on product recipe
+                    $autoResult = auto_issue_lot_materials($lotId);
+                    $flashMsg = "Production Lot #$lotNumber created successfully ($totalPieces pieces)!";
+                    if (!empty($autoResult['shortages'])) {
+                        $flashMsg .= " ⚠️ Note: Raw material stock shortage detected. Please review required materials.";
+                        redirect("modules/lots/view.php?id=$lotId", $flashMsg, 'warning');
+                    } else {
+                        redirect("modules/lots/view.php?id=$lotId", $flashMsg);
+                    }
                 } catch (Exception $e) {
                     $db->rollBack();
                     $error = 'Error creating lot: ' . $e->getMessage();

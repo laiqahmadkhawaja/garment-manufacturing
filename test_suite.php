@@ -582,6 +582,67 @@ $db->commit();
 $opEntryOk = ($totGood === 150 && $dGood === 80 && $nGood === 70);
 assert_test("30. Stage 1 Operator Entry (Double Shift Auto-Balance)", $opEntryOk, "150 pcs Lot: Day Operator made $dGood pcs, Night Operator automatically completed remaining $nGood pcs (No color tracking required)");
 
+// =========================================================================
+// SCENARIO 31: AUTO-ISSUANCE OF RAW MATERIALS VIA PRODUCT RECIPE / BOM & SHORTAGE MANAGEMENT
+// =========================================================================
+echo "\n--- TESTING SCENARIO 31: RECIPE-BASED RAW MATERIAL AUTO-ISSUANCE & SHORTAGES ---\n";
+
+$db->beginTransaction();
+
+// Initial stock of Material 1 & 2
+$m1Before = (float)$db->query("SELECT current_stock FROM materials WHERE id = 1")->fetchColumn();
+$m2Before = (float)$db->query("SELECT current_stock FROM materials WHERE id = 2")->fetchColumn();
+
+// Create Lot A with Product 1 (100 pieces)
+$lotNumA = 'LOT-TEST-BOM-A-' . time();
+$db->prepare("INSERT INTO lots (lot_number, lot_date, product_id, total_pieces, status, created_by) VALUES (?, CURDATE(), 1, 100, 'In Production', 1)")
+   ->execute([$lotNumA]);
+$lotIdA = (int)$db->lastInsertId();
+$db->commit();
+
+// Run auto-issuance on Lot A (Sufficient Stock)
+$resA = auto_issue_lot_materials($lotIdA);
+
+$m1AfterA = (float)$db->query("SELECT current_stock FROM materials WHERE id = 1")->fetchColumn();
+$m2AfterA = (float)$db->query("SELECT current_stock FROM materials WHERE id = 2")->fetchColumn();
+
+// Check if material issue items exist
+$issuedStmtA = $db->prepare("SELECT mii.material_id, SUM(mii.quantity) as tot_qty FROM material_issue_items mii JOIN material_issues mi ON mii.issue_id = mi.id WHERE mi.lot_id = ? GROUP BY mii.material_id");
+$issuedStmtA->execute([$lotIdA]);
+$issuedMapA = $issuedStmtA->fetchAll(PDO::FETCH_KEY_PAIR);
+
+// 100 pcs * 0.45 * 1.05 = 47.25 units for Mat 1; 100 pcs * 0.05 * 1.05 = 5.25 units for Mat 2
+$mat1IssuedA = (float)($issuedMapA[1] ?? 0);
+$mat2IssuedA = (float)($issuedMapA[2] ?? 0);
+$lotASuccess = ($resA['all_fulfilled'] && abs($mat1IssuedA - 47.25) < 0.01 && abs($mat2IssuedA - 5.25) < 0.01 && abs(($m1Before - $m1AfterA) - 47.25) < 0.01);
+
+// Now test Shortage & Partial Allocation on Lot B
+// Force stock of Material 1 to 10.00
+$db->exec("UPDATE materials SET current_stock = 10.00 WHERE id = 1");
+
+$lotNumB = 'LOT-TEST-BOM-B-' . time();
+$db->prepare("INSERT INTO lots (lot_number, lot_date, product_id, total_pieces, status, created_by) VALUES (?, CURDATE(), 1, 100, 'In Production', 1)")
+   ->execute([$lotNumB]);
+$lotIdB = (int)$db->lastInsertId();
+
+$resB = auto_issue_lot_materials($lotIdB);
+$shortageDetected = (!$resB['all_fulfilled'] && count($resB['shortages']) > 0 && abs($resB['shortages'][0]['shortage'] - 37.25) < 0.01);
+
+// Replenish stock by purchasing / receiving 50 units of Material 1
+$db->exec("UPDATE materials SET current_stock = current_stock + 50.00 WHERE id = 1");
+
+// Click "Issue Remaining Materials" (re-run auto_issue_lot_materials)
+$resB2 = auto_issue_lot_materials($lotIdB);
+
+$issuedStmtB = $db->prepare("SELECT SUM(mii.quantity) FROM material_issue_items mii JOIN material_issues mi ON mii.issue_id = mi.id WHERE mi.lot_id = ? AND mii.material_id = 1");
+$issuedStmtB->execute([$lotIdB]);
+$mat1TotalIssuedB = (float)$issuedStmtB->fetchColumn();
+
+$shortageResolved = ($resB2['all_fulfilled'] && abs($mat1TotalIssuedB - 47.25) < 0.01);
+
+$scenario31Passed = ($lotASuccess && $shortageDetected && $shortageResolved);
+assert_test("31. Recipe BOM Auto-Issuance, Shortage Alert & Fulfill", $scenario31Passed, "Auto-deducted 47.25 & 5.25 units; detected 37.25 shortage when stock low; fulfilled remainder without duplicate deductions after stock arrived");
+
 echo "\n========================================================================\n";
 echo "TEST SUITE SUMMARY: $passCount PASSED, $failCount FAILED\n";
 echo "========================================================================\n";

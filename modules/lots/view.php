@@ -45,7 +45,7 @@ $productBom = $bomStmt->fetch();
 
 $bomItems = [];
 if ($productBom) {
-    $biStmt = $db->prepare("SELECT bi.*, m.name AS material_name, m.code AS material_code, u.code AS unit_code, m.cost_price AS cost_per_unit, m.cost_price
+    $biStmt = $db->prepare("SELECT bi.*, m.name AS material_name, m.code AS material_code, m.current_stock, u.code AS unit_code, m.cost_price AS cost_per_unit, m.cost_price
                            FROM bom_items bi
                            JOIN materials m ON bi.material_id = m.id
                            JOIN units u ON m.unit_id = u.id
@@ -83,6 +83,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
         }
     }
 }
+
+// Issue Remaining Materials handler
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['issue_remaining_materials'])) {
+    check_csrf();
+    $issueRes = auto_issue_lot_materials($lotId);
+    $issuedCount = count($issueRes['issued_items'] ?? []);
+    $shortageCount = count($issueRes['shortages'] ?? []);
+
+    if ($issuedCount > 0) {
+        set_flash('success', "کامیابی! گودام سے $issuedCount میٹیریل لاٹ کو کامیابی سے ایشو ہو گئے۔");
+    }
+    if ($shortageCount > 0) {
+        $shortNames = array_map(function($s) {
+            return clean($s['material_name']) . " (" . number_format($s['shortage'], 2) . " " . clean($s['unit_code']) . " کم)";
+        }, $issueRes['shortages']);
+        set_flash('danger', "توجہ فرمائیں! درج ذیل میٹیریل گودام میں کم ہے: " . implode(', ', $shortNames));
+    } elseif ($issuedCount === 0) {
+        set_flash('info', "کوئی بقایا میٹیریل ایشو کے لیے زیر التواء نہیں ہے یا گودام میں اسٹاک موجود نہیں ہے۔");
+    }
+    redirect("modules/lots/view.php?id=$lotId#tab-materials");
+}
+
+// Automatic Material Issuance / Shortage Audit on View
+$autoIssueResult = auto_issue_lot_materials($lotId);
+$shortages = $autoIssueResult['shortages'] ?? [];
 
 // 1. Color & Size Variants Matrix
 $vStmt = $db->prepare("SELECT lv.*, c.name AS color_name, COALESCE(lv.color_code, c.color_code, c.name) AS color_code, c.hex_code, s.name AS size_name, s.code AS size_code 
@@ -209,6 +234,36 @@ require_once __DIR__ . '/../../includes/sidebar.php';
     <?php require_once __DIR__ . '/../../includes/topbar.php'; ?>
     
     <div class="app-content">
+        <!-- Raw Material Shortage Alert Banner -->
+        <?php if (!empty($shortages)): ?>
+            <div class="alert alert-danger border-2 border-danger shadow-sm d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 p-3 mb-4 rounded-3" role="alert">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="p-2 bg-danger text-white rounded-circle fs-4 lh-1 blink-shortage">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold fs-6 text-danger d-flex align-items-center gap-2">
+                            <span>توجہ فرمائیں! خام مال کا اسٹاک ناکافی ہے (Raw Material Shortage Detected)</span>
+                            <span class="badge bg-danger"><?= count($shortages) ?> آئٹمز کم ہیں</span>
+                        </div>
+                        <div class="text-dark small mt-1">
+                            لاٹ کی ریسیپی کے مطابق مطلوبہ میٹیریل گودام میں کم ہے۔ تفصیلی کمی دیکھنے اور بقایا ایشو کرنے کے لیے نیچے <strong>Materials</strong> ٹیب دیکھیں۔
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex flex-wrap gap-2 align-self-stretch align-self-md-auto">
+                    <a href="<?= BASE_URL ?>modules/raw_materials/stock_in.php" class="btn btn-danger btn-sm d-inline-flex align-items-center gap-1 shadow-sm">
+                        <i class="bi bi-plus-circle-fill"></i>
+                        <span>اسٹاک شامل کریں (Stock In)</span>
+                    </a>
+                    <button type="button" class="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1" onclick="const t = document.querySelector('[data-bs-target=\'#tab-materials\']'); if (t) { bootstrap.Tab.getOrCreateInstance(t).show(); t.scrollIntoView({behavior:'smooth'}); }">
+                        <i class="bi bi-boxes"></i>
+                        <span>کمی کی تفصیل دیکھیں</span>
+                    </button>
+                </div>
+            </div>
+        <?php endif; ?>
+
         <!-- Lot Header Card -->
         <div class="card-modern mb-4 border-primary-subtle shadow-sm">
             <div class="card-modern-body p-4">
@@ -369,8 +424,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 </button>
             </li>
             <li class="nav-item">
-                <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-materials">
+                <button class="nav-link fw-semibold <?= !empty($shortages) ? 'blink-shortage tab-shortage-alert fw-bold' : '' ?>" data-bs-toggle="tab" data-bs-target="#tab-materials" id="lot-tab-materials">
                     <i class="bi bi-boxes me-1"></i> Materials (<?= count($materialIssues) ?>)
+                    <?php if (!empty($shortages)): ?>
+                        <span class="badge bg-danger ms-1 text-white"><i class="bi bi-exclamation-triangle-fill"></i> کمی ہے</span>
+                    <?php endif; ?>
                 </button>
             </li>
             <li class="nav-item">
@@ -652,6 +710,41 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
             <!-- TAB 4: MATERIALS -->
             <div class="tab-pane fade" id="tab-materials">
+                <?php if (!empty($shortages)): ?>
+                    <div class="card-modern mb-4 border-danger shadow-sm">
+                        <div class="card-modern-body p-3 bg-danger-subtle d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+                            <div>
+                                <div class="fw-bold text-danger d-flex align-items-center gap-2">
+                                    <i class="bi bi-exclamation-octagon-fill fs-5"></i>
+                                    <span>خام مال کی کمی کی تفصیل (Material Shortage Status)</span>
+                                </div>
+                                <div class="text-danger small mt-1">
+                                    اس لاٹ کے لیے گودام میں درج ذیل خام مال ناکافی ہے۔ آپ نیا اسٹاک پرچیز کرنے کے بعد <strong>"بقایا مٹیریل ایشو کریں"</strong> پر کلک کر کے بقیہ کوٹہ ایشو کر سکتے ہیں۔
+                                </div>
+                                <div class="d-flex flex-wrap gap-2 mt-2">
+                                    <?php foreach ($shortages as $s): ?>
+                                        <span class="badge bg-danger text-white py-1 px-2">
+                                            <?= clean($s['material_name']) ?>: درکار <?= number_format($s['pending'], 2) ?> | گودام میں <?= number_format($s['current_stock'], 2) ?> | <strong>کمی: <?= number_format($s['shortage'], 2) ?> <?= clean($s['unit_code']) ?></strong>
+                                        </span>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                            <div class="d-flex flex-wrap gap-2 align-self-stretch align-self-md-auto">
+                                <a href="<?= BASE_URL ?>modules/raw_materials/stock_in.php" class="btn btn-outline-danger btn-sm text-nowrap">
+                                    <i class="bi bi-box-arrow-in-down me-1"></i> اسٹاک خریدیں / داخل کریں
+                                </a>
+                                <form method="POST" action="" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+                                    <input type="hidden" name="issue_remaining_materials" value="1">
+                                    <button type="submit" class="btn btn-danger btn-sm text-nowrap shadow-sm">
+                                        <i class="bi bi-arrow-repeat me-1"></i> بقایا مٹیریل ایشو کریں (Issue Remaining)
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
                 <?php if ($productBom && !empty($bomItems)): 
                     $estTotalRecipeCost = 0;
                 ?>
@@ -665,7 +758,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 </div>
                             </div>
                             <div class="d-flex align-items-center gap-2">
-                                <a href="<?= BASE_URL ?>modules/settings/products.php?tab=recipes&product_id=<?= $lot['product_id'] ?>" class="btn btn-sm btn-outline-success py-1 px-2">
+                                <form method="POST" action="" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+                                    <input type="hidden" name="issue_remaining_materials" value="1">
+                                    <button type="submit" class="btn btn-sm btn-outline-success py-1 px-2">
+                                        <i class="bi bi-arrow-repeat me-1"></i>Re-check & Issue Materials
+                                    </button>
+                                </form>
+                                <a href="<?= BASE_URL ?>modules/settings/products.php?tab=recipes&product_id=<?= $lot['product_id'] ?>" class="btn btn-sm btn-outline-secondary py-1 px-2">
                                     <i class="bi bi-pencil me-1"></i>Configure Product Recipe
                                 </a>
                             </div>
@@ -678,9 +778,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             <th>Raw Material / خام مال</th>
                                             <th class="text-center">Per Piece Qty</th>
                                             <th class="text-center">Batch Required (w/ Wastage)</th>
-                                            <th class="text-end">Est. Unit Cost</th>
-                                            <th class="text-end">Est. Batch Cost</th>
+                                            <th class="text-center">In Warehouse Stock</th>
                                             <th class="text-center">Actual Issued</th>
+                                            <th class="text-center">Shortage / Pending</th>
+                                            <th class="text-center">Status</th>
+                                            <th class="text-end">Est. Batch Cost</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -688,7 +790,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         foreach ($bomItems as $bi): 
                                             $baseRequired = $bi['quantity_per_piece'] * $lot['total_pieces'];
                                             $wastageMult = 1 + (($productBom['wastage_percent'] ?? 0) / 100);
-                                            $batchRequired = $baseRequired * $wastageMult;
+                                            $batchRequired = round($baseRequired * $wastageMult, 2);
                                             $estCost = $batchRequired * (float)$bi['cost_per_unit'];
                                             $estTotalRecipeCost += $estCost;
 
@@ -699,6 +801,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                     $issuedQty += (float)$mi['quantity'];
                                                 }
                                             }
+                                            $pendingQty = round(max(0, $batchRequired - $issuedQty), 2);
+                                            $currentStock = (float)($bi['current_stock'] ?? 0);
+                                            $itemShortage = round(max(0, $pendingQty - $currentStock), 2);
                                         ?>
                                             <tr>
                                                 <td class="fw-bold text-dark">
@@ -711,35 +816,58 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <td class="text-center fw-bold text-primary">
                                                     <?= number_format($batchRequired, 2) ?> <?= clean($bi['unit_code']) ?>
                                                 </td>
-                                                <td class="text-end text-muted">
-                                                    Rs. <?= number_format($bi['cost_per_unit'], 2) ?>
-                                                </td>
-                                                <td class="text-end fw-bold text-dark">
-                                                    Rs. <?= number_format($estCost, 2) ?>
+                                                <td class="text-center <?= $currentStock < $pendingQty ? 'text-danger fw-bold' : 'text-dark' ?>">
+                                                    <?= number_format($currentStock, 2) ?> <?= clean($bi['unit_code']) ?>
                                                 </td>
                                                 <td class="text-center">
                                                     <?php if ($issuedQty >= $batchRequired): ?>
                                                         <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
-                                                            <i class="bi bi-check-circle me-1"></i><?= number_format($issuedQty, 2) ?> <?= clean($bi['unit_code']) ?> Issued
+                                                            <i class="bi bi-check-circle me-1"></i><?= number_format($issuedQty, 2) ?> <?= clean($bi['unit_code']) ?>
                                                         </span>
                                                     <?php elseif ($issuedQty > 0): ?>
-                                                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-2 py-1">
+                                                        <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle px-2 py-1">
                                                             <?= number_format($issuedQty, 2) ?> / <?= number_format($batchRequired, 2) ?> <?= clean($bi['unit_code']) ?>
                                                         </span>
                                                     <?php else: ?>
-                                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
-                                                            0.00 <?= clean($bi['unit_code']) ?> Issued (Pending)
+                                                        <span class="badge bg-light text-muted border px-2 py-1">
+                                                            0.00 <?= clean($bi['unit_code']) ?>
                                                         </span>
                                                     <?php endif; ?>
+                                                </td>
+                                                <td class="text-center">
+                                                    <?php if ($pendingQty <= 0): ?>
+                                                        <span class="text-success small fw-semibold"><i class="bi bi-check2"></i> 0.00 (None)</span>
+                                                    <?php elseif ($itemShortage > 0): ?>
+                                                        <span class="text-danger fw-bold"><i class="bi bi-dash-circle me-1"></i><?= number_format($itemShortage, 2) ?> <?= clean($bi['unit_code']) ?> Short</span>
+                                                    <?php else: ?>
+                                                        <span class="text-warning-emphasis small fw-semibold"><?= number_format($pendingQty, 2) ?> <?= clean($bi['unit_code']) ?> Pending</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td class="text-center">
+                                                    <?php if ($issuedQty >= $batchRequired): ?>
+                                                        <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                                                            <i class="bi bi-check-circle me-1"></i>مکمل ایشو
+                                                        </span>
+                                                    <?php elseif ($itemShortage > 0): ?>
+                                                        <span class="badge bg-danger text-white px-2 py-1 blink-shortage">
+                                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>کمی ہے
+                                                        </span>
+                                                    <?php else: ?>
+                                                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1">
+                                                            <i class="bi bi-clock me-1"></i>ایشو کے لیے تیار
+                                                        </span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td class="text-end fw-bold text-dark">
+                                                    Rs. <?= number_format($estCost, 2) ?>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
                                     </tbody>
                                     <tfoot class="table-light">
                                         <tr>
-                                            <td colspan="4" class="text-end fw-bold">Estimated Raw Material Budget (بجٹ خام مال):</td>
+                                            <td colspan="7" class="text-end fw-bold">Estimated Raw Material Budget (بجٹ خام مال):</td>
                                             <td class="text-end fw-bold text-success fs-6">Rs. <?= number_format($estTotalRecipeCost, 2) ?></td>
-                                            <td></td>
                                         </tr>
                                     </tfoot>
                                 </table>
@@ -996,5 +1124,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         </div>
 
     </div>
+
+<?php if (!empty($shortages)): ?>
+<script>
+    $(document).ready(function() {
+        showToast("توجہ: لاٹ کی ریسیپی کے مطابق خام مال کا اسٹاک کم ہے! براہ کرم Materials ٹیب دیکھیں۔", "danger");
+    });
+</script>
+<?php endif; ?>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

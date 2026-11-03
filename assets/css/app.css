@@ -383,8 +383,22 @@ html, body {
     100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 
+/* Flashing warning indicator for material shortages */
+@keyframes shortage-blink {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.35; transform: scale(1.05); }
+}
+.blink-shortage {
+    animation: shortage-blink 1s infinite ease-in-out;
+}
+.tab-shortage-alert {
+    background-color: #fee2e2 !important;
+    border-color: #ef4444 !important;
+    color: #b91c1c !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
-    .pulse-indicator { animation: none; }
+    .pulse-indicator, .blink-shortage { animation: none; }
 }
 
 /* Table styling */
