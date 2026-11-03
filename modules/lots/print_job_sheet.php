@@ -170,42 +170,61 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
         <?php $secNum = 1; ?>
 
         <!-- Garment Pattern Components Breakdown -->
-        <?php if (!empty($productElements)): ?>
-            <h6 class="fw-bold text-uppercase border-bottom pb-1 mb-2"><?= $secNum++ ?>. Garment Pattern Elements & Cutting Parts (کٹنگ کے اجزاء)</h6>
+        <?php if (!empty($productElements)): 
+            $anatomyData = !empty($lot['anatomy_breakdown']) ? json_decode($lot['anatomy_breakdown'], true) : [];
+            $hasAnatomy = !empty($lot['has_anatomy_variants']) && !empty($anatomyData);
+            $calcBreakdown = calculate_lot_element_requirements(
+                $productElements,
+                (int)$lot['total_pieces'],
+                $hasAnatomy,
+                $anatomyData
+            );
+            $sumPerGarment = array_sum(array_column($productElements, 'quantity'));
+            $sumBatchCut = $calcBreakdown['total_cut_pieces'];
+        ?>
+            <h6 class="fw-bold text-uppercase border-bottom pb-1 mb-2">
+                <?= $secNum++ ?>. Garment Pattern Elements & Cutting Parts (کٹنگ کے اجزاء)
+                <?php if ($hasAnatomy): ?>
+                    <span class="small text-muted text-lowercase fw-normal">
+                        (بازو والے: <?= (int)($anatomyData['with_sleeves'] ?? 0) ?> pcs | بغیر بازو: <?= (int)($anatomyData['sleeveless'] ?? 0) ?> pcs)
+                    </span>
+                <?php endif; ?>
+            </h6>
             <table class="table table-bordered mb-4" style="font-size: 0.85rem;">
                 <thead class="bg-light text-center">
                     <tr>
                         <th style="width: 5%;">#</th>
-                        <th class="text-start" style="width: 35%;">Component / Element Name</th>
-                        <th style="width: 15%;">Qty / Garment</th>
-                        <th style="width: 20%;">Total Batch Cut Pcs</th>
-                        <th class="text-start">Cutting / Fabric Notes</th>
+                        <th class="text-start" style="width: 30%;">Component / Element Name</th>
+                        <th style="width: 12%;">Qty / Garment</th>
+                        <th style="width: 15%;">Target Garments</th>
+                        <th style="width: 18%;">Total Batch Cut Pcs</th>
+                        <th class="text-start">Cutting Basis / Notes</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php 
-                    $sumPerGarment = 0;
-                    $sumBatchCut = 0;
-                    foreach ($productElements as $eIdx => $pe): 
-                        $bCut = $pe['quantity'] * $lot['total_pieces'];
-                        $sumPerGarment += $pe['quantity'];
-                        $sumBatchCut += $bCut;
-                    ?>
+                    <?php foreach ($calcBreakdown['elements'] as $eIdx => $el): ?>
                         <tr>
                             <td class="text-center fw-bold"><?= $eIdx + 1 ?></td>
-                            <td class="text-start fw-semibold"><?= clean($pe['element_name']) ?></td>
-                            <td class="text-center fw-bold"><?= (int)$pe['quantity'] ?></td>
-                            <td class="text-center fw-bold"><?= number_format($bCut) ?></td>
-                            <td class="text-start text-muted"><?= clean($pe['notes'] ?: '—') ?></td>
+                            <td class="text-start fw-semibold"><?= clean($el['element_name']) ?></td>
+                            <td class="text-center fw-bold"><?= (int)$el['quantity_per_unit'] ?></td>
+                            <td class="text-center fw-semibold"><?= number_format($el['target_pieces']) ?> pcs</td>
+                            <td class="text-center fw-bold"><?= number_format($el['batch_required']) ?> pcs</td>
+                            <td class="text-start text-muted small">
+                                <?= clean($el['calc_note']) ?>
+                                <?php if (!empty($el['original_notes'])): ?>
+                                    (<?= clean($el['original_notes']) ?>)
+                                <?php endif; ?>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
                 <tfoot class="bg-light fw-bold text-center">
                     <tr>
-                        <td colspan="2" class="text-start">Total Pieces to Cut per Unit</td>
+                        <td colspan="2" class="text-start">Total Pieces to Cut per Unit / Batch</td>
                         <td><?= $sumPerGarment ?> pcs</td>
+                        <td>—</td>
                         <td><?= number_format($sumBatchCut) ?> pcs</td>
-                        <td></td>
+                        <td class="text-start small text-muted">Complete Batch Cutting Total</td>
                     </tr>
                 </tfoot>
             </table>

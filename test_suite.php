@@ -643,6 +643,66 @@ $shortageResolved = ($resB2['all_fulfilled'] && abs($mat1TotalIssuedB - 47.25) <
 $scenario31Passed = ($lotASuccess && $shortageDetected && $shortageResolved);
 assert_test("31. Recipe BOM Auto-Issuance, Shortage Alert & Fulfill", $scenario31Passed, "Auto-deducted 47.25 & 5.25 units; detected 37.25 shortage when stock low; fulfilled remainder without duplicate deductions after stock arrived");
 
+// =========================================================================
+// SCENARIO 32: AUTOMATIC GARMENT CUTTING ELEMENTS CALCULATION ON ANATOMY BREAKDOWN
+// =========================================================================
+echo "\n--- TESTING SCENARIO 32: AUTOMATIC CUTTING PARTS ALLOCATION (SLEEVELESS VS SLEEVED) ---\n";
+
+// Fetch elements for Product 1 (Sweater / Coat: Front, Back, Sleeves 2pcs, Neck)
+$peStmt = $db->prepare("SELECT * FROM product_elements WHERE product_id = 1 ORDER BY sort_order ASC, id ASC");
+$peStmt->execute();
+$prod1Elements = $peStmt->fetchAll();
+
+// User scenario: 100 pcs lot (80 with sleeves, 20 sleeveless)
+$anatomyBreakdownData = [
+    'with_sleeves' => 80,
+    'sleeveless' => 20
+];
+
+$calcRes = calculate_lot_element_requirements($prod1Elements, 100, true, $anatomyBreakdownData);
+
+$sleeveRequirement = 0;
+$frontRequirement = 0;
+$backRequirement = 0;
+foreach ($calcRes['elements'] as $el) {
+    if ($el['is_sleeve']) {
+        $sleeveRequirement = $el['batch_required'];
+    } elseif (stripos($el['element_name'], 'front') !== false) {
+        $frontRequirement = $el['batch_required'];
+    } elseif (stripos($el['element_name'], 'back') !== false) {
+        $backRequirement = $el['batch_required'];
+    }
+}
+
+// 80 sleeved * 2 = 160 sleeves. 100 fronts. 100 backs. Total cut parts = 100 + 100 + 160 + 100 = 460 pcs.
+$scenario32Passed = (
+    $sleeveRequirement === 160 &&
+    $frontRequirement === 100 &&
+    $backRequirement === 100 &&
+    $calcRes['total_cut_pieces'] === 460
+);
+
+// Also verify persistence in lot creation
+$lotNumC = 'LOT-TEST-PARTS-' . time();
+$anatomyJson = json_encode([
+    'with_sleeves' => 80,
+    'sleeveless' => 20,
+    'elements' => $calcRes['elements'],
+    'total_cut_pieces' => $calcRes['total_cut_pieces']
+]);
+
+$db->prepare("INSERT INTO lots 
+    (lot_number, lot_date, product_id, total_pieces, has_anatomy_variants, anatomy_breakdown, status, created_by)
+    VALUES (?, CURDATE(), 1, 100, 1, ?, 'Draft', 1)")
+   ->execute([$lotNumC, $anatomyJson]);
+$lotIdC = (int)$db->lastInsertId();
+
+$savedLot = $db->query("SELECT * FROM lots WHERE id = $lotIdC")->fetch();
+$savedAnatomy = json_decode($savedLot['anatomy_breakdown'], true);
+$persistedOk = ($savedLot['has_anatomy_variants'] == 1 && $savedAnatomy['total_cut_pieces'] === 460);
+
+assert_test("32. Auto Cutting Parts Allocation (80 Sleeved x 2 = 160 Sleeves)", ($scenario32Passed && $persistedOk), "100 pcs lot (80 with sleeves, 20 sleeveless): exactly 160 sleeves ($80x2), 100 fronts, 100 backs calculated & tracked");
+
 echo "\n========================================================================\n";
 echo "TEST SUITE SUMMARY: $passCount PASSED, $failCount FAILED\n";
 echo "========================================================================\n";

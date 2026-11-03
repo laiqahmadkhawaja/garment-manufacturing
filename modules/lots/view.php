@@ -457,8 +457,16 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             <!-- TAB 1: OVERVIEW & VARIANTS -->
             <div class="tab-pane fade show active" id="tab-overview">
                 <?php if (!empty($productElements)): 
+                    $anatomyData = !empty($lot['anatomy_breakdown']) ? json_decode($lot['anatomy_breakdown'], true) : [];
+                    $hasAnatomy = !empty($lot['has_anatomy_variants']) && !empty($anatomyData);
+                    $calcBreakdown = calculate_lot_element_requirements(
+                        $productElements,
+                        (int)$lot['total_pieces'],
+                        $hasAnatomy,
+                        $anatomyData
+                    );
                     $totalElemPcs = array_sum(array_column($productElements, 'quantity'));
-                    $batchTotalPcs = $totalElemPcs * $lot['total_pieces'];
+                    $batchTotalPcs = $calcBreakdown['total_cut_pieces'];
                 ?>
                     <div class="card-modern mb-4">
                         <div class="card-modern-header d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -466,7 +474,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <span class="badge bg-primary p-2 rounded-2"><i class="bi bi-puzzle-fill text-white fs-6"></i></span>
                                 <div>
                                     <h6 class="fw-bold mb-0 text-dark">Product Pattern Elements & Structure (اجزاء اور کٹنگ کے حصے)</h6>
-                                    <span class="text-muted small">Pattern anatomy for <?= clean($lot['product_name']) ?> (<?= clean($lot['product_type']) ?>)</span>
+                                    <span class="text-muted small">
+                                        Pattern anatomy for <?= clean($lot['product_name']) ?> (<?= clean($lot['product_type']) ?>)
+                                        <?php if ($hasAnatomy): ?>
+                                            &bull; <span class="text-primary fw-semibold"><i class="bi bi-diagram-3-fill me-1"></i>بازو والے: <?= (int)($anatomyData['with_sleeves'] ?? 0) ?> pcs | بغیر بازو: <?= (int)($anatomyData['sleeveless'] ?? 0) ?> pcs</span>
+                                        <?php endif; ?>
+                                    </span>
                                 </div>
                             </div>
                             <div class="d-flex align-items-center gap-3">
@@ -485,28 +498,37 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <tr>
                                             <th style="width: 50px;" class="text-center">#</th>
                                             <th>Component / Element Name</th>
-                                            <th class="text-center" style="width: 140px;">Qty Per Unit</th>
+                                            <th class="text-center" style="width: 130px;">Qty Per Unit</th>
+                                            <th class="text-center" style="width: 140px;">Target Garments</th>
                                             <th class="text-center" style="width: 180px;">Batch Required to Cut</th>
-                                            <th>Pattern & Fabrication Notes</th>
+                                            <th>Allocation Basis & Notes (حساب کا فارمولا)</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <?php foreach ($productElements as $eIdx => $pe): 
-                                            $reqCut = $pe['quantity'] * $lot['total_pieces'];
-                                        ?>
+                                        <?php foreach ($calcBreakdown['elements'] as $eIdx => $el): ?>
                                             <tr>
                                                 <td class="text-center text-muted fw-bold"><?= $eIdx + 1 ?></td>
                                                 <td class="fw-bold text-dark">
                                                     <i class="bi bi-scissors text-primary me-1"></i>
-                                                    <?= clean($pe['element_name']) ?>
+                                                    <?= clean($el['element_name']) ?>
                                                 </td>
-                                                <td class="text-center fw-bold text-primary">
-                                                    <?= (int)$pe['quantity'] ?> pcs
+                                                <td class="text-center fw-bold text-muted">
+                                                    <?= (int)$el['quantity_per_unit'] ?> pcs
                                                 </td>
-                                                <td class="text-center fw-bold text-success">
-                                                    <?= number_format($reqCut) ?> pcs
+                                                <td class="text-center fw-semibold <?= $el['is_sleeve'] && $hasAnatomy ? 'text-primary' : 'text-dark' ?>">
+                                                    <?= number_format($el['target_pieces']) ?> pcs
                                                 </td>
-                                                <td class="text-muted"><?= clean($pe['notes'] ?: '—') ?></td>
+                                                <td class="text-center fw-bold text-success fs-6">
+                                                    <?= number_format($el['batch_required']) ?> pcs
+                                                </td>
+                                                <td>
+                                                    <span class="badge <?= $el['is_sleeve'] && $hasAnatomy ? 'bg-primary-subtle text-primary border border-primary-subtle' : 'bg-light text-secondary border' ?> me-1">
+                                                        <?= clean($el['calc_note']) ?>
+                                                    </span>
+                                                    <?php if (!empty($el['original_notes'])): ?>
+                                                        <span class="text-muted small ms-1">&bull; <?= clean($el['original_notes']) ?></span>
+                                                    <?php endif; ?>
+                                                </td>
                                             </tr>
                                         <?php endforeach; ?>
                                     </tbody>

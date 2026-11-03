@@ -40,6 +40,18 @@ $colors = $db->query($colorSql)->fetchAll();
 // Fetch Sizes
 $sizes = $db->query("SELECT * FROM sizes ORDER BY sort_order ASC, id ASC")->fetchAll();
 
+// Prefetch all product elements for instant real-time anatomy and cutting calculation
+$allProductElements = $db->query("SELECT * FROM product_elements ORDER BY product_id ASC, sort_order ASC, id ASC")->fetchAll();
+$productElementsMap = [];
+foreach ($allProductElements as $pe) {
+    $productElementsMap[$pe['product_id']][] = [
+        'id' => (int)$pe['id'],
+        'name' => $pe['element_name'],
+        'quantity' => (int)$pe['quantity'],
+        'notes' => $pe['notes'] ?? ''
+    ];
+}
+
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -190,6 +202,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($hasAnatomyVariants && ($sleevedQty + $sleevelessQty) !== $totalPieces) {
                 $error = "Style Anatomy breakdown sum (" . ($sleevedQty + $sleevelessQty) . " pcs) must match Total Planned Pieces ($totalPieces pcs).";
             } else {
+                // Compute calculated element requirements for permanent lot tracking
+                if ($hasAnatomyVariants) {
+                    $prodElements = $productElementsMap[$productId] ?? [];
+                    $calcReq = calculate_lot_element_requirements(
+                        $prodElements,
+                        $totalPieces,
+                        true,
+                        ['with_sleeves' => $sleevedQty, 'sleeveless' => $sleevelessQty]
+                    );
+                    $anatomyBreakdown = json_encode([
+                        'with_sleeves' => $sleevedQty,
+                        'sleeveless' => $sleevelessQty,
+                        'notes' => trim($_POST['anatomy_notes'] ?? ''),
+                        'elements' => $calcReq['elements'],
+                        'total_cut_pieces' => $calcReq['total_cut_pieces']
+                    ], JSON_UNESCAPED_UNICODE);
+                }
+
                 $db->beginTransaction();
                 try {
                     $totalColors = count($usedColors);
@@ -521,6 +551,35 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             </div>
                                         </div>
                                     </div>
+
+                                    <!-- Real-time Automatic Cutting Elements Calculation -->
+                                    <div id="cuttingPartsLivePreview" class="mt-3 pt-3 border-top">
+                                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                                            <div class="fw-bold small text-dark d-flex align-items-center gap-1">
+                                                <i class="bi bi-scissors text-primary"></i>
+                                                <span>خودکار کٹنگ کے اجزاء کا حساب (Automatic Cutting Components Allocation)</span>
+                                            </div>
+                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle" id="lblTotalCutPcsBadge">
+                                                Total Parts to Cut: 0 pcs
+                                            </span>
+                                        </div>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-bordered align-middle mb-0 bg-white" style="font-size: 0.82rem;">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>Component / حصہ</th>
+                                                        <th class="text-center" style="width: 100px;">فی پیس تعداد</th>
+                                                        <th class="text-center" style="width: 130px;">ٹارگٹ پیسز</th>
+                                                        <th class="text-center" style="width: 160px;">بیچ کے لیے کٹنگ</th>
+                                                        <th>حساب کا طریقہ (Formula)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="tblCuttingPartsBody">
+                                                    <tr><td colspan="5" class="text-center text-muted py-2">پروڈکٹ منتخب کریں اور تعداد درج کریں تاکہ کٹنگ کا حساب خودکار ظاہر ہو۔</td></tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -803,6 +862,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const productElementsData = <?= json_encode($productElementsMap) ?>;
     const lotNumberInput = document.getElementById('lot_number');
     const lotUniquenessBadge = document.getElementById('lotUniquenessBadge');
     const btnGenLot = document.getElementById('btnGenLot');
@@ -823,6 +883,63 @@ document.addEventListener('DOMContentLoaded', function() {
     const quickColorCodeInput = document.getElementById('quickColorCodeInput');
     const singleColorsTbody = document.getElementById('singleColorsTbody');
     const productSelect = document.getElementById('product_id');
+
+    function escapeHtml(text) {
+        const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+        return text ? String(text).replace(/[&<>"']/g, m => map[m]) : '';
+    }
+
+    function updateCuttingPartsPreview() {
+        const prodId = parseInt(productSelect.value, 10) || 0;
+        const total = parseInt(document.getElementById('lotGrandTotal').textContent, 10) || 0;
+        const hasAnatomy = hasAnatomySwitch.checked;
+        const s1 = parseInt(withSleevesInput.value, 10) || 0;
+        const s2 = parseInt(sleevelessInput.value, 10) || 0;
+        const tbody = document.getElementById('tblCuttingPartsBody');
+        const badge = document.getElementById('lblTotalCutPcsBadge');
+        if (!tbody) return;
+
+        const elements = productElementsData[prodId] || [];
+        if (elements.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">اس پروڈکٹ کے لیے کوئی پیٹرن اجزاء تشکیل نہیں دیے گئے۔</td></tr>`;
+            if (badge) badge.textContent = `Total Parts to Cut: 0 pcs`;
+            return;
+        }
+
+        let totalCutPcs = 0;
+        let html = '';
+
+        elements.forEach(el => {
+            const isSleeve = /(sleeve|بازو|bazu|aasteen|آستین)/i.test(el.name);
+            let target = total;
+            let basis = `تمام ${total} پیسز کے لیے (${el.quantity} × ${total})`;
+
+            if (hasAnatomy && isSleeve) {
+                target = s1;
+                basis = `<span class="badge bg-primary-subtle text-primary border border-primary">${s1} بازو والے پیسز (${el.quantity} × ${s1})</span>`;
+            }
+
+            const batchCut = el.quantity * target;
+            totalCutPcs += batchCut;
+
+            html += `
+                <tr>
+                    <td class="fw-bold text-dark">
+                        <i class="bi bi-scissors text-primary me-1"></i> ${escapeHtml(el.name)}
+                    </td>
+                    <td class="text-center fw-semibold text-muted">${el.quantity} pcs</td>
+                    <td class="text-center fw-bold ${hasAnatomy && isSleeve ? 'text-primary' : 'text-dark'}">${target} pcs</td>
+                    <td class="text-center fw-bold text-success fs-6">${batchCut.toLocaleString()} pcs</td>
+                    <td class="small text-muted">${basis}</td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+        if (badge) {
+            badge.textContent = `Total Parts to Cut: ${totalCutPcs.toLocaleString()} pcs`;
+        }
+    }
 
     // 1. Shift Toggle (Single vs Double Shift)
     function updateShiftView() {
@@ -913,20 +1030,22 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function validateAnatomyBreakdown() {
-        if (!hasAnatomySwitch.checked) return;
         const total = parseInt(document.getElementById('lotGrandTotal').textContent, 10) || 0;
-        const s1 = parseInt(withSleevesInput.value, 10) || 0;
-        const s2 = parseInt(sleevelessInput.value, 10) || 0;
-        const sum = s1 + s2;
-        lblAnatomySum.textContent = sum;
+        if (hasAnatomySwitch.checked) {
+            const s1 = parseInt(withSleevesInput.value, 10) || 0;
+            const s2 = parseInt(sleevelessInput.value, 10) || 0;
+            const sum = s1 + s2;
+            lblAnatomySum.textContent = sum;
 
-        if (sum === total && total > 0) {
-            anatomyMatchStatus.className = 'p-2 rounded bg-success-subtle text-success border border-success small fw-semibold text-center';
-            anatomyMatchStatus.innerHTML = `✓ Sum: ${sum} pcs (Matches Lot Total!)`;
-        } else {
-            anatomyMatchStatus.className = 'p-2 rounded bg-warning-subtle text-warning-emphasis border border-warning small fw-semibold text-center';
-            anatomyMatchStatus.innerHTML = `⚠️ Sum: ${sum} / ${total} pcs (Does not match lot total)`;
+            if (sum === total && total > 0) {
+                anatomyMatchStatus.className = 'p-2 rounded bg-success-subtle text-success border border-success small fw-semibold text-center';
+                anatomyMatchStatus.innerHTML = `✓ Sum: ${sum} pcs (Matches Lot Total!)`;
+            } else {
+                anatomyMatchStatus.className = 'p-2 rounded bg-warning-subtle text-warning-emphasis border border-warning small fw-semibold text-center';
+                anatomyMatchStatus.innerHTML = `⚠️ Sum: ${sum} / ${total} pcs (Does not match lot total)`;
+            }
         }
+        updateCuttingPartsPreview();
     }
 
     withSleevesInput.addEventListener('input', validateAnatomyBreakdown);
@@ -1170,6 +1289,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // 8. Product Selection Specs Preview
     productSelect.addEventListener('change', function() {
         const pId = this.value;
+        updateCuttingPartsPreview();
         const preview = document.getElementById('productSpecsPreview');
         if (!pId) {
             preview.classList.add('d-none');

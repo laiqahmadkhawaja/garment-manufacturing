@@ -382,3 +382,60 @@ function auto_issue_lot_materials(int $lotId): array {
         'all_fulfilled' => empty($shortages)
     ];
 }
+
+/**
+ * Calculate required cutting pieces for garment elements based on lot pieces and anatomy breakdown
+ *
+ * E.g., if a lot has 100 waistcoats/sweaters with 80 sleeved and 20 sleeveless:
+ * Sleeves (2 per piece) -> 80 * 2 = 160 sleeves.
+ * Front/Back (1 per piece) -> 100 * 1 = 100 fronts, 100 backs.
+ *
+ * @param array $productElements List of elements from product_elements table
+ * @param int $totalPieces Total lot pieces
+ * @param bool $hasAnatomyVariants Whether lot has anatomy breakdown (sleeves vs sleeveless)
+ * @param array $anatomyBreakdown Breakdown array with keys 'with_sleeves', 'sleeveless'
+ * @return array Calculated elements with batch required, target pieces, notes, and total cutting count
+ */
+function calculate_lot_element_requirements(array $productElements, int $totalPieces, bool $hasAnatomyVariants = false, array $anatomyBreakdown = []): array {
+    $result = [];
+    $totalBatchCut = 0;
+    $sleevedQty = (int)($anatomyBreakdown['with_sleeves'] ?? $totalPieces);
+    $sleevelessQty = (int)($anatomyBreakdown['sleeveless'] ?? 0);
+
+    foreach ($productElements as $pe) {
+        $name = trim($pe['element_name'] ?? '');
+        $qtyPerUnit = (int)($pe['quantity'] ?? 1);
+        $isSleeve = (bool)preg_match('/(sleeve|بازو|bazu|aasteen|آستین)/iu', $name);
+
+        if ($hasAnatomyVariants && $isSleeve) {
+            $targetPieces = $sleevedQty;
+            $batchCut = $qtyPerUnit * $sleevedQty;
+            $calcNote = "{$sleevedQty} بازو والے پیسز کے لیے ({$qtyPerUnit} × {$sleevedQty} = {$batchCut})";
+        } else {
+            $targetPieces = $totalPieces;
+            $batchCut = $qtyPerUnit * $totalPieces;
+            $calcNote = "تمام {$totalPieces} پیسز کے لیے ({$qtyPerUnit} × {$totalPieces} = {$batchCut})";
+        }
+
+        $totalBatchCut += $batchCut;
+
+        $result[] = [
+            'id' => $pe['id'] ?? null,
+            'element_name' => $name,
+            'quantity_per_unit' => $qtyPerUnit,
+            'target_pieces' => $targetPieces,
+            'batch_required' => $batchCut,
+            'is_sleeve' => $isSleeve,
+            'calc_note' => $calcNote,
+            'original_notes' => $pe['notes'] ?? ''
+        ];
+    }
+
+    return [
+        'elements' => $result,
+        'total_cut_pieces' => $totalBatchCut,
+        'has_anatomy_variants' => $hasAnatomyVariants,
+        'sleeved_qty' => $sleevedQty,
+        'sleeveless_qty' => $sleevelessQty
+    ];
+}
