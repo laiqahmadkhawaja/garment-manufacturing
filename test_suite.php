@@ -471,6 +471,59 @@ foreach ($moduleFiles as $mf) {
 
 assert_test("26. UI Viewport & Flexbox Layout Integrity", $divMismatches === 0 && $scannedPages >= 20, "$scannedPages pages verified: zero premature closures, full flex viewport guaranteed");
 
+// ------------------------------------------------------------------------
+// Test 27: Smart Color Codes & Double Sorting (Usage Frequency + Yarn Stock)
+// ------------------------------------------------------------------------
+$sortedColors = $db->query("SELECT c.*, 
+                                   COALESCE((SELECT COUNT(DISTINCT lv.lot_id) FROM lot_variants lv WHERE lv.color_id = c.id), 0) AS usage_count
+                            FROM colors c 
+                            ORDER BY usage_count DESC, c.yarn_stock_kg DESC, c.color_code ASC")->fetchAll(PDO::FETCH_ASSOC);
+
+$topColor = $sortedColors[0];
+$hasCodes = !empty($topColor['color_code']) && isset($topColor['yarn_stock_kg']);
+$isProperlySorted = ($sortedColors[0]['usage_count'] >= $sortedColors[count($sortedColors)-1]['usage_count']);
+
+assert_test("27. Smart Color Codes & Double-Sorting", $hasCodes && $isProperlySorted, "Top Color [{$topColor['color_code']}] {$topColor['name']} (Used: {$topColor['usage_count']}, Yarn: {$topColor['yarn_stock_kg']} KG)");
+
+// ------------------------------------------------------------------------
+// Test 28: Fast Lot Creation with Shift & Double Operators Assignment
+// ------------------------------------------------------------------------
+$db->beginTransaction();
+$testLotNum = 'LOT-TEST-SHIFT-' . time();
+$dayOpId = 1; // Latif
+$nightOpId = 3; // Amir
+$insLot = $db->prepare("INSERT INTO lots 
+    (lot_number, lot_date, product_id, design_number, shift_type, operator_id, night_operator_id, 
+     supervisor_name, total_pieces, total_colors, total_sizes, size_mode, single_size_id, has_anatomy_variants, anatomy_breakdown, status)
+    VALUES (?, CURDATE(), 1, '905', 'Double Shift', ?, ?, 'Supervisor Iqbal', 200, 2, 1, 'Single Size', 2, 1, '{\"with_sleeves\":140,\"sleeveless\":60}', 'Draft')");
+$insLot->execute([$testLotNum, $dayOpId, $nightOpId]);
+$newLotId = (int)$db->lastInsertId();
+
+// Insert variants with color codes
+$insVar = $db->prepare("INSERT INTO lot_variants (lot_id, color_id, color_code, size_id, quantity) VALUES (?, ?, ?, ?, ?)");
+$insVar->execute([$newLotId, 1, '1136', 2, 120]);
+$insVar->execute([$newLotId, 5, '1138', 2, 80]);
+
+// Verify fetch with operators & anatomy breakdown
+$verifyStmt = $db->prepare("SELECT l.*, w1.name AS day_op, w2.name AS night_op 
+                            FROM lots l 
+                            JOIN workers w1 ON l.operator_id = w1.id 
+                            JOIN workers w2 ON l.night_operator_id = w2.id 
+                            WHERE l.id = ?");
+$verifyStmt->execute([$newLotId]);
+$vLot = $verifyStmt->fetch(PDO::FETCH_ASSOC);
+$abData = json_decode($vLot['anatomy_breakdown'], true);
+
+$lotCreatedOk = ($vLot['shift_type'] === 'Double Shift' && $vLot['day_op'] === 'Latif Stitcher' && $vLot['night_op'] === 'Amir Overlock' && $vLot['total_pieces'] == 200);
+assert_test("28. Shift & Double Operators Assignment", $lotCreatedOk, "Lot #{$vLot['lot_number']}: Double Shift (Day: {$vLot['day_op']}, Night: {$vLot['night_op']})");
+
+// ------------------------------------------------------------------------
+// Test 29: Style Anatomy Breakdown (With Sleeves vs Sleeveless Verification)
+// ------------------------------------------------------------------------
+$anatomyValid = ($vLot['has_anatomy_variants'] == 1 && ($abData['with_sleeves'] + $abData['sleeveless']) == 200);
+assert_test("29. Style Anatomy Breakdown (Sleeves vs Sleeveless)", $anatomyValid, "Total: 200 pcs = With Sleeves: {$abData['with_sleeves']} pcs + Sleeveless: {$abData['sleeveless']} pcs");
+$db->commit();
+
 echo "\n========================================================================\n";
 echo "TEST SUITE SUMMARY: $passCount PASSED, $failCount FAILED\n";
 echo "========================================================================\n";

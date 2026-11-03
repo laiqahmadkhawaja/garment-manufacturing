@@ -49,24 +49,51 @@ if ($recipe) {
     $recipeItems = $biStmt->fetchAll();
 }
 
+// Fetch active workers/operators
+$operators = $db->query("SELECT id, code, name, worker_type FROM workers WHERE is_active = 1 ORDER BY name ASC")->fetchAll();
+
+// Existing anatomy breakdown
+$anatomyData = !empty($lot['anatomy_breakdown']) ? json_decode($lot['anatomy_breakdown'], true) : [];
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     check_csrf();
     $designNumber = trim($_POST['design_number'] ?? '');
     $supervisor = trim($_POST['supervisor_name'] ?? '');
     $expectedDate = !empty($_POST['expected_date']) ? trim($_POST['expected_date']) : null;
     $instructions = trim($_POST['instructions'] ?? '');
+    $shiftType = in_array($_POST['shift_type'] ?? '', ['Single Shift', 'Double Shift']) ? $_POST['shift_type'] : 'Single Shift';
+    $operatorId = !empty($_POST['operator_id']) ? (int)$_POST['operator_id'] : null;
+    $nightOperatorId = ($shiftType === 'Double Shift' && !empty($_POST['night_operator_id'])) ? (int)$_POST['night_operator_id'] : null;
+
+    $hasAnatomy = !empty($_POST['has_anatomy_variants']) ? 1 : 0;
+    $sleevedQty = (int)($_POST['with_sleeves_qty'] ?? 0);
+    $sleevelessQty = (int)($_POST['sleeveless_qty'] ?? 0);
+    $anatomyBreakdown = null;
+    if ($hasAnatomy) {
+        $anatomyBreakdown = json_encode([
+            'with_sleeves' => $sleevedQty,
+            'sleeveless' => $sleevelessQty,
+            'notes' => trim($_POST['anatomy_notes'] ?? '')
+        ]);
+    }
 
     $db->beginTransaction();
     try {
-        $up = $db->prepare("UPDATE lots SET design_number = ?, supervisor_name = ?, expected_date = ?, instructions = ? WHERE id = ?");
-        $up->execute([$designNumber ?: null, $supervisor, $expectedDate, $instructions, $lotId]);
+        $up = $db->prepare("UPDATE lots SET design_number = ?, supervisor_name = ?, expected_date = ?, instructions = ?, 
+                            shift_type = ?, operator_id = ?, night_operator_id = ?, has_anatomy_variants = ?, anatomy_breakdown = ? 
+                            WHERE id = ?");
+        $up->execute([$designNumber ?: null, $supervisor, $expectedDate, $instructions, $shiftType, $operatorId, $nightOperatorId, $hasAnatomy, $anatomyBreakdown, $lotId]);
 
         log_audit('EDIT_LOT', 'lots', $lotId, [
             'design_number' => $lot['design_number'],
-            'supervisor' => $lot['supervisor_name']
+            'supervisor' => $lot['supervisor_name'],
+            'shift_type' => $lot['shift_type']
         ], [
             'design_number' => $designNumber,
-            'supervisor' => $supervisor
+            'supervisor' => $supervisor,
+            'shift_type' => $shiftType,
+            'operator_id' => $operatorId,
+            'night_operator_id' => $nightOperatorId
         ]);
 
         $db->commit();
@@ -116,6 +143,41 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <input type="text" name="supervisor_name" class="form-control" value="<?= clean($lot['supervisor_name']) ?>" placeholder="e.g. Master Shabbir">
                         </div>
 
+                        <!-- Shift Handling -->
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-semibold">Shift Handling</label>
+                            <select name="shift_type" id="edit_shift_type" class="form-select fw-semibold">
+                                <option value="Single Shift" <?= ($lot['shift_type'] ?? '') === 'Single Shift' ? 'selected' : '' ?>>☀️ Single Shift (Day)</option>
+                                <option value="Double Shift" <?= ($lot['shift_type'] ?? '') === 'Double Shift' ? 'selected' : '' ?>>🌙 Double Shift (Day & Night)</option>
+                            </select>
+                        </div>
+
+                        <!-- Day Operator -->
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-semibold">Day Shift Operator</label>
+                            <select name="operator_id" class="form-select fw-semibold">
+                                <option value="">-- Unassigned --</option>
+                                <?php foreach ($operators as $op): ?>
+                                    <option value="<?= $op['id'] ?>" <?= ($lot['operator_id'] == $op['id']) ? 'selected' : '' ?>>
+                                        <?= clean($op['name']) ?> (<?= clean($op['code']) ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <!-- Night Operator -->
+                        <div class="col-12 col-md-4" id="editNightOpContainer">
+                            <label class="form-label fw-semibold">Night Shift Operator</label>
+                            <select name="night_operator_id" class="form-select fw-semibold">
+                                <option value="">-- Unassigned --</option>
+                                <?php foreach ($operators as $op): ?>
+                                    <option value="<?= $op['id'] ?>" <?= ($lot['night_operator_id'] == $op['id']) ? 'selected' : '' ?>>
+                                        <?= clean($op['name']) ?> (<?= clean($op['code']) ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
                         <div class="col-12 col-md-6">
                             <label class="form-label fw-semibold">Expected Completion Date</label>
                             <input type="date" name="expected_date" class="form-control" value="<?= clean($lot['expected_date']) ?>">
@@ -124,6 +186,28 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <div class="col-12 col-md-6">
                             <label class="form-label fw-semibold">Product Type</label>
                             <input type="text" class="form-control bg-light" value="<?= clean($lot['product_type']) ?>" readonly>
+                        </div>
+
+                        <!-- Style Anatomy Breakdown -->
+                        <div class="col-12">
+                            <div class="p-3 bg-light border rounded-3">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" role="switch" name="has_anatomy_variants" id="edit_has_anatomy" value="1" <?= !empty($lot['has_anatomy_variants']) ? 'checked' : '' ?>>
+                                    <label class="form-check-label fw-bold text-dark" for="edit_has_anatomy">
+                                        <i class="bi bi-diagram-3-fill text-primary me-1"></i> Style Anatomy Breakdown (بازو والے vs بغیر بازو / واسکٹ)
+                                    </label>
+                                </div>
+                                <div class="row g-2 mt-2">
+                                    <div class="col-6 col-sm-4">
+                                        <label class="form-label small text-muted">With Sleeves Qty (بازو والے)</label>
+                                        <input type="number" name="with_sleeves_qty" class="form-control form-control-sm fw-bold" value="<?= (int)($anatomyData['with_sleeves'] ?? 0) ?>">
+                                    </div>
+                                    <div class="col-6 col-sm-4">
+                                        <label class="form-label small text-muted">Sleeveless Qty (بغیر بازو / واسکٹ)</label>
+                                        <input type="number" name="sleeveless_qty" class="form-control form-control-sm fw-bold" value="<?= (int)($anatomyData['sleeveless'] ?? 0) ?>">
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Product Pattern Elements Info -->

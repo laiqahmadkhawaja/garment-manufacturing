@@ -19,12 +19,16 @@ $search = trim($_GET['search'] ?? '');
 $sql = "SELECT l.*, p.name AS product_name, p.code AS product_code, 
         COALESCE(l.design_number, d.design_number) AS design_number, 
         d.name AS design_name,
+        w_day.name AS operator_name,
+        w_night.name AS night_operator_name,
         (SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = l.id) AS completed_good,
         (SELECT COALESCE(SUM(packed_qty), 0) FROM packing_entries WHERE lot_id = l.id) AS total_packed,
         (SELECT COALESCE(SUM(quantity), 0) FROM dispatch_items WHERE lot_id = l.id) AS total_dispatched
         FROM lots l
         JOIN products p ON l.product_id = p.id
         LEFT JOIN designs d ON l.design_id = d.id
+        LEFT JOIN workers w_day ON l.operator_id = w_day.id
+        LEFT JOIN workers w_night ON l.night_operator_id = w_night.id
         WHERE 1=1";
 
 $params = [];
@@ -122,7 +126,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <tr>
                                 <th>Lot Number</th>
                                 <th>Product & Design</th>
-                                <th>Supervisor</th>
+                                <th>Shift & Operator</th>
                                 <th class="text-center">Total Pcs</th>
                                 <th class="text-center">Packed</th>
                                 <th class="text-center">Dispatched</th>
@@ -152,7 +156,19 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <?= $l['design_number'] ? 'Design: #' . clean($l['design_number']) : '<span class="text-warning fw-semibold"><i class="bi bi-exclamation-circle me-1"></i>Design Pending</span>' ?>
                                             </div>
                                         </td>
-                                        <td><?= clean($l['supervisor_name'] ?: '-') ?></td>
+                                        <td>
+                                            <div>
+                                                <span class="badge <?= $l['shift_type'] === 'Double Shift' ? 'bg-primary-subtle text-primary' : 'bg-warning-subtle text-warning-emphasis' ?> small py-0 px-1 border">
+                                                    <?= $l['shift_type'] === 'Double Shift' ? '🌙 Double' : '☀️ Single' ?>
+                                                </span>
+                                                <span class="fw-semibold text-dark small ms-1"><?= clean($l['operator_name'] ?: 'Unassigned') ?></span>
+                                            </div>
+                                            <?php if (!empty($l['night_operator_name'])): ?>
+                                                <div class="text-muted small" style="font-size: 11px;">
+                                                    <i class="bi bi-moon-stars-fill text-info me-1"></i><?= clean($l['night_operator_name']) ?>
+                                                </div>
+                                            <?php endif; ?>
+                                        </td>
                                         <td class="text-center fw-bold fs-6 text-dark">
                                             <?= number_format($l['total_pieces']) ?>
                                             <div class="text-muted small" style="font-size: 0.75rem;"><?= $l['total_colors'] ?> Clr · <?= $l['total_sizes'] ?> Sz</div>

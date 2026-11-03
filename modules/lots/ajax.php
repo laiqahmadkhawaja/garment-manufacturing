@@ -108,7 +108,7 @@ if ($action === 'get_lot_details') {
     }
 
     // Get variants
-    $vStmt = $db->prepare("SELECT lv.*, c.name AS color_name, s.name AS size_name, s.code AS size_code 
+    $vStmt = $db->prepare("SELECT lv.*, c.name AS color_name, COALESCE(lv.color_code, c.color_code) AS color_code, s.name AS size_name, s.code AS size_code 
                            FROM lot_variants lv 
                            JOIN colors c ON lv.color_id = c.id 
                            JOIN sizes s ON lv.size_id = s.id 
@@ -131,6 +131,64 @@ if ($action === 'get_lot_details') {
         'variants' => $variants,
         'steps' => $steps
     ]);
+}
+
+if ($action === 'check_lot_number') {
+    $lotNumber = trim($_GET['lot_number'] ?? '');
+    $excludeId = (int)($_GET['exclude_id'] ?? 0);
+    
+    if (empty($lotNumber)) {
+        json_response(['status' => 'error', 'message' => 'Lot number required'], 400);
+    }
+    
+    $stmt = $db->prepare("SELECT id FROM lots WHERE lot_number = ? AND id != ?");
+    $stmt->execute([$lotNumber, $excludeId]);
+    $exists = (bool)$stmt->fetch();
+    
+    json_response([
+        'status' => 'success',
+        'lot_number' => $lotNumber,
+        'is_unique' => !$exists,
+        'message' => $exists ? "Lot # '$lotNumber' is already in use!" : "Lot # '$lotNumber' is unique & available."
+    ]);
+}
+
+if ($action === 'quick_add_color') {
+    $code = trim($_POST['color_code'] ?? '');
+    $name = trim($_POST['name'] ?? '');
+    $hex = trim($_POST['hex_code'] ?? '#4f46e5');
+    $yarnStock = (float)($_POST['yarn_stock_kg'] ?? 0.00);
+
+    if (empty($code)) {
+        json_response(['status' => 'error', 'message' => 'Color code is required.'], 400);
+    }
+    if (empty($name)) {
+        $name = "Shade " . $code;
+    }
+
+    // Check if code or name already exists
+    $chk = $db->prepare("SELECT * FROM colors WHERE color_code = ? OR name = ? LIMIT 1");
+    $chk->execute([$code, $name]);
+    $existing = $chk->fetch();
+
+    if ($existing) {
+        json_response(['status' => 'success', 'color' => $existing, 'is_new' => false]);
+    }
+
+    $stmt = $db->prepare("INSERT INTO colors (color_code, name, hex_code, yarn_stock_kg) VALUES (?, ?, ?, ?)");
+    $stmt->execute([$code, $name, $hex, $yarnStock]);
+    $newId = (int)$db->lastInsertId();
+
+    $newColor = [
+        'id' => $newId,
+        'color_code' => $code,
+        'name' => $name,
+        'hex_code' => $hex,
+        'yarn_stock_kg' => $yarnStock,
+        'usage_count' => 0
+    ];
+
+    json_response(['status' => 'success', 'color' => $newColor, 'is_new' => true]);
 }
 
 json_response(['status' => 'error', 'message' => 'Unknown action'], 400);

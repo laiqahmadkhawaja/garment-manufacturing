@@ -13,11 +13,17 @@ $db = get_db();
 // Fetch Lot Master
 $stmt = $db->prepare("SELECT l.*, p.name AS product_name, p.code AS product_code, p.product_type,
                              COALESCE(l.design_number, d.design_number) AS design_number, 
-                             d.name AS design_name, u.full_name AS creator_name 
+                             d.name AS design_name, u.full_name AS creator_name,
+                             w_day.name AS operator_name, w_day.code AS operator_code,
+                             w_night.name AS night_operator_name, w_night.code AS night_operator_code,
+                             sz.name AS single_size_name, sz.code AS single_size_code
                       FROM lots l
                       JOIN products p ON l.product_id = p.id
                       LEFT JOIN designs d ON l.design_id = d.id
                       LEFT JOIN users u ON l.created_by = u.id
+                      LEFT JOIN workers w_day ON l.operator_id = w_day.id
+                      LEFT JOIN workers w_night ON l.night_operator_id = w_night.id
+                      LEFT JOIN sizes sz ON l.single_size_id = sz.id
                       WHERE l.id = ?");
 $stmt->execute([$lotId]);
 $lot = $stmt->fetch();
@@ -79,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
 }
 
 // 1. Color & Size Variants Matrix
-$vStmt = $db->prepare("SELECT lv.*, c.name AS color_name, c.hex_code, s.name AS size_name, s.code AS size_code 
+$vStmt = $db->prepare("SELECT lv.*, c.name AS color_name, COALESCE(lv.color_code, c.color_code, c.name) AS color_code, c.hex_code, s.name AS size_name, s.code AS size_code 
                        FROM lot_variants lv 
                        JOIN colors c ON lv.color_id = c.id 
                        JOIN sizes s ON lv.size_id = s.id 
@@ -226,14 +232,40 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             ?>
                             <span class="badge-status <?= $badgeClass ?> fs-6"><?= clean($st) ?></span>
                         </div>
-                        <div class="text-muted small">
+                        <div class="text-muted small d-flex flex-wrap align-items-center gap-1 mt-1">
                             <span class="fw-semibold text-dark"><?= clean($lot['product_name']) ?></span> (<?= clean($lot['product_type']) ?>)
-                            <span class="mx-2">•</span>
-                            <?= $lot['design_number'] ? '<span class="fw-semibold text-primary">Design #' . clean($lot['design_number']) . '</span>' : '<span class="text-warning fw-semibold"><i class="bi bi-exclamation-circle me-1"></i>No Design (Editable)</span>' ?>
-                            <span class="mx-2">•</span>
-                            Started: <?= format_date($lot['lot_date']) ?>
+                            <span class="text-muted">•</span>
+                            <?= $lot['design_number'] ? '<span class="fw-semibold text-primary">Design #' . clean($lot['design_number']) . '</span>' : '<span class="text-warning fw-semibold"><i class="bi bi-exclamation-circle me-1"></i>No Design</span>' ?>
+                            <span class="text-muted">•</span>
+                            <span>Started: <?= format_date($lot['lot_date']) ?></span>
+                            <span class="text-muted">•</span>
+                            <span class="badge <?= $lot['shift_type'] === 'Double Shift' ? 'bg-primary-subtle text-primary border border-primary' : 'bg-warning-subtle text-warning-emphasis border border-warning' ?>">
+                                <?= $lot['shift_type'] === 'Double Shift' ? '🌙 Double Shift' : '☀️ Single Shift' ?>
+                            </span>
+                            <?php if (!empty($lot['operator_name'])): ?>
+                                <span class="badge bg-light text-dark border">
+                                    <i class="bi bi-person-fill text-primary me-1"></i>Operator: <?= clean($lot['operator_name']) ?>
+                                </span>
+                            <?php endif; ?>
+                            <?php if (!empty($lot['night_operator_name'])): ?>
+                                <span class="badge bg-light text-dark border">
+                                    <i class="bi bi-moon-stars-fill text-info me-1"></i>Night: <?= clean($lot['night_operator_name']) ?>
+                                </span>
+                            <?php endif; ?>
+                            <?php if (!empty($lot['single_size_name'])): ?>
+                                <span class="badge bg-secondary-subtle text-secondary border">
+                                    Size: <?= clean($lot['single_size_name']) ?> (<?= clean($lot['single_size_code']) ?>)
+                                </span>
+                            <?php endif; ?>
+                            <?php if (!empty($lot['has_anatomy_variants']) && !empty($lot['anatomy_breakdown'])): 
+                                $ab = json_decode($lot['anatomy_breakdown'], true);
+                            ?>
+                                <span class="badge bg-info-subtle text-info-emphasis border">
+                                    <i class="bi bi-diagram-3-fill me-1"></i>Sleeves: <?= (int)($ab['with_sleeves'] ?? 0) ?> | Sleeveless: <?= (int)($ab['sleeveless'] ?? 0) ?>
+                                </span>
+                            <?php endif; ?>
                             <?php if ($lot['supervisor_name']): ?>
-                                <span class="mx-2">•</span> Supervisor: <?= clean($lot['supervisor_name']) ?>
+                                <span class="badge bg-light text-muted border">Sup: <?= clean($lot['supervisor_name']) ?></span>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -435,7 +467,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <table class="table table-modern align-middle mb-0">
                                 <thead>
                                     <tr>
-                                        <th>Color</th>
+                                        <th>Color Code & Name</th>
                                         <th>Size</th>
                                         <th>Size Code</th>
                                         <th class="text-end">Planned Quantity</th>
@@ -457,8 +489,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     ?>
                                         <tr>
                                             <td class="fw-semibold text-dark">
-                                                <span class="d-inline-block rounded-circle border me-2 align-middle" style="width: 14px; height: 14px; background-color: <?= clean($v['hex_code']) ?>;"></span>
-                                                <?= clean($v['color_name']) ?>
+                                                <span class="d-inline-block rounded-circle border me-1 align-middle" style="width: 14px; height: 14px; background-color: <?= clean($v['hex_code']) ?>;"></span>
+                                                <span class="badge bg-dark font-monospace me-1"><?= clean($v['color_code'] ?: $v['color_name']) ?></span>
+                                                <span class="text-secondary small"><?= clean($v['color_name']) ?></span>
                                             </td>
                                             <td><?= clean($v['size_name']) ?></td>
                                             <td><span class="badge bg-light text-dark border"><?= clean($v['size_code']) ?></span></td>
