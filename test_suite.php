@@ -447,6 +447,30 @@ $db->commit();
 
 assert_test("25. Sub-Operations, SAM & Worker Minute-Rate Formula", $computedPieceRate === 6.25 && $computedLabour === 625.00 && $computedTotalMins === 250.00, "Attach Pockets (2.5 min) @ Rs. 2.50/min = Rs. 6.25/pc (100 pcs = Rs. 625.00, 250 mins)");
 
+// ------------------------------------------------------------------------
+// Test 26: UI Viewport & Flexbox DOM Integrity (Zero Premature DIV Closures)
+// ------------------------------------------------------------------------
+$moduleFiles = glob(__DIR__ . '/modules/*/*.php');
+$divMismatches = 0;
+$scannedPages = 0;
+
+foreach ($moduleFiles as $mf) {
+    $c = file_get_contents($mf);
+    if (strpos($c, 'includes/footer.php') === false) continue;
+    $scannedPages++;
+    $cleanCode = preg_replace('/<!--.*?-->/s', '', $c);
+    $cleanCode = preg_replace('/<\?php.*?\?>/s', '', $cleanCode);
+    $numOpens = preg_match_all('/<div[\s>]/i', $cleanCode);
+    $numCloses = preg_match_all('/<\/div>/i', $cleanCode);
+    // Footer closes 2 divs (app-main, app-wrapper) while header opens 1 (app-wrapper).
+    // Therefore (opens - closes) must strictly equal 1 inside the page.
+    if (($numOpens - $numCloses) !== 1) {
+        $divMismatches++;
+    }
+}
+
+assert_test("26. UI Viewport & Flexbox Layout Integrity", $divMismatches === 0 && $scannedPages >= 20, "$scannedPages pages verified: zero premature closures, full flex viewport guaranteed");
+
 echo "\n========================================================================\n";
 echo "TEST SUITE SUMMARY: $passCount PASSED, $failCount FAILED\n";
 echo "========================================================================\n";

@@ -395,8 +395,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
     </div> <!-- end departmentsTab -->
 </div> <!-- end tab-content -->
 
-    </div>
-</div>
+    </div> <!-- end app-content -->
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
