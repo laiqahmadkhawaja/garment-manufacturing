@@ -25,6 +25,17 @@ if (!$worker) {
 $pageTitle = $worker['name'] . " - Worker Profile";
 $activeNav = 'workers';
 
+// Quick update minute rate
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_minute_rate') {
+    check_csrf();
+    $newMinRate = (float)($_POST['rate_per_minute'] ?? 2.50);
+    if ($newMinRate > 0) {
+        $up = $db->prepare("UPDATE workers SET rate_per_minute = ? WHERE id = ?");
+        $up->execute([$newMinRate, $workerId]);
+        redirect("modules/workers/view.php?id=$workerId", "Worker minute rate updated to Rs. " . number_format($newMinRate, 2) . "/min!");
+    }
+}
+
 // Worker Assigned Operations
 $opStmt = $db->prepare("SELECT o.* FROM worker_operations wo JOIN operations o ON wo.operation_id = o.id WHERE wo.worker_id = ?");
 $opStmt->execute([$workerId]);
@@ -94,12 +105,29 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <div class="d-flex align-items-center gap-2">
                                 <h4 class="fw-bold text-dark mb-0"><?= clean($worker['name']) ?></h4>
                                 <span class="badge bg-light text-primary border fw-bold"><?= clean($worker['code']) ?></span>
+                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 small fw-semibold">
+                                    <i class="bi bi-stopwatch me-1"></i>Rate: Rs. <?= number_format($worker['rate_per_minute'] ?? 2.50, 2) ?>/min
+                                </span>
                             </div>
-                            <div class="text-muted small">
-                                <?= clean($worker['worker_type']) ?> · <?= clean($worker['department_name'] ?? 'General') ?>
+                            <div class="text-muted small mt-1 d-flex flex-wrap align-items-center gap-2">
+                                <span><?= clean($worker['worker_type']) ?> · <?= clean($worker['department_name'] ?? 'General') ?></span>
                                 <?php if ($worker['phone']): ?>
-                                    <span class="mx-2">•</span> Tel: <?= clean($worker['phone']) ?>
+                                    <span>• Tel: <?= clean($worker['phone']) ?></span>
                                 <?php endif; ?>
+                                <span class="vr"></span>
+                                <form method="POST" action="" class="d-inline-flex align-items-center gap-1">
+                                    <input type="hidden" name="action" value="update_minute_rate">
+                                    <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+                                    <span class="small text-muted">Change Minute Rate:</span>
+                                    <div class="input-group input-group-sm" style="width: 130px;">
+                                        <span class="input-group-text py-0 px-1 bg-light small">Rs</span>
+                                        <input type="number" name="rate_per_minute" class="form-control form-control-sm text-center fw-bold text-success py-0" step="0.05" min="0" value="<?= number_format($worker['rate_per_minute'] ?? 2.50, 2) ?>">
+                                        <span class="input-group-text py-0 px-1 bg-light small">/m</span>
+                                    </div>
+                                    <button type="submit" class="btn btn-sm btn-outline-success py-0 px-2" title="Save Minute Rate">
+                                        <i class="bi bi-check"></i>
+                                    </button>
+                                </form>
                             </div>
                         </div>
                     </div>

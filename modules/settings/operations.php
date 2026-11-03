@@ -16,33 +16,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'create_operation') {
+        check_csrf();
         $code = trim($_POST['code'] ?? '');
         $name = trim($_POST['name'] ?? '');
+        $parentId = !empty($_POST['parent_id']) ? (int)$_POST['parent_id'] : null;
         $deptId = !empty($_POST['department_id']) ? (int)$_POST['department_id'] : null;
         $sequence = (int)($_POST['sequence'] ?? 10);
+        $minutes = (float)($_POST['estimated_minutes'] ?? 0.00);
         $rate = (float)($_POST['default_rate'] ?? 0.00);
+        if ($rate <= 0 && $minutes > 0) {
+            $rate = round($minutes * 2.50, 2); // 2.50 Rs/min standard factory default
+        }
         $unit = trim($_POST['rate_unit'] ?? 'Per piece');
         $mandatory = isset($_POST['is_mandatory']) ? 1 : 0;
 
         if (empty($code) || empty($name)) {
             set_flash('danger', 'Operation code and name are required.');
         } else {
-            $stmt = $db->prepare("INSERT INTO operations (code, name, department_id, sequence, is_mandatory, default_rate, rate_unit, is_active) 
-                                  VALUES (?, ?, ?, ?, ?, ?, ?, 1)");
-            $stmt->execute([$code, $name, $deptId, $sequence, $mandatory, $rate, $unit]);
-            log_audit('CREATE', 'operations', (int)$db->lastInsertId(), null, ['code' => $code, 'name' => $name, 'rate' => $rate]);
+            $stmt = $db->prepare("INSERT INTO operations (parent_id, code, name, department_id, sequence, estimated_minutes, is_mandatory, default_rate, rate_unit, is_active) 
+                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)");
+            $stmt->execute([$parentId, $code, $name, $deptId, $sequence, $minutes, $mandatory, $rate, $unit]);
+            log_audit('CREATE', 'operations', (int)$db->lastInsertId(), null, ['code' => $code, 'name' => $name, 'rate' => $rate, 'minutes' => $minutes]);
             redirect('modules/settings/operations.php', "Operation '$name' created successfully!");
         }
     }
 
     if ($action === 'update_rate') {
+        check_csrf();
         $opId = (int)($_POST['operation_id'] ?? 0);
+        $minutes = (float)($_POST['estimated_minutes'] ?? 0.00);
         $newRate = (float)($_POST['default_rate'] ?? 0.00);
         if ($opId > 0) {
-            $stmt = $db->prepare("UPDATE operations SET default_rate = ? WHERE id = ?");
-            $stmt->execute([$newRate, $opId]);
-            log_audit('UPDATE_RATE', 'operations', $opId, null, ['new_default_rate' => $newRate]);
-            redirect('modules/settings/operations.php', 'Operation default rate updated.');
+            $stmt = $db->prepare("UPDATE operations SET estimated_minutes = ?, default_rate = ? WHERE id = ?");
+            $stmt->execute([$minutes, $newRate, $opId]);
+            log_audit('UPDATE_RATE', 'operations', $opId, null, ['estimated_minutes' => $minutes, 'new_default_rate' => $newRate]);
+            redirect('modules/settings/operations.php', 'Operation SAM minutes and default rate updated.');
         }
     }
 
@@ -65,12 +73,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$operations = $db->query("SELECT o.*, d.name AS department_name,
-                          (SELECT COUNT(*) FROM worker_operations WHERE operation_id = o.id) AS assigned_workers
+$operations = $db->query("SELECT o.*, p_op.name AS parent_operation_name, p_op.code AS parent_operation_code, d.name AS department_name,
+                          (SELECT COUNT(*) FROM worker_operations WHERE operation_id = o.id) AS assigned_workers,
+                          (SELECT COUNT(*) FROM operations sub WHERE sub.parent_id = o.id) AS sub_ops_count
                           FROM operations o
-                          LEFT JOIN departments dep ON o.department_id = dep.id
+                          LEFT JOIN operations p_op ON o.parent_id = p_op.id
                           LEFT JOIN departments d ON o.department_id = d.id
-                          ORDER BY o.sequence ASC")->fetchAll();
+                          ORDER BY COALESCE(o.parent_id, o.id) ASC, (o.parent_id IS NOT NULL) ASC, o.sequence ASC")->fetchAll();
+
+$parentOperations = $db->query("SELECT id, name, code, department_id FROM operations WHERE parent_id IS NULL AND is_active = 1 ORDER BY sequence ASC, name ASC")->fetchAll();
 
 $departments = $db->query("SELECT d.*, 
                            (SELECT COUNT(*) FROM operations WHERE department_id = d.id) AS ops_count,
@@ -113,125 +124,192 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             <div class="tab-pane fade show active" id="operationsTab">
                 <!-- Add Operation Inline Form -->
                 <div class="card-modern mb-4">
-            <div class="card-modern-header">
-                <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-plus-circle me-1 text-primary"></i> Create Dynamic Operation</h6>
-            </div>
-            <div class="card-modern-body">
-                <form method="POST" action="">
-                    <input type="hidden" name="action" value="create_operation">
-                    <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+                    <div class="card-modern-header d-flex justify-content-between align-items-center">
+                        <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-plus-circle me-1 text-primary"></i> Create Dynamic Operation / Sub-Operation</h6>
+                        <span class="badge bg-light text-muted border">Standard Factory Benchmark: Rs. 2.50 / Minute</span>
+                    </div>
+                    <div class="card-modern-body">
+                        <form method="POST" action="" id="opForm">
+                            <input type="hidden" name="action" value="create_operation">
+                            <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
 
-                    <div class="row g-3 align-items-end">
-                        <div class="col-12 col-sm-6 col-md-2">
-                            <label class="form-label">Operation Code *</label>
-                            <input type="text" name="code" class="form-control text-uppercase" placeholder="OP-TRIM" required>
-                        </div>
-                        <div class="col-12 col-sm-6 col-md-3">
-                            <label class="form-label">Operation Name *</label>
-                            <input type="text" name="name" class="form-control" placeholder="e.g. Thread Trimming" required>
-                        </div>
-                        <div class="col-12 col-sm-6 col-md-2">
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                <label class="form-label mb-0">Department</label>
-                                <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none fw-semibold" data-bs-toggle="modal" data-bs-target="#addDeptModal">
-                                    <i class="bi bi-plus-circle"></i> New
-                                </button>
+                            <div class="row g-3">
+                                <div class="col-12 col-md-3">
+                                    <label class="form-label fw-semibold">Parent Stage (مین آپریشن)</label>
+                                    <select name="parent_id" id="parent_id" class="form-select">
+                                        <option value="">-- Main Primary Operation (No Parent) --</option>
+                                        <?php foreach ($parentOperations as $pop): ?>
+                                            <option value="<?= $pop['id'] ?>" data-dept="<?= $pop['department_id'] ?>">
+                                                <?= clean($pop['name']) ?> (<?= clean($pop['code']) ?>)
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <div class="form-text small" style="font-size: 11px;">Select parent if this is a sub-part (e.g. Sleeves/Pockets under Tailoring).</div>
+                                </div>
+
+                                <div class="col-12 col-sm-6 col-md-2">
+                                    <label class="form-label fw-semibold">Operation Code *</label>
+                                    <input type="text" name="code" id="op_code" class="form-control text-uppercase fw-bold" placeholder="OP-TAIL-SLV" required>
+                                </div>
+
+                                <div class="col-12 col-sm-6 col-md-4">
+                                    <label class="form-label fw-semibold">Operation / Part Name *</label>
+                                    <input type="text" name="name" class="form-control" placeholder="e.g. Attach Sleeves (بازو لگانا)" required>
+                                </div>
+
+                                <div class="col-12 col-sm-6 col-md-3">
+                                    <label class="form-label fw-semibold">Department</label>
+                                    <select name="department_id" id="department_id" class="form-select">
+                                        <option value="">-- General / Production --</option>
+                                        <?php foreach ($departments as $dept): ?>
+                                            <option value="<?= $dept['id'] ?>"><?= clean($dept['name']) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+
+                                <div class="col-12 col-sm-4 col-md-2">
+                                    <label class="form-label fw-semibold">Standard Time (SAM) *</label>
+                                    <div class="input-group">
+                                        <input type="number" name="estimated_minutes" id="estimated_minutes" class="form-control fw-bold text-primary" step="0.1" min="0" value="2.0" required>
+                                        <span class="input-group-text">min</span>
+                                    </div>
+                                    <div class="form-text small" style="font-size: 11px;">وقت منٹوں میں (فی پیس)</div>
+                                </div>
+
+                                <div class="col-12 col-sm-4 col-md-2">
+                                    <label class="form-label fw-semibold">Default Rate (Rs.) *</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">Rs.</span>
+                                        <input type="number" name="default_rate" id="default_rate" class="form-control fw-bold text-success" step="0.25" min="0" value="5.00" required>
+                                    </div>
+                                    <div class="form-text small" style="font-size: 11px;">منٹس × 2.50 روپے یا مینوئل ریٹ</div>
+                                </div>
+
+                                <div class="col-12 col-sm-4 col-md-2">
+                                    <label class="form-label fw-semibold">Workflow Sequence</label>
+                                    <input type="number" name="sequence" class="form-control" value="25" min="1">
+                                </div>
+
+                                <div class="col-12 col-sm-6 col-md-3">
+                                    <label class="form-label fw-semibold">Rate Unit</label>
+                                    <select name="rate_unit" class="form-select">
+                                        <option value="Per piece">Per piece (فی پیس)</option>
+                                        <option value="Per dozen">Per dozen (فی درجن)</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-12 col-sm-6 col-md-3 d-flex align-items-end justify-content-between gap-2">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" name="is_mandatory" value="1" id="is_mandatory" checked>
+                                        <label class="form-check-label small fw-semibold" for="is_mandatory">Mandatory</label>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary fw-semibold px-4 flex-grow-1">
+                                        <i class="bi bi-plus-lg me-1"></i> Add Operation
+                                    </button>
+                                </div>
                             </div>
-                            <select name="department_id" class="form-select">
-                                <option value="">-- None --</option>
-                                <?php foreach ($departments as $dept): ?>
-                                    <option value="<?= $dept['id'] ?>"><?= clean($dept['name']) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-12 col-sm-6 col-md-1">
-                            <label class="form-label">Sequence</label>
-                            <input type="number" name="sequence" class="form-control" value="50" min="1">
-                        </div>
-                        <div class="col-12 col-sm-6 col-md-2">
-                            <label class="form-label">Default Rate (Rs.)</label>
-                            <input type="number" name="default_rate" class="form-control" step="0.25" value="0.00">
-                        </div>
-                        <div class="col-12 col-sm-6 col-md-2">
-                            <div class="form-check mb-2">
-                                <input class="form-check-input" type="checkbox" name="is_mandatory" value="1" id="is_mandatory" checked>
-                                <label class="form-check-label small fw-semibold" for="is_mandatory">Mandatory Stage</label>
-                            </div>
-                            <button type="submit" class="btn btn-primary w-100 fw-semibold">
-                                Add Operation
-                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Operations List -->
+                <div class="card-modern">
+                    <div class="card-modern-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div>
+                            <h6 class="fw-bold mb-0 text-dark">Active Factory Operations, Sub-Parts & SAM Rates</h6>
+                            <span class="text-muted small">Sequential manufacturing stages with Standard Allowed Minutes (SAM) and benchmark rates</span>
                         </div>
                     </div>
-                </form>
-            </div>
-        </div>
+                    <div class="card-modern-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-modern align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 60px;">Seq</th>
+                                        <th>Code</th>
+                                        <th>Operation / Sub-Part Name</th>
+                                        <th>Hierarchy</th>
+                                        <th>Department</th>
+                                        <th class="text-center" style="width: 140px;">Standard Time (SAM)</th>
+                                        <th class="text-end" style="width: 130px;">Base Rate</th>
+                                        <th>Artisans</th>
+                                        <th class="text-end" style="width: 260px;">Quick Update (Time & Rate)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($operations as $op): 
+                                        $isSub = !empty($op['parent_id']);
+                                    ?>
+                                        <tr class="<?= $isSub ? 'bg-light bg-opacity-25' : '' ?>">
+                                            <td>
+                                                <span class="badge <?= $isSub ? 'bg-white text-muted border' : 'bg-light text-dark border fw-bold' ?>"><?= $op['sequence'] ?></span>
+                                            </td>
+                                            <td class="fw-bold <?= $isSub ? 'text-secondary small' : 'text-primary' ?>"><?= clean($op['code']) ?></td>
+                                            <td>
+                                                <?php if ($isSub): ?>
+                                                    <div class="ms-3 fw-bold text-dark d-flex align-items-center gap-1">
+                                                        <span class="text-primary fs-6">↳</span>
+                                                        <span><?= clean($op['name']) ?></span>
+                                                    </div>
+                                                <?php else: ?>
+                                                    <div class="fw-bold text-dark fs-6"><?= clean($op['name']) ?></div>
+                                                <?php endif; ?>
+                                                <div class="text-muted small ms-<?= $isSub ? '4' : '0' ?>">Unit: <?= clean($op['rate_unit']) ?></div>
+                                            </td>
+                                            <td>
+                                                <?php if ($isSub): ?>
+                                                    <span class="badge bg-info-subtle text-info border border-info-subtle">
+                                                        <i class="bi bi-diagram-3 me-1"></i>Under: <?= clean($op['parent_operation_name'] ?? 'Main') ?>
+                                                    </span>
+                                                <?php else: ?>
+                                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold">
+                                                        Main Stage <?= $op['sub_ops_count'] > 0 ? "({$op['sub_ops_count']} sub-parts)" : '' ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><?= clean($op['department_name'] ?? 'General') ?></td>
+                                            <td class="text-center">
+                                                <span class="badge bg-light text-primary border fs-6 px-2 py-1">
+                                                    <i class="bi bi-stopwatch me-1"></i><?= (float)$op['estimated_minutes'] ?> min
+                                                </span>
+                                            </td>
+                                            <td class="text-end fw-bold fs-6 text-dark">
+                                                <?= format_currency($op['default_rate']) ?>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-secondary-subtle text-secondary fw-semibold">
+                                                    <?= $op['assigned_workers'] ?> workers
+                                                </span>
+                                            </td>
+                                            <td class="text-end">
+                                                <form method="POST" action="" class="d-inline-flex gap-1 justify-content-end align-items-center">
+                                                    <input type="hidden" name="action" value="update_rate">
+                                                    <input type="hidden" name="operation_id" value="<?= $op['id'] ?>">
+                                                    <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+                                                    
+                                                    <div class="input-group input-group-sm" style="width: 105px;" title="Estimated Minutes">
+                                                        <input type="number" name="estimated_minutes" class="form-control text-center" step="0.1" min="0" value="<?= (float)$op['estimated_minutes'] ?>" placeholder="Min">
+                                                        <span class="input-group-text px-1 small">m</span>
+                                                    </div>
 
-        <!-- Operations List -->
-        <div class="card-modern">
-            <div class="card-modern-header">
-                <h6 class="fw-bold mb-0 text-dark">Active Factory Operations & Standard Rates</h6>
-            </div>
-            <div class="card-modern-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-modern align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th style="width: 70px;">Seq</th>
-                                <th>Code</th>
-                                <th>Operation Name</th>
-                                <th>Department</th>
-                                <th>Type</th>
-                                <th>Assigned Artisans</th>
-                                <th class="text-end">Standard Rate</th>
-                                <th class="text-end">Update Rate</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($operations as $op): ?>
-                                <tr>
-                                    <td>
-                                        <span class="badge bg-light text-dark border fw-bold"><?= $op['sequence'] ?></span>
-                                    </td>
-                                    <td class="fw-bold text-primary"><?= clean($op['code']) ?></td>
-                                    <td>
-                                        <div class="fw-bold text-dark"><?= clean($op['name']) ?></div>
-                                        <div class="text-muted small">Unit: <?= clean($op['rate_unit']) ?></div>
-                                    </td>
-                                    <td><?= clean($op['department_name'] ?? 'General') ?></td>
-                                    <td>
-                                        <?php if ($op['is_mandatory']): ?>
-                                            <span class="badge bg-danger-subtle text-danger fw-semibold">Mandatory</span>
-                                        <?php else: ?>
-                                            <span class="badge bg-secondary-subtle text-secondary fw-semibold">Optional</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-primary-subtle text-primary fw-semibold">
-                                            <?= $op['assigned_workers'] ?> workers
-                                        </span>
-                                    </td>
-                                    <td class="text-end fw-bold fs-6 text-dark">
-                                        <?= format_currency($op['default_rate']) ?>
-                                    </td>
-                                    <td class="text-end">
-                                        <form method="POST" action="" class="d-inline-flex gap-1 justify-content-end align-items-center">
-                                            <input type="hidden" name="action" value="update_rate">
-                                            <input type="hidden" name="operation_id" value="<?= $op['id'] ?>">
-                                            <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
-                                            <input type="number" name="default_rate" class="form-control form-control-sm text-end" style="width: 90px;" step="0.25" value="<?= $op['default_rate'] ?>">
-                                            <button type="submit" class="btn btn-sm btn-outline-secondary py-1 px-2" title="Save Rate">
-                                                <i class="bi bi-check-lg"></i>
-                                            </button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                                                    <div class="input-group input-group-sm" style="width: 105px;" title="Default Piece Rate">
+                                                        <span class="input-group-text px-1 small">Rs</span>
+                                                        <input type="number" name="default_rate" class="form-control text-end" step="0.25" min="0" value="<?= $op['default_rate'] ?>">
+                                                    </div>
+
+                                                    <button type="submit" class="btn btn-sm btn-outline-primary py-1 px-2" title="Save Time & Rate">
+                                                        <i class="bi bi-check-lg"></i>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
-    </div> <!-- end operationsTab -->
+            </div> <!-- end operationsTab -->
 
     <!-- DEPARTMENTS TAB -->
     <div class="tab-pane fade" id="departmentsTab">
@@ -318,35 +396,34 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 </div> <!-- end tab-content -->
 
     </div>
-
-<!-- Quick Add Department Modal -->
-<div class="modal fade" id="addDeptModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <form method="POST" action="">
-                <input type="hidden" name="action" value="create_department">
-                <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-building-add text-primary me-2"></i>Add Factory Department</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Department Name *</label>
-                        <input type="text" name="name" class="form-control" placeholder="e.g. Quality Control, Embroidery" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Description / Scope</label>
-                        <textarea name="description" class="form-control" rows="3" placeholder="Department notes or details..."></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary fw-semibold">Save Department</button>
-                </div>
-            </form>
-        </div>
-    </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const minInput = document.getElementById('estimated_minutes');
+    const rateInput = document.getElementById('default_rate');
+    const parentSelect = document.getElementById('parent_id');
+    const deptSelect = document.getElementById('department_id');
+
+    // Auto-update department if parent has one
+    if (parentSelect && deptSelect) {
+        parentSelect.addEventListener('change', function() {
+            const selected = this.options[this.selectedIndex];
+            const deptId = selected.dataset.dept;
+            if (deptId) {
+                deptSelect.value = deptId;
+            }
+        });
+    }
+
+    // Dynamic rate calculation: Minutes * 2.50 Rs/min
+    if (minInput && rateInput) {
+        minInput.addEventListener('input', function() {
+            const mins = parseFloat(this.value) || 0;
+            rateInput.value = (mins * 2.50).toFixed(2);
+        });
+    }
+});
+</script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

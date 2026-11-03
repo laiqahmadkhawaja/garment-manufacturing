@@ -412,6 +412,41 @@ $calculatedYarn = $lotPcs * $yarnPerPiece * 1.05;
 
 assert_test("24. Product Recipe BOM & Batch Material Estimation", $bomItemCount === 2 && abs($calculatedYarn - 47.25) < 0.01, "Recipe with 2 raw materials: 100 pcs = 47.25 KG Yarn (incl 5% wastage)");
 
+// ------------------------------------------------------------------------
+// Test 25: SAM (Minutes), Worker Minute Rate (Rs 2.50/min) & Sub-Operations
+// ------------------------------------------------------------------------
+$db->beginTransaction();
+// Get or create Tailoring main operation
+$tailOp = $db->query("SELECT id FROM operations WHERE code = 'OP-TAIL' OR name LIKE '%Tailoring%' LIMIT 1")->fetch();
+$tailId = (int)$tailOp['id'];
+
+// Check sub-operation: Attach Pockets with 2.5 min
+$db->prepare("DELETE FROM operations WHERE code = 'OP-TEST-PCK'")->execute();
+$insSubOp = $db->prepare("INSERT INTO operations (parent_id, code, name, department_id, sequence, estimated_minutes, default_rate, rate_unit, is_mandatory, is_active)
+                          VALUES (?, 'OP-TEST-PCK', 'Attach Pockets Test', 2, 25, 2.50, 6.25, 'Per piece', 1, 1)");
+$insSubOp->execute([$tailId]);
+$subOpId = (int)$db->lastInsertId();
+
+// Worker with minute rate Rs. 2.50/min
+$db->prepare("UPDATE workers SET rate_per_minute = 2.50 WHERE id = 1")->execute();
+$workerMinRate = (float)$db->query("SELECT rate_per_minute FROM workers WHERE id = 1")->fetchColumn();
+$subOpMins = (float)$db->query("SELECT estimated_minutes FROM operations WHERE id = $subOpId")->fetchColumn();
+
+// Piece rate = Minutes * Rate per minute
+$computedPieceRate = round($subOpMins * $workerMinRate, 2); // 2.50 * 2.50 = 6.25
+$testGoodPcs = 100;
+$computedLabour = round($testGoodPcs * $computedPieceRate, 2); // 100 * 6.25 = 625.00
+$computedTotalMins = round($testGoodPcs * $subOpMins, 2); // 250 mins
+
+// Insert test production entry with SAM tracking
+$insPe = $db->prepare("INSERT INTO production_entries 
+    (entry_number, entry_date, lot_id, operation_id, worker_id, color_id, size_id, qty_received, good_qty, rate, minutes_per_piece, worker_minute_rate, total_minutes, labour_amount, notes, created_by)
+    VALUES ('PE-TEST-SAM-01', CURDATE(), ?, ?, 1, 1, 1, 100, 100, ?, ?, ?, ?, ?, 'SAM test', 1)");
+$insPe->execute([$lotId101, $subOpId, $computedPieceRate, $subOpMins, $workerMinRate, $computedTotalMins, $computedLabour]);
+$db->commit();
+
+assert_test("25. Sub-Operations, SAM & Worker Minute-Rate Formula", $computedPieceRate === 6.25 && $computedLabour === 625.00 && $computedTotalMins === 250.00, "Attach Pockets (2.5 min) @ Rs. 2.50/min = Rs. 6.25/pc (100 pcs = Rs. 625.00, 250 mins)");
+
 echo "\n========================================================================\n";
 echo "TEST SUITE SUMMARY: $passCount PASSED, $failCount FAILED\n";
 echo "========================================================================\n";

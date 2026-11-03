@@ -92,7 +92,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         </td>
                                         <td>
                                             <div class="fw-semibold text-dark"><?= clean($w['worker_type']) ?></div>
-                                            <div class="text-muted small"><?= clean($w['department_name'] ?? 'General') ?></div>
+                                            <div class="text-muted small">
+                                                <?= clean($w['department_name'] ?? 'General') ?>
+                                                <span class="badge bg-success-subtle text-success border border-success-subtle ms-1" style="font-size: 10px;">
+                                                    Rs. <?= number_format($w['rate_per_minute'] ?? 2.50, 2) ?>/min
+                                                </span>
+                                            </div>
                                         </td>
                                         <td><?= clean($w['phone'] ?: '-') ?></td>
                                         <td class="text-center">

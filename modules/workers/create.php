@@ -26,6 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $workerType = trim($_POST['worker_type'] ?? 'Piece Rate');
     $deptId = !empty($_POST['department_id']) ? (int)$_POST['department_id'] : null;
     $defaultRate = (float)($_POST['default_rate'] ?? 0.00);
+    $ratePerMinute = (float)($_POST['rate_per_minute'] ?? 2.50);
+    if ($ratePerMinute <= 0) $ratePerMinute = 2.50; // default benchmark
     $joiningDate = !empty($_POST['joining_date']) ? trim($_POST['joining_date']) : date('Y-m-d');
     $openingBalance = (float)($_POST['opening_balance'] ?? 0.00); // positive means factory owes worker
     $notes = trim($_POST['notes'] ?? '');
@@ -42,8 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->beginTransaction();
             try {
                 $stmt = $db->prepare("INSERT INTO workers 
-                    (code, name, phone, address, cnic, worker_type, department_id, default_rate, joining_date, opening_balance, notes, is_active) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)");
+                    (code, name, phone, address, cnic, worker_type, department_id, default_rate, rate_per_minute, joining_date, opening_balance, notes, is_active) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)");
                 $stmt->execute([
                     $code,
                     $name,
@@ -53,6 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $workerType,
                     $deptId,
                     $defaultRate,
+                    $ratePerMinute,
                     $joiningDate,
                     $openingBalance,
                     $notes
@@ -157,8 +160,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             </select>
                         </div>
                         <div class="col-12 col-md-4">
-                            <label class="form-label">Default Rate (Rs.)</label>
-                            <input type="number" name="default_rate" class="form-control" step="0.25" value="0.00">
+                            <label class="form-label fw-semibold">Minute Rate (روپے فی منٹ) *</label>
+                            <div class="input-group">
+                                <span class="input-group-text">Rs.</span>
+                                <input type="number" name="rate_per_minute" class="form-control fw-bold text-success" step="0.05" min="0" value="<?= clean($_POST['rate_per_minute'] ?? '2.50') ?>" required>
+                                <span class="input-group-text">/min</span>
+                            </div>
+                            <div class="form-text small" style="font-size: 11px;">طے شدہ ریٹ (مثلاً 2.50 روپے فی منٹ)۔</div>
                         </div>
 
                         <div class="col-12 col-md-4">

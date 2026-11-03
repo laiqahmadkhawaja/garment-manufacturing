@@ -177,15 +177,18 @@ CREATE TABLE `design_elements` (
 DROP TABLE IF EXISTS `operations`;
 CREATE TABLE `operations` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `parent_id` INT NULL DEFAULT NULL,
     `code` VARCHAR(40) NOT NULL UNIQUE,
     `name` VARCHAR(100) NOT NULL,
     `department_id` INT NULL,
     `sequence` INT NOT NULL DEFAULT 10,
+    `estimated_minutes` DECIMAL(8,2) NOT NULL DEFAULT 0.00,
     `is_mandatory` TINYINT(1) NOT NULL DEFAULT 1,
     `default_rate` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     `rate_unit` VARCHAR(30) NOT NULL DEFAULT 'Per piece',
     `quantity_tracking` TINYINT(1) NOT NULL DEFAULT 1,
     `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+    FOREIGN KEY (`parent_id`) REFERENCES `operations`(`id`) ON DELETE SET NULL,
     FOREIGN KEY (`department_id`) REFERENCES `departments`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -214,6 +217,7 @@ CREATE TABLE `workers` (
     `worker_type` VARCHAR(50) NOT NULL DEFAULT 'Piece Rate',
     `department_id` INT NULL,
     `default_rate` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    `rate_per_minute` DECIMAL(8,2) NOT NULL DEFAULT 2.50,
     `joining_date` DATE NULL,
     `opening_balance` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
     `notes` TEXT NULL,
@@ -318,6 +322,9 @@ CREATE TABLE `production_entries` (
     `rejected_qty` INT NOT NULL DEFAULT 0,
     `rework_qty` INT NOT NULL DEFAULT 0,
     `rate` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+    `minutes_per_piece` DECIMAL(8,2) NOT NULL DEFAULT 0.00,
+    `worker_minute_rate` DECIMAL(8,2) NOT NULL DEFAULT 0.00,
+    `total_minutes` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     `labour_amount` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
     `notes` TEXT NULL,
     `created_by` INT NULL,

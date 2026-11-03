@@ -18,12 +18,20 @@ $error = '';
 
 // Handle Production Work Submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    check_csrf();
     $entryMode = trim($_POST['entry_mode'] ?? 'matrix');
     $entryDate = trim($_POST['entry_date'] ?? date('Y-m-d'));
     $lotId = (int)($_POST['lot_id'] ?? 0);
     $operationId = (int)($_POST['operation_id'] ?? 0);
     $workerId = (int)($_POST['worker_id'] ?? 0);
+    $minutesPerPiece = (float)($_POST['minutes_per_piece'] ?? 0.00);
+    $workerMinuteRate = (float)($_POST['worker_minute_rate'] ?? 2.50);
     $rate = (float)($_POST['rate'] ?? 0.00);
+
+    // Fallback: If rate was 0 but minutes & worker minute rate were provided, calculate rate
+    if ($rate <= 0 && $minutesPerPiece > 0 && $workerMinuteRate > 0) {
+        $rate = round($minutesPerPiece * $workerMinuteRate, 2);
+    }
 
     if ($lotId <= 0 || $operationId <= 0 || $workerId <= 0) {
         $error = 'Please fill all required fields: Lot, Operation, and Worker.';
@@ -161,8 +169,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         // Prepare production entries insert
                         $insertStmt = $db->prepare("INSERT INTO production_entries 
-                            (entry_number, entry_date, lot_id, operation_id, worker_id, color_id, size_id, qty_received, good_qty, rejected_qty, rework_qty, rate, labour_amount, notes, created_by) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                            (entry_number, entry_date, lot_id, operation_id, worker_id, color_id, size_id, qty_received, good_qty, rejected_qty, rework_qty, rate, minutes_per_piece, worker_minute_rate, total_minutes, labour_amount, notes, created_by) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
                     // Prepare rejections and rework statements
                     $rejStmt = $db->prepare("INSERT INTO production_rejections 
@@ -181,6 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $firstEntryId = null;
                     foreach ($entriesToSave as $entry) {
                         $entryNum = 'PE-' . str_pad((string)$docSeq++, 4, '0', STR_PAD_LEFT);
+                        $entryTotalMinutes = round($entry['good_qty'] * $minutesPerPiece, 2);
                         $insertStmt->execute([
                             $entryNum,
                             $entryDate,
@@ -194,6 +203,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $entry['rejected_qty'],
                             $entry['rework_qty'],
                             $rate,
+                            $minutesPerPiece,
+                            $workerMinuteRate,
+                            $entryTotalMinutes,
                             $entry['labour_amount'],
                             $notes,
                             $_SESSION['user_id'] ?? null
@@ -375,8 +387,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // 1. Insert Production Entry
                 $stmt = $db->prepare("INSERT INTO production_entries 
-                    (entry_number, entry_date, lot_id, operation_id, worker_id, color_id, size_id, qty_received, good_qty, rejected_qty, rework_qty, rate, labour_amount, notes, created_by) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    (entry_number, entry_date, lot_id, operation_id, worker_id, color_id, size_id, qty_received, good_qty, rejected_qty, rework_qty, rate, minutes_per_piece, worker_minute_rate, total_minutes, labour_amount, notes, created_by) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $totalSingleMinutes = round($goodQty * $minutesPerPiece, 2);
                 $stmt->execute([
                     $entryNumber,
                     $entryDate,
@@ -390,6 +403,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $rejectedQty,
                     $reworkQty,
                     $rate,
+                    $minutesPerPiece,
+                    $workerMinuteRate,
+                    $totalSingleMinutes,
                     $labourAmount,
                     $notes,
                     $_SESSION['user_id'] ?? null
@@ -600,8 +616,8 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     </select>
                                 </div>
 
-                                <!-- Worker & Piece Rate -->
-                                <div class="col-12 col-md-6">
+                                <!-- Worker & Piece Rate Scheme -->
+                                <div class="col-12 col-md-5">
                                     <div class="d-flex justify-content-between align-items-center mb-1">
                                         <label class="form-label fw-semibold mb-0">Worker / Operator *</label>
                                         <span id="workerCountBadge" class="badge bg-light text-secondary border small d-none">0 matching</span>
@@ -610,13 +626,57 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <option value="">-- Select Operation First --</option>
                                     </select>
                                 </div>
-                                <div class="col-12 col-md-6">
-                                    <label class="form-label fw-semibold">Piece Rate (Rs.) *</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text">Rs.</span>
-                                        <input type="number" name="rate" id="pe_rate" class="form-control fw-bold" step="0.25" min="0" value="0.00" required>
+                                <div class="col-12 col-md-7">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <label class="form-label fw-semibold mb-0">Rate Calculation Scheme (منٹ ریٹ کا حساب)</label>
+                                        <span class="text-success small fw-bold" id="lblFormulaBadge">
+                                            <i class="bi bi-calculator me-1"></i>Minutes × Rate/min = Piece Rate
+                                        </span>
                                     </div>
-                                    <div class="form-text small">Auto-populated from operation rate; editable if exception applies.</div>
+                                    <div class="row g-2">
+                                        <div class="col-4">
+                                            <div class="input-group">
+                                                <input type="number" name="minutes_per_piece" id="pe_minutes" class="form-control fw-bold text-center text-primary" step="0.1" min="0" value="0.0" placeholder="SAM Min" title="Operation Standard Time (SAM Minutes per piece)">
+                                                <span class="input-group-text px-1 small text-muted">min</span>
+                                            </div>
+                                            <div class="form-text text-center small" style="font-size: 10px;">وقت فی پیس</div>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="input-group">
+                                                <span class="input-group-text px-1 small text-muted">Rs</span>
+                                                <input type="number" name="worker_minute_rate" id="pe_min_rate" class="form-control fw-bold text-center text-success" step="0.05" min="0" value="2.50" placeholder="Rs/min" title="Worker's agreed rate per minute">
+                                                <span class="input-group-text px-1 small text-muted">/m</span>
+                                            </div>
+                                            <div class="form-text text-center small" style="font-size: 10px;">ریٹ فی منٹ</div>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="input-group">
+                                                <span class="input-group-text px-1 small text-muted">Rs</span>
+                                                <input type="number" name="rate" id="pe_rate" class="form-control fw-bold text-end text-dark" step="0.25" min="0" value="0.00" required title="Final Piece Rate">
+                                                <span class="input-group-text px-1 small text-muted">/pc</span>
+                                            </div>
+                                            <div class="form-text text-center small" style="font-size: 10px;">پیس ریٹ</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Dynamic Scheme Indicator Banner -->
+                                <div class="col-12 mt-2">
+                                    <div class="alert alert-light border py-2 px-3 d-flex flex-wrap justify-content-between align-items-center small mb-0 rounded-2 text-muted">
+                                        <div>
+                                            <i class="bi bi-info-circle text-primary me-1"></i>
+                                            <span id="rateBreakdownText">
+                                                <span class="fw-bold text-primary" id="lblSamMins">0.0</span> منٹ فی پیس &times; 
+                                                <span class="fw-bold text-success" id="lblWorkerMinRate">Rs. 2.50</span> فی منٹ = 
+                                                <strong class="text-dark fs-6">Rs. <span id="lblCalculatedPieceRate">0.00</span></strong> فی پیس
+                                            </span>
+                                        </div>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span id="lblTotalBatchTime" class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1">
+                                                <i class="bi bi-clock-history me-1"></i>Batch Work: 0 mins
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -860,6 +920,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const workerSelect = document.getElementById('pe_worker_id');
     const workerBadge = document.getElementById('workerCountBadge');
     const rateInput = document.getElementById('pe_rate');
+    const minInput = document.getElementById('pe_minutes');
+    const minRateInput = document.getElementById('pe_min_rate');
+    const lblSamMins = document.getElementById('lblSamMins');
+    const lblWorkerMinRate = document.getElementById('lblWorkerMinRate');
+    const lblCalculatedPieceRate = document.getElementById('lblCalculatedPieceRate');
+    const lblTotalBatchTime = document.getElementById('lblTotalBatchTime');
     const preselectedOpId = <?= (int)$preselectedOpId ?>;
 
     // Mode Toggle Elements
@@ -886,6 +952,28 @@ document.addEventListener('DOMContentLoaded', function() {
     const matrixTfoot = document.getElementById('matrixTfoot');
     const btnFillAllPending = document.getElementById('btnFillAllPending');
     const btnClearMatrix = document.getElementById('btnClearMatrix');
+
+    function updateRateCalculation(fromDirectRate = false) {
+        const mins = parseFloat(minInput.value) || 0;
+        const minRate = parseFloat(minRateInput.value) || 2.50;
+
+        if (!fromDirectRate) {
+            if (mins > 0 && minRate > 0) {
+                rateInput.value = (mins * minRate).toFixed(2);
+            }
+        }
+
+        const currentRate = parseFloat(rateInput.value) || 0;
+        if (lblSamMins) lblSamMins.textContent = mins.toFixed(1);
+        if (lblWorkerMinRate) lblWorkerMinRate.textContent = 'Rs. ' + minRate.toFixed(2);
+        if (lblCalculatedPieceRate) lblCalculatedPieceRate.textContent = currentRate.toFixed(2);
+
+        calculateSingleLabour();
+        recalculateMatrixTotals();
+    }
+
+    if (minInput) minInput.addEventListener('input', () => updateRateCalculation(false));
+    if (minRateInput) minRateInput.addEventListener('input', () => updateRateCalculation(false));
 
     // Toggle Modes
     btnModeMatrix.addEventListener('click', function() {
@@ -926,8 +1014,7 @@ document.addEventListener('DOMContentLoaded', function() {
     rejInput.addEventListener('input', calculateSingleLabour);
     rewInput.addEventListener('input', calculateSingleLabour);
     rateInput.addEventListener('input', function() {
-        calculateSingleLabour();
-        recalculateMatrixTotals();
+        updateRateCalculation(true);
     });
 
     // Load operations and variants for selected lot
@@ -956,11 +1043,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         const opt = document.createElement('option');
                         opt.value = op.operation_id;
                         opt.dataset.rate = op.default_rate;
+                        opt.dataset.minutes = op.estimated_minutes || 0;
                         opt.dataset.goodDone = op.good_done || 0;
                         const goodDone = parseInt(op.good_done) || 0;
                         const lotTotal = parseInt(data.lot.total_pieces) || 0;
                         const isCompleted = (goodDone >= lotTotal && lotTotal > 0);
-                        opt.textContent = op.sequence + '. ' + op.op_name + ' (' + op.dept_name + ') - Rs. ' + parseFloat(op.default_rate).toFixed(2) + 
+                        const isSub = op.parent_id ? true : false;
+                        const prefix = isSub ? '  ↳ ' : '';
+                        const minInfo = (parseFloat(op.estimated_minutes) > 0 ? ' (' + parseFloat(op.estimated_minutes) + ' min)' : '');
+                        opt.textContent = prefix + op.sequence + '. ' + op.op_name + minInfo + ' [' + op.dept_name + '] - Rs. ' + parseFloat(op.default_rate).toFixed(2) + 
                                           (isCompleted ? ' [✓ Completed: ' + goodDone + '/' + lotTotal + ']' : ' [' + goodDone + '/' + lotTotal + ' pcs]');
                         opSelect.appendChild(opt);
                     });
@@ -981,9 +1072,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (preselectedOpId && data.operations.some(op => op.operation_id == preselectedOpId)) {
                         opSelect.value = preselectedOpId;
                         const selectedOpt = opSelect.options[opSelect.selectedIndex];
-                        if (selectedOpt && selectedOpt.dataset.rate) {
-                            rateInput.value = selectedOpt.dataset.rate;
-                            calculateSingleLabour();
+                        if (selectedOpt) {
+                            if (minInput && selectedOpt.dataset.minutes) {
+                                minInput.value = parseFloat(selectedOpt.dataset.minutes).toFixed(1);
+                            }
+                            if (selectedOpt.dataset.rate) {
+                                rateInput.value = selectedOpt.dataset.rate;
+                            }
+                            updateRateCalculation(false);
                         }
                         loadWorkersForOperation(preselectedOpId);
                         loadMatrixGrid(lotId, preselectedOpId);
@@ -1037,18 +1133,22 @@ document.addEventListener('DOMContentLoaded', function() {
                         const opt = document.createElement('option');
                         opt.value = w.id;
                         opt.dataset.rate = w.effective_rate || '';
-                        opt.textContent = w.name + ' (' + w.code + ') — ' + (w.department_name || 'Worker');
+                        opt.dataset.minRate = w.rate_per_minute || 2.50;
+                        const minRateTxt = parseFloat(w.rate_per_minute || 2.50).toFixed(2);
+                        opt.textContent = w.name + ' (' + w.code + ') — Rs. ' + minRateTxt + '/min';
                         workerSelect.appendChild(opt);
                     });
 
                     // Auto-select if exactly 1 matching artisan
                     if (count === 1) {
                         workerSelect.value = data.workers[0].id;
+                        if (minRateInput && data.workers[0].rate_per_minute) {
+                            minRateInput.value = parseFloat(data.workers[0].rate_per_minute).toFixed(2);
+                        }
                         if (data.workers[0].effective_rate && parseFloat(data.workers[0].effective_rate) > 0) {
                             rateInput.value = parseFloat(data.workers[0].effective_rate).toFixed(2);
-                            calculateSingleLabour();
-                            recalculateMatrixTotals();
                         }
+                        updateRateCalculation(false);
                     }
                 }
             })
@@ -1060,19 +1160,30 @@ document.addEventListener('DOMContentLoaded', function() {
 
     workerSelect.addEventListener('change', function() {
         const opt = this.options[this.selectedIndex];
-        if (opt && opt.dataset.rate && parseFloat(opt.dataset.rate) > 0) {
-            rateInput.value = parseFloat(opt.dataset.rate).toFixed(2);
-            calculateSingleLabour();
-            recalculateMatrixTotals();
+        if (opt) {
+            if (minRateInput && opt.dataset.minRate) {
+                minRateInput.value = parseFloat(opt.dataset.minRate).toFixed(2);
+            }
+            if (opt.dataset.rate && parseFloat(opt.dataset.rate) > 0) {
+                rateInput.value = parseFloat(opt.dataset.rate).toFixed(2);
+                updateRateCalculation(true);
+            } else {
+                updateRateCalculation(false);
+            }
         }
     });
 
-    // When operation changes, update default rate, load workers, and load matrix grid!
+    // When operation changes, update SAM minutes, load workers, and load matrix grid!
     opSelect.addEventListener('change', function() {
         const selectedOpt = this.options[this.selectedIndex];
-        if (selectedOpt && selectedOpt.dataset.rate) {
-            rateInput.value = selectedOpt.dataset.rate;
-            calculateSingleLabour();
+        if (selectedOpt) {
+            if (minInput && selectedOpt.dataset.minutes) {
+                minInput.value = parseFloat(selectedOpt.dataset.minutes).toFixed(1);
+            }
+            if (selectedOpt.dataset.rate) {
+                rateInput.value = selectedOpt.dataset.rate;
+            }
+            updateRateCalculation(false);
         }
         loadWorkersForOperation(this.value);
         loadMatrixGrid(lotSelect.value, this.value);
@@ -1498,6 +1609,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const labourDisplay = document.getElementById('lblBatchTotalLabour');
         if (labourDisplay) {
             labourDisplay.textContent = 'Rs. ' + batchLabour.toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+
+        const opMins = minInput ? (parseFloat(minInput.value) || 0) : 0;
+        const totalBatchMins = grandGood * opMins;
+        const batchHours = (totalBatchMins / 60).toFixed(1);
+        if (lblTotalBatchTime) {
+            lblTotalBatchTime.innerHTML = '<i class="bi bi-clock-history me-1"></i>Batch Work: ' + totalBatchMins.toFixed(1) + ' mins (' + batchHours + ' hrs)';
         }
 
         // Validation alert & submit button
