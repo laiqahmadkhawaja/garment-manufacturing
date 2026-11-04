@@ -222,6 +222,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <a href="<?= BASE_URL ?>modules/production/index.php?lot_id=<?= $lotId ?>" class="btn btn-primary btn-sm fw-bold shadow-sm">
                     <i class="bi bi-lightning-charge-fill me-1"></i> Worker Production Entry
                 </a>
+                <a href="<?= BASE_URL ?>modules/lots/print_jobcard.php?id=<?= $lotId ?>" target="_blank" class="btn btn-success btn-sm fw-bold shadow-sm">
+                    <i class="bi bi-printer-fill me-1"></i> Print Job Card (پرنٹ جاب کارڈ)
+                </a>
                 <a href="<?= BASE_URL ?>modules/lots/print_design_sheet.php?id=<?= $lotId ?>" target="_blank" class="btn btn-outline-secondary btn-sm">
                     <i class="bi bi-printer me-1"></i> Print Design Sheet
                 </a>

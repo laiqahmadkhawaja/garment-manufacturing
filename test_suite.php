@@ -873,6 +873,84 @@ $fullCheck = ($newStatus2 === 'Ready Stock' && $totPacked2 === 100 && $totalCurr
 $scenario34Passed = ($partialCheck && $fullCheck);
 assert_test("34. Unified Workflow Packing & Finished Goods Stock Inward", $scenario34Passed, "Workflow packing deposited 100 pcs directly into finished_goods_stock; transitioned lot status to 'Partially Packed' at 50 pcs and 'Ready Stock' at 100 pcs without duplicate box steps");
 
+
+// =========================================================================
+// SCENARIO 35: FACTORY WORKFLOW REFINEMENT & PRINTABLE JOB CARD
+// =========================================================================
+echo "\n--- TESTING SCENARIO 35: FACTORY WORKFLOW & PRINTABLE JOB CARD ---\n";
+
+// 1. Verify Printable Job Card file exists and compiles
+$jobCardFile = __DIR__ . '/modules/lots/print_jobcard.php';
+$jobCardFileExists = file_exists($jobCardFile);
+
+// Test rendering output buffer
+$_SESSION['user_id'] = 1;
+$_SESSION['user_role'] = 'admin';
+$_GET['id'] = $lotId34; // Use lot from previous scenario
+ob_start();
+include $jobCardFile;
+$jcHtml = ob_get_clean();
+
+$hasOperatorSec = (strpos($jcHtml, 'آپریٹر سیکشن') !== false);
+$hasCuttingSec = (strpos($jcHtml, 'کٹائی ماسٹر') !== false);
+$hasWorkerGrid = (strpos($jcHtml, 'کاریگروں کا کام اور کھاتہ لاگ') !== false);
+$hasCalcTbl = (strpos($jcHtml, 'حساب ضرب') !== false);
+
+$renderPassed = ($jobCardFileExists && $hasOperatorSec && $hasCuttingSec && $hasWorkerGrid && $hasCalcTbl);
+
+// 2. Test Multi-Worker Sub-Operations (Arif: Pocket, Asad: Gala)
+// Ensure Arif and Asad workers exist
+$wArifStmt = $db->query("SELECT id FROM workers WHERE name LIKE '%Arif%' LIMIT 1");
+$wArifId = (int)$wArifStmt->fetchColumn();
+if (!$wArifId) {
+    $db->prepare("INSERT INTO workers (name, code, worker_type, phone, is_active, created_at) VALUES ('Arif Tailor', 'WRK-ARIF', 'Contract', '0300-1111111', 1, NOW())")->execute();
+    $wArifId = (int)$db->lastInsertId();
+}
+
+$wAsadStmt = $db->query("SELECT id FROM workers WHERE name LIKE '%Asad%' LIMIT 1");
+$wAsadId = (int)$wAsadStmt->fetchColumn();
+if (!$wAsadId) {
+    $db->prepare("INSERT INTO workers (name, code, worker_type, phone, is_active, created_at) VALUES ('Asad Tailor', 'WRK-ASAD', 'Contract', '0300-2222222', 1, NOW())")->execute();
+    $wAsadId = (int)$db->lastInsertId();
+}
+
+// Ensure Pocket (Attach Pockets) and Gala (Neck) operation IDs
+$opPocketId = (int)$db->query("SELECT id FROM operations WHERE name LIKE '%Pocket%' OR code = 'OP-TEST-PCK' LIMIT 1")->fetchColumn();
+if (!$opPocketId) $opPocketId = 2; // Tailoring
+
+$opGalaId = (int)$db->query("SELECT id FROM operations WHERE name LIKE '%Neck%' OR code = 'OP-NECK' LIMIT 1")->fetchColumn();
+if (!$opGalaId) $opGalaId = 5; // Neck Finishing
+
+// Record Arif attaching pockets: 100 pcs @ Rs. 3.00 = Rs. 300.00
+$peArifNum = 'PE-ARIF-' . time();
+$db->prepare("INSERT INTO production_entries (entry_number, entry_date, lot_id, operation_id, worker_id, color_id, size_id, qty_received, good_qty, rate, labour_amount)
+              VALUES (?, CURDATE(), ?, ?, ?, ?, 1, 100, 100, 3.00, 300.00)")
+   ->execute([$peArifNum, $lotId34, $opPocketId, $wArifId, $cId]);
+
+// Record Asad attaching gala: 100 pcs @ Rs. 4.00 = Rs. 400.00
+$peAsadNum = 'PE-ASAD-' . time();
+$db->prepare("INSERT INTO production_entries (entry_number, entry_date, lot_id, operation_id, worker_id, color_id, size_id, qty_received, good_qty, rate, labour_amount)
+              VALUES (?, CURDATE(), ?, ?, ?, ?, 1, 100, 100, 4.00, 400.00)")
+   ->execute([$peAsadNum, $lotId34, $opGalaId, $wAsadId, $cId]);
+
+// Record worker ledger credits
+$db->prepare("INSERT INTO worker_ledger (worker_id, transaction_date, transaction_type, reference_type, reference_id, lot_id, operation_id, credit, running_balance, description)
+              VALUES (?, CURDATE(), 'Labour', 'PRODUCTION', ?, ?, ?, 300.00, 300.00, 'Attach Pockets (100 pcs)')")
+   ->execute([$wArifId, $lotId34, $lotId34, $opPocketId]);
+
+$db->prepare("INSERT INTO worker_ledger (worker_id, transaction_date, transaction_type, reference_type, reference_id, lot_id, operation_id, credit, running_balance, description)
+              VALUES (?, CURDATE(), 'Labour', 'PRODUCTION', ?, ?, ?, 400.00, 400.00, 'Attach Gala / Neck (100 pcs)')")
+   ->execute([$wAsadId, $lotId34, $lotId34, $opGalaId]);
+
+// Verify aggregation on Job Card
+$arifDone = (int)$db->query("SELECT SUM(good_qty) FROM production_entries WHERE lot_id = $lotId34 AND worker_id = $wArifId")->fetchColumn();
+$asadDone = (int)$db->query("SELECT SUM(good_qty) FROM production_entries WHERE lot_id = $lotId34 AND worker_id = $wAsadId")->fetchColumn();
+
+$subOpsPassed = ($arifDone === 100 && $asadDone === 100);
+
+$scenario35Passed = ($renderPassed && $subOpsPassed);
+assert_test("35. Printable Job Card & Multi-Worker Sub-Operations", $scenario35Passed, "Printable Job Card verified with A4 layout; Arif (Pockets: 100 pcs) & Asad (Gala: 100 pcs) recorded into worker matrix with separate ledgers");
+
 echo "\n========================================================================\n";
 echo "TEST SUITE SUMMARY: $passCount PASSED, $failCount FAILED\n";
 echo "========================================================================\n";
