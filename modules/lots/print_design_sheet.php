@@ -125,7 +125,7 @@ $designDisplay = $lot['design_number'] ?: '39/26';
 
         @page {
             size: A4 portrait;
-            margin: 4mm 6mm 4mm 6mm;
+            margin: 4mm 5mm 4mm 5mm;
         }
         * {
             box-sizing: border-box;
@@ -136,14 +136,14 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             background: #f8fafc;
             color: #000;
             font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', 'Urdu Typesetting', Tahoma, 'Segoe UI', sans-serif;
-            font-size: 13.5px;
-            line-height: 1.8;
+            font-size: 12px;
+            line-height: 1.45;
             direction: rtl;
             text-align: right;
             padding: 0;
             margin: 0;
         }
-        /* Latin elements, monospace codes & numeric data: use sans/monospace for zero clipping */
+        /* Latin elements, monospace codes & numeric data */
         .font-latin,
         .badge-boxed,
         .badge-lot-dark,
@@ -152,63 +152,64 @@ $designDisplay = $lot['design_number'] ?: '39/26';
         span[dir="ltr"],
         div[dir="ltr"] {
             font-family: Consolas, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif !important;
-            line-height: 1.35;
+            line-height: 1.25;
         }
 
         .sheet-container {
             max-width: 860px;
             margin: 10px auto;
             background: #fff;
-            padding: 8px 10px;
+            padding: 6px 8px;
             box-shadow: 0 4px 14px rgba(0,0,0,0.08);
             border-radius: 4px;
         }
         .form-section {
-            border: 2px solid #000;
-            padding: 7px 9px;
-            margin-bottom: 7px;
+            border: 1.5px solid #000;
+            padding: 4px 6px;
+            margin-bottom: 5px;
             position: relative;
             background: #fff;
+            page-break-inside: avoid;
         }
         /* Header Table */
         .header-grid-tbl {
             width: 100%;
             table-layout: fixed;
             border-collapse: collapse;
-            border-bottom: 2px solid #000;
-            margin-bottom: 6px;
+            border-bottom: 1.5px solid #000;
+            margin-bottom: 4px;
         }
         .header-grid-tbl td {
-            padding: 3px 4px;
+            padding: 2px 3px;
             vertical-align: middle;
-            font-size: 14px;
-            line-height: 1.8;
+            font-size: 12.5px;
+            line-height: 1.45;
         }
         .lbl {
             font-weight: 700;
             color: #000;
-            margin-left: 3px;
-            font-size: 14.5px;
+            margin-left: 2px;
+            font-size: 13px;
         }
         .val {
             color: #000;
         }
         .badge-boxed {
             border: 1px solid #000;
-            padding: 1px 6px;
+            padding: 1px 5px;
             background: #f8fafc;
             border-radius: 2px;
             font-weight: 700;
-            font-size: 12px;
+            font-size: 11px;
             display: inline-block;
         }
         .badge-lot-dark {
             background: #000;
             color: #fff;
-            padding: 2px 7px;
+            padding: 1px 6px;
             border-radius: 2px;
             font-weight: 800;
-            font-size: 12px;
+            font-size: 11px;
             display: inline-block;
             letter-spacing: 0.5px;
             vertical-align: middle;
@@ -217,13 +218,13 @@ $designDisplay = $lot['design_number'] ?: '39/26';
         .perforated-cut-divider {
             position: relative;
             text-align: center;
-            margin: 9px 0;
-            height: 16px;
+            margin: 5px 0;
+            height: 14px;
         }
         .perforated-cut-divider .cut-line {
-            border-top: 2px dashed #444;
+            border-top: 1.5px dashed #444;
             position: absolute;
-            top: 8px;
+            top: 7px;
             left: 0;
             right: 0;
         }
@@ -231,36 +232,36 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             position: relative;
             display: inline-block;
             background: #fff;
-            padding: 0 14px;
-            font-size: 12px;
+            padding: 0 10px;
+            font-size: 10.5px;
             font-weight: 700;
             color: #333;
-            line-height: 16px;
+            line-height: 14px;
         }
         /* Grids and Tables */
         .tbl-grid {
             width: 100%;
             border-collapse: collapse;
-            font-size: 13px;
+            font-size: 11.5px;
             text-align: center;
             margin-bottom: 0;
         }
         .tbl-grid th, .tbl-grid td {
             border: 1px solid #000;
-            padding: 4px 4px;
+            padding: 2.5px 3px;
             vertical-align: middle;
-            line-height: 1.7;
+            line-height: 1.4;
         }
         .tbl-grid th {
             background-color: #f1f3f5 !important;
             font-weight: 700;
-            font-size: 13.5px;
+            font-size: 12px;
             color: #000;
         }
         /* Prototype Sweater Card */
         .sweater-card {
             border: 1px solid #000;
-            padding: 6px;
+            padding: 4px;
             text-align: center;
             background: #fafafa;
             border-radius: 2px;
@@ -271,16 +272,16 @@ $designDisplay = $lot['design_number'] ?: '39/26';
         }
         .sketch-svg {
             max-width: 100%;
-            height: 94px;
+            height: 68px;
             margin: 0 auto;
             display: block;
         }
         .sketch-meta {
             border-top: 1px dashed #777;
-            padding-top: 3px;
-            margin-top: 3px;
-            font-size: 11px;
-            line-height: 1.4;
+            padding-top: 2px;
+            margin-top: 2px;
+            font-size: 9.5px;
+            line-height: 1.25;
             text-align: right;
             font-family: Consolas, 'Segoe UI', sans-serif;
         }
@@ -294,20 +295,20 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             width: 100%;
         }
         .tbl-cutting th {
-            font-size: 12px;
-            padding: 4px 1px;
+            font-size: 10.5px;
+            padding: 2px 1px;
             word-break: break-word;
             white-space: normal;
-            line-height: 1.35;
+            line-height: 1.2;
         }
         .tbl-cutting td {
-            padding: 3px;
-            height: 38px;
+            padding: 2px;
+            height: 25px;
         }
         .copy-footer-note {
-            font-size: 11px;
+            font-size: 9.5px;
             color: #444;
-            margin-top: 4px;
+            margin-top: 3px;
             font-weight: 700;
             text-align: left;
             direction: ltr;
@@ -317,19 +318,24 @@ $designDisplay = $lot['design_number'] ?: '39/26';
         .no-print-bar {
             background: #0f172a;
             color: #fff;
-            padding: 10px 18px;
+            padding: 8px 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         }
         @media print {
-            body { 
+            @page {
+                size: A4 portrait;
+                margin: 4mm 5mm 4mm 5mm;
+            }
+            html, body { 
                 background: #fff !important; 
-                font-size: 13px !important;
+                font-size: 11px !important;
                 padding: 0 !important;
                 margin: 0 !important;
+                height: 100% !important;
             }
             .no-print-bar { display: none !important; }
             .sheet-container { 
@@ -340,19 +346,46 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                 box-shadow: none !important;
             }
             .form-section { 
-                page-break-inside: avoid;
-                margin-bottom: 6px !important; 
-                padding: 5px 7px !important;
+                page-break-inside: avoid !important;
+                margin-bottom: 4px !important; 
+                padding: 3px 5px !important;
             }
             .perforated-cut-divider { 
-                margin: 7px 0 !important; 
+                margin: 3px 0 !important; 
+                height: 12px !important;
+            }
+            .perforated-cut-divider .cut-label {
+                font-size: 9px !important;
+                line-height: 12px !important;
+                padding: 0 8px !important;
+            }
+            .tbl-grid th, .tbl-grid td {
+                padding: 1.5px 2px !important;
+                font-size: 10.5px !important;
+                line-height: 1.3 !important;
+            }
+            .tbl-cutting th {
+                font-size: 9.5px !important;
+                padding: 1.5px 1px !important;
+            }
+            .tbl-cutting td {
+                height: 22px !important;
+                padding: 1px !important;
+            }
+            .sketch-svg {
+                height: 60px !important;
             }
             .badge-lot-dark {
                 background: #000 !important;
                 color: #fff !important;
             }
-            .tbl-cutting td {
-                height: 36px !important;
+            .header-grid-tbl td {
+                padding: 1.5px 2px !important;
+                font-size: 11.5px !important;
+                line-height: 1.3 !important;
+            }
+            .lbl {
+                font-size: 12px !important;
             }
         }
     </style>
@@ -389,7 +422,6 @@ $designDisplay = $lot['design_number'] ?: '39/26';
     <!-- ======================================================================= -->
     <?php if (in_array($copyFilter, ['all', 'operator'])): ?>
     <div class="form-section">
-        <!-- Section Header Table (Full Width 28% for Lot# prevents any truncation) -->
         <table class="header-grid-tbl">
             <tr>
                 <td style="width: 20%;">
@@ -413,7 +445,6 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             </tr>
         </table>
 
-        <!-- Body Columns: Right=Color table (42%), Center=Measurements (34%), Left=Prototype sketch (24%) -->
         <div class="row g-2 align-items-stretch">
             <!-- Col 1 (Right): Color Table with Piece Breakdown -->
             <div class="col-5">
@@ -429,14 +460,14 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                     <tbody>
                         <?php foreach ($colorSummary as $cs): ?>
                             <tr>
-                                <td class="fw-bold font-monospace fs-6" dir="ltr"><?= clean($cs['color_code']) ?></td>
+                                <td class="fw-bold font-monospace" dir="ltr"><?= clean($cs['color_code']) ?></td>
                                 <td>
                                     <div class="d-flex align-items-center justify-content-center gap-1">
-                                        <span class="rounded-circle border d-inline-block" style="width: 9px; height: 9px; background: <?= clean($cs['hex_code']) ?>;"></span>
+                                        <span class="rounded-circle border d-inline-block" style="width: 7px; height: 7px; background: <?= clean($cs['hex_code']) ?>;"></span>
                                         <span class="fw-bold"><?= clean($cs['color_name']) ?></span>
                                     </div>
                                 </td>
-                                <td class="fw-bold fs-6" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
+                                <td class="fw-bold" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
                                 <td class="fw-semibold" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
                             </tr>
                         <?php endforeach; ?>
@@ -447,8 +478,8 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                     <tfoot>
                         <tr class="table-light fw-bold">
                             <td colspan="2" class="text-start pe-2">کل تعداد:</td>
-                            <td class="fs-6" dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
-                            <td class="fs-6" dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
+                            <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
+                            <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
                         </tr>
                     </tfoot>
                 </table>
@@ -474,22 +505,22 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                     <tbody>
                         <tr>
                             <td class="fw-bold">لمبائی</td>
-                            <td class="fw-bold fs-6" dir="ltr"><?= clean($plaLen) ?></td>
+                            <td class="fw-bold" dir="ltr"><?= clean($plaLen) ?></td>
                             <td dir="ltr">41</td><td></td><td></td><td></td>
                         </tr>
                         <tr>
                             <td class="fw-bold">چوڑائی</td>
-                            <td class="fw-bold fs-6" dir="ltr"><?= clean($plaWid) ?></td>
+                            <td class="fw-bold" dir="ltr"><?= clean($plaWid) ?></td>
                             <td dir="ltr">45</td><td></td><td></td><td></td>
                         </tr>
                         <tr>
                             <td class="fw-bold">بارڈر</td>
-                            <td class="fw-bold fs-6" dir="ltr"><?= clean($plaBor) ?></td>
+                            <td class="fw-bold" dir="ltr"><?= clean($plaBor) ?></td>
                             <td dir="ltr">46</td><td></td><td></td><td></td>
                         </tr>
                         <tr>
                             <td class="fw-bold">منٹ</td>
-                            <td class="fw-bold fs-6" dir="ltr"><?= clean($samMins) ?></td>
+                            <td class="fw-bold" dir="ltr"><?= clean($samMins) ?></td>
                             <td dir="ltr">43</td><td></td><td></td><td></td>
                         </tr>
                     </tbody>
@@ -525,8 +556,8 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                     </svg>
 
                     <div class="d-flex justify-content-between align-items-center px-1 my-1">
-                        <span class="fw-bold">منٹ: <strong class="badge-boxed" dir="ltr"><?= clean($samMins) ?></strong></span>
-                        <span class="badge bg-light text-dark border font-latin" style="font-size: 10px;"><?= clean($lot['product_name']) ?></span>
+                        <span class="small fw-bold">منٹ: <strong class="badge-boxed" dir="ltr"><?= clean($samMins) ?></strong></span>
+                        <span class="badge bg-light text-dark border font-latin" style="font-size: 9px;"><?= clean($lot['product_name']) ?></span>
                     </div>
 
                     <div class="sketch-meta">
@@ -596,11 +627,11 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                     <tbody>
                         <?php foreach ($colorSummary as $cs): ?>
                             <tr>
-                                <td class="fw-bold font-monospace fs-6" dir="ltr"><?= clean($cs['color_code']) ?></td>
+                                <td class="fw-bold font-monospace" dir="ltr"><?= clean($cs['color_code']) ?></td>
                                 <td class="fw-bold"><?= clean($cs['color_name']) ?></td>
                                 <td class="fw-semibold" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
                                 <td class="fw-semibold" dir="ltr"><?= (int)$cs['total_qty'] * 2 ?></td>
-                                <td class="fw-bold fs-6" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
+                                <td class="fw-bold" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
                             </tr>
                         <?php endforeach; ?>
                         <?php for ($i = count($colorSummary); $i < 4; $i++): ?>
@@ -610,9 +641,9 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                     <tfoot>
                         <tr class="table-light fw-bold">
                             <td colspan="2" class="text-start pe-2">ٹوٹل:</td>
-                            <td class="fs-6" dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
-                            <td class="fs-6" dir="ltr"><?= (int)$lot['total_pieces'] * 2 ?></td>
-                            <td class="fs-6" dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
+                            <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
+                            <td dir="ltr"><?= (int)$lot['total_pieces'] * 2 ?></td>
+                            <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
                         </tr>
                     </tfoot>
                 </table>
@@ -627,10 +658,10 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                                 <tr><th colspan="2">پلا پیمائش</th></tr>
                             </thead>
                             <tbody>
-                                <tr><td>لمبائی</td><td class="fw-bold fs-6" dir="ltr"><?= clean($plaLen) ?></td></tr>
-                                <tr><td>چوڑائی</td><td class="fw-bold fs-6" dir="ltr"><?= clean($plaWid) ?></td></tr>
-                                <tr><td>بارڈر</td><td class="fw-bold fs-6" dir="ltr"><?= clean($plaBor) ?></td></tr>
-                                <tr><td>منٹ</td><td class="fw-bold fs-6" dir="ltr"><?= clean($samMins) ?></td></tr>
+                                <tr><td>لمبائی</td><td class="fw-bold" dir="ltr"><?= clean($plaLen) ?></td></tr>
+                                <tr><td>چوڑائی</td><td class="fw-bold" dir="ltr"><?= clean($plaWid) ?></td></tr>
+                                <tr><td>بارڈر</td><td class="fw-bold" dir="ltr"><?= clean($plaBor) ?></td></tr>
+                                <tr><td>منٹ</td><td class="fw-bold" dir="ltr"><?= clean($samMins) ?></td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -640,10 +671,10 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                                 <tr><th colspan="2">بازو پیمائش</th></tr>
                             </thead>
                             <tbody>
-                                <tr><td>لمبائی</td><td class="fw-bold fs-6" dir="ltr"><?= clean($bazoLen) ?></td></tr>
-                                <tr><td>چوڑائی</td><td class="fw-bold fs-6" dir="ltr"><?= clean($bazoWid) ?></td></tr>
-                                <tr><td>بارڈر</td><td class="fw-bold fs-6" dir="ltr"><?= clean($bazoBor) ?></td></tr>
-                                <tr><td>منٹ</td><td class="fw-bold fs-6" dir="ltr"><?= clean($samMins) ?></td></tr>
+                                <tr><td>لمبائی</td><td class="fw-bold" dir="ltr"><?= clean($bazoLen) ?></td></tr>
+                                <tr><td>چوڑائی</td><td class="fw-bold" dir="ltr"><?= clean($bazoWid) ?></td></tr>
+                                <tr><td>بارڈر</td><td class="fw-bold" dir="ltr"><?= clean($bazoBor) ?></td></tr>
+                                <tr><td>منٹ</td><td class="fw-bold" dir="ltr"><?= clean($samMins) ?></td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -708,7 +739,7 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                 <!-- Row 1: Pieces Cut -->
                 <tr>
                     <td rowspan="2" class="p-1 text-center" style="vertical-align: middle; background: #fafafa;">
-                        <svg class="sketch-svg" style="height: 58px; width: 100%; max-width: 60px;" viewBox="0 0 160 140" fill="none">
+                        <svg class="sketch-svg" style="height: 50px; width: 100%; max-width: 55px;" viewBox="0 0 160 140" fill="none">
                             <path d="M45 32 L115 32 L120 115 L40 115 Z" stroke="#000" stroke-width="2" fill="#fff"/>
                             <path d="M65 32 L80 56 L95 32 Z" stroke="#000" stroke-width="1.5" fill="#fff"/>
                             <path d="M45 32 L15 75 L28 80 L50 50" stroke="#000" stroke-width="1.5" fill="#fff"/>
@@ -716,16 +747,16 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                         </svg>
                     </td>
                     <?php foreach ($garmentTypes as $gt): ?>
-                        <td style="height: 38px;"></td>
+                        <td></td>
                     <?php endforeach; ?>
-                    <td class="fw-bold" style="height: 38px;"></td>
+                    <td class="fw-bold"></td>
                 </tr>
                 <!-- Row 2: Secondary Notes or Colors -->
                 <tr>
                     <?php foreach ($garmentTypes as $gt): ?>
-                        <td style="height: 38px;"></td>
+                        <td></td>
                     <?php endforeach; ?>
-                    <td style="height: 38px;"></td>
+                    <td></td>
                 </tr>
             </tbody>
         </table>
@@ -785,14 +816,14 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             <tbody>
                 <?php foreach ($colorSummary as $cs): ?>
                     <tr>
-                        <td class="fw-bold font-monospace fs-6" dir="ltr"><?= clean($cs['color_code']) ?> (<?= clean($cs['color_name']) ?>)</td>
+                        <td class="fw-bold font-monospace" dir="ltr"><?= clean($cs['color_code']) ?> (<?= clean($cs['color_name']) ?>)</td>
                         <td></td>
                         <td></td>
                         <td></td>
                         <td></td>
                         <td class="fw-semibold" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
                         <td class="fw-semibold" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
-                        <td class="fw-bold fs-6" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
+                        <td class="fw-bold" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
                     </tr>
                 <?php endforeach; ?>
                 <?php for ($i = count($colorSummary); $i < 4; $i++): ?>
@@ -805,9 +836,9 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                 <tr class="table-light fw-bold">
                     <td class="text-start pe-2">ٹوٹل پیسز:</td>
                     <td></td><td></td><td></td><td></td>
-                    <td class="fs-6" dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
-                    <td class="fs-6" dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
-                    <td class="fs-6" dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
+                    <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
+                    <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
+                    <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
                 </tr>
             </tfoot>
         </table>
