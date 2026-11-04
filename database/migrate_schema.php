@@ -81,4 +81,87 @@ if (!in_array('shift', $peCols)) {
     echo "[✓] Added shift to production_entries\n";
 }
 
+// 5. Dynamic Garment Types Table (Jersey, Coat, Full Zip, Gold Gala, etc.)
+$db->exec("CREATE TABLE IF NOT EXISTS garment_types (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(80) NOT NULL,
+    code VARCHAR(30) NULL,
+    sort_order INT DEFAULT 0,
+    is_active TINYINT(1) DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)");
+echo "[✓] Verified garment_types table\n";
+
+$gCount = (int)$db->query("SELECT COUNT(*) FROM garment_types")->fetchColumn();
+if ($gCount === 0) {
+    $defaultGarmentTypes = [
+        ['name' => 'جرسی', 'code' => 'JERSEY', 'order' => 1],
+        ['name' => 'کوٹ', 'code' => 'COAT', 'order' => 2],
+        ['name' => 'فل زپ', 'code' => 'FULL_ZIP', 'order' => 3],
+        ['name' => 'ہاف زپ', 'code' => 'HALF_ZIP', 'order' => 4],
+        ['name' => 'فل زپ گول گلا', 'code' => 'FULL_ZIP_GG', 'order' => 5],
+        ['name' => 'ہاف زپ گول گلا', 'code' => 'HALF_ZIP_GG', 'order' => 6],
+        ['name' => 'سینڈو فل زپ', 'code' => 'SANDO_FZ', 'order' => 7],
+        ['name' => 'سینڈو ہاف زپ', 'code' => 'SANDO_HZ', 'order' => 8],
+        ['name' => 'سینڈو', 'code' => 'SANDO', 'order' => 9],
+        ['name' => 'جیکٹ', 'code' => 'JACKET', 'order' => 10],
+    ];
+    $insG = $db->prepare("INSERT INTO garment_types (name, code, sort_order) VALUES (?, ?, ?)");
+    foreach ($defaultGarmentTypes as $gt) {
+        $insG->execute([$gt['name'], $gt['code'], $gt['order']]);
+    }
+    echo "[✓] Seeded default garment types\n";
+}
+
+// 6. Designs Table Enhancements (Prototype Sketch, Machine Type, Measurements)
+$dCols = $db->query("SHOW COLUMNS FROM designs")->fetchAll(PDO::FETCH_COLUMN);
+if (!in_array('sketch_image', $dCols)) {
+    $db->exec("ALTER TABLE designs ADD COLUMN sketch_image VARCHAR(255) NULL AFTER name");
+    echo "[✓] Added sketch_image to designs\n";
+}
+if (!in_array('machine_type', $dCols)) {
+    $db->exec("ALTER TABLE designs ADD COLUMN machine_type VARCHAR(60) DEFAULT 'CMS 430' AFTER sketch_image");
+    echo "[✓] Added machine_type to designs\n";
+}
+if (!in_array('measurements_json', $dCols)) {
+    $db->exec("ALTER TABLE designs ADD COLUMN measurements_json JSON NULL AFTER machine_type");
+    echo "[✓] Added measurements_json to designs\n";
+}
+
+// 7. Product Elements Multipliers & Flags
+$peCols = $db->query("SHOW COLUMNS FROM product_elements")->fetchAll(PDO::FETCH_COLUMN);
+if (!in_array('multiplier', $peCols)) {
+    $db->exec("ALTER TABLE product_elements ADD COLUMN multiplier INT NOT NULL DEFAULT 1 AFTER quantity");
+    echo "[✓] Added multiplier to product_elements\n";
+}
+if (!in_array('tracks_at_operator', $peCols)) {
+    $db->exec("ALTER TABLE product_elements ADD COLUMN tracks_at_operator TINYINT(1) DEFAULT 1 AFTER multiplier");
+    echo "[✓] Added tracks_at_operator to product_elements\n";
+}
+if (!in_array('default_sam_minutes', $peCols)) {
+    $db->exec("ALTER TABLE product_elements ADD COLUMN default_sam_minutes DECIMAL(6,2) DEFAULT 0.00 AFTER tracks_at_operator");
+    echo "[✓] Added default_sam_minutes to product_elements\n";
+}
+
+// 8. Operator Element Entries Table (Stage 1 without colors)
+$db->exec("CREATE TABLE IF NOT EXISTS lot_operator_element_entries (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    lot_id INT NOT NULL,
+    element_id INT NOT NULL,
+    entry_date DATE NOT NULL,
+    operator1_id INT NULL,
+    operator1_pieces INT DEFAULT 0,
+    operator2_id INT NULL,
+    operator2_pieces INT DEFAULT 0,
+    total_pieces INT GENERATED ALWAYS AS (operator1_pieces + operator2_pieces) STORED,
+    required_pieces INT NOT NULL,
+    minutes_spent DECIMAL(8,2) DEFAULT 0.00,
+    notes VARCHAR(255) NULL,
+    created_by INT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (lot_id) REFERENCES lots(id) ON DELETE CASCADE,
+    FOREIGN KEY (element_id) REFERENCES product_elements(id)
+)");
+echo "[✓] Verified lot_operator_element_entries table\n";
+
 echo "[SUCCESS] Schema migration complete.\n";

@@ -121,6 +121,10 @@ $activeNav = $activeNav ?? 'dashboard';
             <i class="bi bi-palette-fill"></i>
             <span>Products & Variants</span>
         </a>
+        <a href="<?= BASE_URL ?>modules/settings/garment_types.php" class="nav-link <?= $activeNav === 'settings_garment_types' ? 'active' : '' ?>">
+            <i class="bi bi-scissors"></i>
+            <span>Garment Types (کٹائی اقسام)</span>
+        </a>
         <a href="<?= BASE_URL ?>modules/settings/index.php" class="nav-link <?= $activeNav === 'settings' ? 'active' : '' ?>">
             <i class="bi bi-sliders"></i>
             <span>Factory Settings & Users</span>

@@ -343,6 +343,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <i class="bi bi-box-seam-fill"></i>
                             <span>Pack in Workflow</span>
                         </a>
+                        <a href="<?= BASE_URL ?>modules/lots/print_design_sheet.php?id=<?= $lot['id'] ?>" target="_blank" class="btn btn-warning btn-sm d-inline-flex align-items-center gap-1 shadow-sm fw-bold">
+                            <i class="bi bi-file-earmark-text-fill"></i>
+                            <span>Lot Design Sheet (لاٹ پرچہ)</span>
+                        </a>
+                        <a href="<?= BASE_URL ?>modules/lots/jobcard.php?id=<?= $lot['id'] ?>" class="btn btn-info btn-sm d-inline-flex align-items-center gap-1 shadow-sm fw-bold text-dark">
+                            <i class="bi bi-clipboard2-data-fill"></i>
+                            <span>Digital Job Card (جاب کارڈ)</span>
+                        </a>
                         <a href="<?= BASE_URL ?>modules/lots/print_job_sheet.php?id=<?= $lot['id'] ?>" target="_blank" class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1">
                             <i class="bi bi-printer"></i>
                             <span>Job Sheet</span>
