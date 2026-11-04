@@ -42,7 +42,11 @@ $stmt->execute([$lotId]);
 $lot = $stmt->fetch();
 
 if (!$lot) {
-    redirect('modules/lots/index.php', 'Please select a valid production lot.', 'warning');
+    if (!empty($activeLots)) {
+        redirect('modules/lots/jobcard.php?id=' . (int)$activeLots[0]['id'], 'Lot #' . $lotId . ' was not found or closed. Loaded active lot #' . clean($activeLots[0]['lot_number']) . '.', 'info');
+    } else {
+        redirect('modules/lots/index.php', 'Please select a valid production lot.', 'warning');
+    }
 }
 
 // Fetch Variants with Color Codes & Sizes
@@ -131,7 +135,7 @@ $workflowSteps = $stepStmt->fetchAll();
 $peMatrixStmt = $db->prepare("SELECT pe.worker_id, w.name AS worker_name, w.code AS worker_code,
                                      pe.operation_id, o.name AS op_name,
                                      SUM(pe.good_qty) AS pieces,
-                                     SUM(pe.total_labour_amount) AS labour_rs,
+                                     SUM(pe.labour_amount) AS labour_rs,
                                      SUM(pe.total_minutes) AS minutes,
                                      MAX(pe.entry_date) AS last_date
                               FROM production_entries pe
