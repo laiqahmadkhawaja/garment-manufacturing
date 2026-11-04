@@ -34,6 +34,11 @@ try {
     }
     echo "[✓] Database tables and seed data created successfully!\n";
 
+    // Run schema migrations for enhanced capabilities
+    if (file_exists(__DIR__ . '/migrate_schema.php')) {
+        require_once __DIR__ . '/migrate_schema.php';
+    }
+
     $tables = ['users', 'roles', 'departments', 'operations', 'workflow_templates', 'products', 'product_elements', 'designs', 'design_elements', 'colors', 'sizes', 'workers', 'materials', 'customers', 'warehouses'];
     foreach ($tables as $tbl) {
         $stmt = $pdo->query("SELECT COUNT(*) AS cnt FROM `$tbl`");
