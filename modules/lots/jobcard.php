@@ -131,6 +131,18 @@ $stepStmt = $db->prepare("SELECT lws.*, o.name AS op_name, o.code AS op_code, o.
 $stepStmt->execute([$lotId]);
 $workflowSteps = $stepStmt->fetchAll();
 
+if (empty($workflowSteps)) {
+    $fallbackStmt = $db->prepare("SELECT o.id AS operation_id, o.sequence, o.name AS op_name, o.code AS op_code, o.default_rate, o.estimated_minutes,
+                                         COALESCE((SELECT SUM(good_qty) FROM production_entries WHERE lot_id = ? AND operation_id = o.id), 0) AS total_done,
+                                         COALESCE((SELECT SUM(rejected_qty) FROM production_entries WHERE lot_id = ? AND operation_id = o.id), 0) AS total_rejected,
+                                         COALESCE((SELECT SUM(rework_qty) FROM production_entries WHERE lot_id = ? AND operation_id = o.id), 0) AS total_rework
+                                  FROM operations o
+                                  WHERE o.parent_id IS NULL AND o.is_active = 1
+                                  ORDER BY o.sequence ASC");
+    $fallbackStmt->execute([$lotId, $lotId, $lotId]);
+    $workflowSteps = $fallbackStmt->fetchAll();
+}
+
 // Fetch Worker Submissions Matrix for this lot
 $peMatrixStmt = $db->prepare("SELECT pe.worker_id, w.name AS worker_name, w.code AS worker_code,
                                      pe.operation_id, o.name AS op_name,
@@ -298,8 +310,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <th>Target</th>
                                         <th>Op 1</th>
                                         <th>Op 2</th>
-                                        <th>Total</th>
-                                        <th>Balance</th>
+                                        <th>Operator Total</th>
+                                        <th>Cut (کٹ گئے)</th>
+                                        <th>Cut Balance</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -311,6 +324,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         $pending = max(0, $req - $done);
                                         if ($pending > 0) $allElementsComplete = false;
                                     ?>
+                                        <?php 
+                                            $cutPcs = (int)($oe['cut_pieces'] ?? 0);
+                                            $cutPending = max(0, $done - $cutPcs);
+                                        ?>
                                         <tr class="<?= $pending > 0 ? 'table-warning' : '' ?>">
                                             <td class="text-start fw-bold text-dark">
                                                 <?= clean($oe['element_name']) ?>
@@ -319,8 +336,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             <td class="fw-semibold"><?= (int)$oe['operator1_pieces'] ?></td>
                                             <td class="fw-semibold"><?= (int)$oe['operator2_pieces'] ?></td>
                                             <td class="fw-bold text-primary"><?= $done ?></td>
-                                            <td class="fw-bold <?= $pending > 0 ? 'text-danger bg-danger-subtle' : 'text-success' ?>">
-                                                <?= $pending > 0 ? ($pending . ' pending ⚠️') : '✓ Done' ?>
+                                            <td class="fw-bold text-success"><?= $cutPcs ?></td>
+                                            <td class="fw-bold <?= $cutPending > 0 ? 'text-danger' : 'text-success' ?>">
+                                                <?= $cutPending > 0 ? ($cutPending . ' to cut') : '✓ All Cut' ?>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -359,6 +377,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <th>Rejected</th>
                                         <th>Pending</th>
                                         <th>Progress</th>
+                                        <th class="text-end">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -369,6 +388,15 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         $pending = max(0, $req - $done);
                                         $pct = $req > 0 ? round(($done / $req) * 100) : 0;
                                         if ($pct > 100) $pct = 100;
+
+                                        $opNameLower = strtolower($ws['op_name']);
+                                        if (strpos($opNameLower, 'operat') !== false || strpos($opNameLower, 'knitt') !== false) {
+                                            $btnMode = 'operator_initial';
+                                        } elseif (strpos($opNameLower, 'cut') !== false) {
+                                            $btnMode = 'cutting';
+                                        } else {
+                                            $btnMode = 'matrix';
+                                        }
                                     ?>
                                         <tr>
                                             <td class="fw-bold text-muted"><?= (int)$ws['sequence'] ?></td>
@@ -387,13 +415,22 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             <td class="fw-bold <?= $pending > 0 ? 'text-danger' : 'text-muted' ?>">
                                                 <?= $pending > 0 ? $pending : '0' ?>
                                             </td>
-                                            <td style="min-width: 110px;">
+                                            <td style="min-width: 90px;">
                                                 <div class="d-flex align-items-center gap-2">
                                                     <div class="progress flex-grow-1" style="height: 6px;">
                                                         <div class="progress-bar <?= $pct >= 100 ? 'bg-success' : 'bg-primary' ?>" style="width: <?= $pct ?>%;"></div>
                                                     </div>
                                                     <span class="small fw-semibold <?= $pct >= 100 ? 'text-success' : 'text-muted' ?>"><?= $pct ?>%</span>
                                                 </div>
+                                            </td>
+                                            <td class="text-end">
+                                                <?php if ($pending > 0): ?>
+                                                    <a href="<?= BASE_URL ?>modules/production/index.php?lot_id=<?= $lotId ?>&operation_id=<?= $ws['operation_id'] ?>&mode=<?= $btnMode ?>" class="btn btn-sm btn-outline-warning py-0 px-2 fw-semibold" style="font-size: 0.78rem;">
+                                                        <i class="bi bi-plus-lg me-1"></i> Record
+                                                    </a>
+                                                <?php else: ?>
+                                                    <span class="badge bg-success-subtle text-success"><i class="bi bi-check-circle-fill"></i> Complete</span>
+                                                <?php endif; ?>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>

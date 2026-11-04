@@ -14,6 +14,7 @@ $db = get_db();
 
 $preselectedLotId = (int)($_GET['lot_id'] ?? 0);
 $preselectedOpId = (int)($_GET['operation_id'] ?? 0);
+$preselectedMode = trim($_GET['mode'] ?? '');
 $error = '';
 
 // Handle Production Work Submission
@@ -193,6 +194,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $db->prepare("UPDATE lot_workflow_steps SET status = 'In Progress' WHERE lot_id = ? AND operation_id = ? AND status = 'Pending'")
                        ->execute([$lotId, $operationId]);
 
+                    // Sync lot_operator_element_entries
+                    $elementsData = $_POST['elements'] ?? [];
+                    if (!empty($elementsData)) {
+                        foreach ($elementsData as $elId => $vals) {
+                            $elId = (int)$elId;
+                            $req = (int)($vals['required'] ?? $lotRow['total_pieces']);
+                            $p1 = max(0, (int)($vals['op1_pieces'] ?? 0));
+                            $p2 = max(0, (int)($vals['op2_pieces'] ?? 0));
+                            // Enforce rule: element amounts cannot exceed planned amount
+                            if ($p1 + $p2 > $req) {
+                                $excess = ($p1 + $p2) - $req;
+                                $p2 = max(0, $p2 - $excess);
+                                if ($p1 + $p2 > $req) {
+                                    $p1 = $req;
+                                }
+                            }
+
+                            $chkEl = $db->prepare("SELECT id FROM lot_operator_element_entries WHERE lot_id = ? AND element_id = ?");
+                            $chkEl->execute([$lotId, $elId]);
+                            $existingElId = $chkEl->fetchColumn();
+
+                            if ($existingElId) {
+                                $db->prepare("UPDATE lot_operator_element_entries SET entry_date = ?, operator1_id = ?, operator1_pieces = ?, operator2_id = ?, operator2_pieces = ?, required_pieces = ? WHERE id = ?")
+                                   ->execute([$entryDate, $dayWorkerId, $p1, $nightWorkerId, $p2, $req, $existingElId]);
+                            } else {
+                                $db->prepare("INSERT INTO lot_operator_element_entries (lot_id, element_id, entry_date, operator1_id, operator1_pieces, operator2_id, operator2_pieces, required_pieces, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                                   ->execute([$lotId, $elId, $entryDate, $dayWorkerId, $p1, $nightWorkerId, $p2, $req, $_SESSION['user_id'] ?? null]);
+                            }
+                        }
+                    } else {
+                        $peList = $db->prepare("SELECT id, multiplier, quantity FROM product_elements WHERE product_id = (SELECT product_id FROM lots WHERE id = ?)");
+                        $peList->execute([$lotId]);
+                        foreach ($peList->fetchAll() as $pel) {
+                            $m = (int)($pel['multiplier'] ?: $pel['quantity'] ?: 1);
+                            $elId = (int)$pel['id'];
+                            $req = $m * (int)$lotRow['total_pieces'];
+                            $p1 = $m * $dayTotalPcs;
+                            $p2 = $m * $nightTotalPcs;
+
+                            $chkEl = $db->prepare("SELECT id FROM lot_operator_element_entries WHERE lot_id = ? AND element_id = ?");
+                            $chkEl->execute([$lotId, $elId]);
+                            $existingElId = $chkEl->fetchColumn();
+
+                            if ($existingElId) {
+                                $db->prepare("UPDATE lot_operator_element_entries SET entry_date = ?, operator1_id = ?, operator1_pieces = ?, operator2_id = ?, operator2_pieces = ?, required_pieces = ? WHERE id = ?")
+                                   ->execute([$entryDate, $dayWorkerId, $p1, $nightWorkerId, $p2, $req, $existingElId]);
+                            } else {
+                                $db->prepare("INSERT INTO lot_operator_element_entries (lot_id, element_id, entry_date, operator1_id, operator1_pieces, operator2_id, operator2_pieces, required_pieces, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                                   ->execute([$lotId, $elId, $entryDate, $dayWorkerId, $p1, $nightWorkerId, $p2, $req, $_SESSION['user_id'] ?? null]);
+                            }
+                        }
+                    }
+
+
                     $db->commit();
                     $msg = "Operator Initial Production recorded: Day Operator ($dayTotalPcs pcs)";
                     if ($shiftType === 'Double Shift') {
@@ -206,6 +261,189 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+
+    // =========================================================================
+    // 1.5 CUTTING PRODUCTION ENTRY MODE (WHOLE SWEATERS OR INDIVIDUAL ELEMENTS)
+    // =========================================================================
+    if ($entryMode === 'cutting') {
+        $lotId = (int)($_POST['lot_id'] ?? 0);
+        $operationId = (int)($_POST['operation_id'] ?? 0);
+        $workerId = (int)($_POST['cutting_worker_id'] ?? $_POST['worker_id'] ?? 0);
+        $entryDate = trim($_POST['entry_date'] ?? date('Y-m-d'));
+        $shift = in_array($_POST['cutting_shift'] ?? $_POST['shift'] ?? '', ['Day Shift', 'Night Shift', 'General']) ? ($_POST['cutting_shift'] ?? $_POST['shift']) : 'Day Shift';
+        $rate = (float)($_POST['rate'] ?? 0.00);
+        $wholePieces = (int)($_POST['cutting_whole_pieces'] ?? 0);
+        $elementsCut = $_POST['elements_cut'] ?? [];
+        $notes = trim($_POST['notes'] ?? 'Cutting master element output');
+
+        if ($lotId <= 0 || $workerId <= 0) {
+            $error = 'Please select Lot and Cutting Master.';
+        } else {
+            $lStmt = $db->prepare("SELECT lot_number, total_pieces, single_size_id, status FROM lots WHERE id = ?");
+            $lStmt->execute([$lotId]);
+            $lotRow = $lStmt->fetch();
+
+            if (!$lotRow) {
+                $error = 'Selected lot not found.';
+            } else {
+                if ($operationId <= 0) {
+                    $opCutStmt = $db->query("SELECT id FROM operations WHERE name LIKE '%Cut%' LIMIT 1");
+                    $operationId = (int)$opCutStmt->fetchColumn() ?: 1;
+                }
+
+                if ($rate <= 0) {
+                    $rStmt = $db->prepare("SELECT default_rate FROM operations WHERE id = ?");
+                    $rStmt->execute([$operationId]);
+                    $rate = (float)$rStmt->fetchColumn() ?: 5.00;
+                }
+
+                $db->beginTransaction();
+                try {
+                    // Update cut_pieces in lot_operator_element_entries
+                    $totalCutSum = 0;
+                    $elementsCount = 0;
+                    foreach ($elementsCut as $elId => $cutQty) {
+                        $elId = (int)$elId;
+                        $cutQty = (int)$cutQty;
+                        if ($cutQty <= 0) continue;
+                        $totalCutSum += $cutQty;
+                        $elementsCount++;
+
+                        $chkEl = $db->prepare("SELECT id, cut_pieces FROM lot_operator_element_entries WHERE lot_id = ? AND element_id = ?");
+                        $chkEl->execute([$lotId, $elId]);
+                        $existingEl = $chkEl->fetch();
+
+                        if ($existingEl) {
+                            $upEl = $db->prepare("UPDATE lot_operator_element_entries SET cut_pieces = cut_pieces + ? WHERE id = ?");
+                            $upEl->execute([$cutQty, $existingEl['id']]);
+                        } else {
+                            $peMultStmt = $db->prepare("SELECT multiplier, quantity FROM product_elements WHERE id = ?");
+                            $peMultStmt->execute([$elId]);
+                            $multRow = $peMultStmt->fetch();
+                            $mult = $multRow ? (int)($multRow['multiplier'] ?: $multRow['quantity']) : 1;
+                            $req = $mult * (int)$lotRow['total_pieces'];
+
+                            $insEl = $db->prepare("INSERT INTO lot_operator_element_entries 
+                                (lot_id, element_id, entry_date, required_pieces, cut_pieces, notes, created_by)
+                                VALUES (?, ?, ?, ?, ?, 'Cutting direct entry', ?)");
+                            $insEl->execute([$lotId, $elId, $entryDate, $req, $cutQty, $_SESSION['user_id'] ?? null]);
+                        }
+                    }
+
+                    // Color x Size Matrix Processing for Cutting
+                    $matrixData = $_POST['matrix'] ?? [];
+                    $matrixTotalGood = 0;
+                    $matrixTotalRej = 0;
+                    $matrixTotalRew = 0;
+                    $matrixTotalLabour = 0.00;
+                    $matrixSavedCount = 0;
+                    $lastPeId = null;
+
+                    $cutMins = (float)($_POST['cutting_minutes'] ?? 2.0);
+                    $cutMinRate = (float)($_POST['cutting_min_rate'] ?? 2.50);
+
+                    if (!empty($matrixData)) {
+                        $baseDocNum = generate_doc_number('PE-CUT-', 'production_entries', 'entry_number');
+                        $seq = 1;
+
+                        foreach ($matrixData as $cId => $sizes) {
+                            $cId = (int)$cId;
+                            if (!is_array($sizes)) continue;
+
+                            foreach ($sizes as $sId => $vals) {
+                                $sId = (int)$sId;
+                                $good = isset($vals['good']) ? (int)$vals['good'] : 0;
+                                $rej = isset($vals['rejected']) ? (int)$vals['rejected'] : 0;
+                                $rew = isset($vals['rework']) ? (int)$vals['rework'] : 0;
+
+                                if ($good <= 0 && $rej <= 0 && $rew <= 0) continue;
+
+                                $received = $good + $rej + $rew;
+                                $cellLabour = round($good * $rate, 2);
+                                $minsTotal = round($good * $cutMins, 2);
+                                $entryNum = $baseDocNum . '-' . $seq++;
+
+                                $insPE = $db->prepare("INSERT INTO production_entries 
+                                    (entry_number, entry_date, lot_id, operation_id, worker_id, shift, color_id, size_id, qty_received, good_qty, rejected_qty, rework_qty, rate, minutes_per_piece, worker_minute_rate, total_minutes, labour_amount, notes, created_by)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                $insPE->execute([
+                                    $entryNum, $entryDate, $lotId, $operationId, $workerId, $shift,
+                                    $cId, $sId, $received, $good, $rej, $rew,
+                                    $rate, $cutMins, $cutMinRate, $minsTotal, $cellLabour,
+                                    $notes, $_SESSION['user_id'] ?? null
+                                ]);
+                                $lastPeId = (int)$db->lastInsertId();
+
+                                // Track Rejections with specific color & size
+                                if ($rej > 0) {
+                                    $db->prepare("INSERT INTO production_rejections 
+                                        (production_entry_id, lot_id, operation_id, worker_id, color_id, size_id, quantity, reason, created_by)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, 'Cutting defect / damage', ?)")
+                                       ->execute([$lastPeId, $lotId, $operationId, $workerId, $cId, $sId, $rej, $_SESSION['user_id'] ?? null]);
+                                }
+
+                                // Track Rework with specific color & size
+                                if ($rew > 0) {
+                                    $db->prepare("INSERT INTO production_rework 
+                                        (production_entry_id, lot_id, operation_id, worker_id, color_id, size_id, quantity, rework_notes, created_by)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, 'Recut / touchup required', ?)")
+                                       ->execute([$lastPeId, $lotId, $operationId, $workerId, $cId, $sId, $rew, $_SESSION['user_id'] ?? null]);
+                                }
+
+                                $matrixTotalGood += $good;
+                                $matrixTotalRej += $rej;
+                                $matrixTotalRew += $rew;
+                                $matrixTotalLabour += $cellLabour;
+                                $matrixSavedCount++;
+                            }
+                        }
+
+                        if ($matrixSavedCount > 0) {
+                            $wholePieces = $matrixTotalGood;
+                            $labourAmount = $matrixTotalLabour;
+                        }
+                    }
+
+                    // Fallback single whole pieces entry if matrix was empty
+                    if ($matrixSavedCount === 0 && $wholePieces > 0) {
+                        $labourAmount = round($wholePieces * $rate, 2);
+                        $entryNum = generate_doc_number('PE-CUT-', 'production_entries', 'entry_number');
+
+                        $insPE = $db->prepare("INSERT INTO production_entries 
+                            (entry_number, entry_date, lot_id, operation_id, worker_id, shift, color_id, size_id, qty_received, good_qty, rate, minutes_per_piece, worker_minute_rate, total_minutes, labour_amount, notes, created_by)
+                            VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                        $insPE->execute([$entryNum, $entryDate, $lotId, $operationId, $workerId, $shift, $lotRow['single_size_id'], $wholePieces, $wholePieces, $rate, $cutMins, $cutMinRate, round($wholePieces * $cutMins, 2), $labourAmount, $notes, $_SESSION['user_id'] ?? null]);
+                        $lastPeId = (int)$db->lastInsertId();
+                    }
+
+                    // Credit Cutting Master Ledger
+                    if ($labourAmount > 0 && $lastPeId) {
+                        $wStmt = $db->prepare("SELECT COALESCE((SELECT running_balance FROM worker_ledger WHERE worker_id = ? ORDER BY id DESC LIMIT 1), (SELECT opening_balance FROM workers WHERE id = ?))");
+                        $wStmt->execute([$workerId, $workerId]);
+                        $lastBal = (float)$wStmt->fetchColumn();
+                        $newBal = $lastBal + $labourAmount;
+
+                        $db->prepare("INSERT INTO worker_ledger (worker_id, transaction_date, transaction_type, reference_type, reference_id, lot_id, operation_id, debit, credit, running_balance, description, created_by)
+                                      VALUES (?, ?, 'Labour', 'PRODUCTION_ENTRY', ?, ?, ?, 0.00, ?, ?, ?, ?)")
+                           ->execute([$workerId, $entryDate, $lastPeId, $lotId, $operationId, $labourAmount, $newBal, "Cutting master batch on Lot #{$lotRow['lot_number']} ($wholePieces pcs @ Rs. $rate)", $_SESSION['user_id'] ?? null]);
+                    }
+
+                    if ($lotRow['status'] === 'Draft') {
+                        $db->prepare("UPDATE lots SET status = 'In Production' WHERE id = ?")->execute([$lotId]);
+                    }
+                    $db->prepare("UPDATE lot_workflow_steps SET status = 'In Progress' WHERE lot_id = ? AND operation_id = ? AND status = 'Pending'")
+                       ->execute([$lotId, $operationId]);
+
+                    $db->commit();
+                    redirect("modules/lots/jobcard.php?id=$lotId", "Cutting entry saved successfully! $wholePieces pieces cut (Labour: " . format_currency($labourAmount) . ").");
+                } catch (Exception $e) {
+                    $db->rollBack();
+                    $error = 'Error saving cutting entry: ' . $e->getMessage();
+                }
+            }
+        }
+    }
+
 
     $entryDate = trim($_POST['entry_date'] ?? date('Y-m-d'));
     $lotId = (int)($_POST['lot_id'] ?? 0);
@@ -913,6 +1151,30 @@ $workers = $db->query("SELECT w.*, dep.name AS department_name
                        WHERE w.is_active = 1 
                        ORDER BY w.name ASC")->fetchAll();
 
+// Fetch cutting-specific workers for cutting master selector
+$cuttingWorkers = $db->query("SELECT w.*, dep.name AS department_name 
+                              FROM workers w 
+                              LEFT JOIN departments dep ON w.department_id = dep.id 
+                              WHERE w.is_active = 1 
+                                AND (dep.name LIKE '%Cut%' OR w.name LIKE '%Cut%' OR w.code LIKE '%CUT%' 
+                                     OR w.id IN (SELECT worker_id FROM worker_operations wo JOIN operations o ON wo.operation_id = o.id WHERE o.name LIKE '%Cut%'))
+                              ORDER BY w.name ASC")->fetchAll();
+if (empty($cuttingWorkers)) {
+    $cuttingWorkers = $workers;
+}
+
+// Fetch cutting-specific workers for cutting master selector
+$cuttingWorkers = $db->query("SELECT w.*, dep.name AS department_name 
+                              FROM workers w 
+                              LEFT JOIN departments dep ON w.department_id = dep.id 
+                              WHERE w.is_active = 1 
+                                AND (dep.name LIKE '%Cut%' OR w.name LIKE '%Cut%' OR w.code LIKE '%CUT%' 
+                                     OR w.id IN (SELECT worker_id FROM worker_operations wo JOIN operations o ON wo.operation_id = o.id WHERE o.name LIKE '%Cut%'))
+                              ORDER BY w.name ASC")->fetchAll();
+if (empty($cuttingWorkers)) {
+    $cuttingWorkers = $workers;
+}
+
 // Recent 10 entries for live history panel
 $recentEntries = $db->query("SELECT pe.*, l.lot_number, o.name AS op_name, w.name AS worker_name, c.name AS color_name, s.name AS size_name 
                             FROM production_entries pe 
@@ -971,13 +1233,16 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <!-- Mode Switcher -->
                         <div class="btn-group btn-group-sm" role="group">
                             <button type="button" class="btn btn-primary fw-semibold" id="btnModeOperator">
-                                <i class="bi bi-person-workspace me-1"></i> 🧵 1. Operator Entry (پہلا پروسیس)
+                                <i class="bi bi-person-workspace me-1"></i> 🧵 1. Operator (اعضاء و شفٹ)
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary fw-semibold" id="btnModeCutting">
+                                <i class="bi bi-scissors me-1"></i> ✂️ 2. Cutting (کٹنگ)
                             </button>
                             <button type="button" class="btn btn-outline-secondary fw-semibold" id="btnModeMatrix">
-                                <i class="bi bi-grid-3x3-gap-fill me-1"></i> ⚡ 2. Downstream Matrix (اگلے آپریشنز)
+                                <i class="bi bi-grid-3x3-gap-fill me-1"></i> ⚡ 3. Fast Matrix (دیگر مراحل)
                             </button>
                             <button type="button" class="btn btn-outline-secondary fw-semibold" id="btnModeSingle">
-                                <i class="bi bi-list-check me-1"></i> 3. Single Item
+                                <i class="bi bi-list-check me-1"></i> 4. Single Item
                             </button>
                         </div>
                     </div>
@@ -987,34 +1252,52 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <input type="hidden" name="entry_mode" id="pe_entry_mode" value="operator_initial">
 
                             <!-- ================================================================= -->
+                            <!-- UNIVERSAL TOP FIELDS: ENTRY DATE, PRODUCTION LOT, STAGE OPERATION -->
+                            <!-- ================================================================= -->
+                            <div class="row g-3 mb-3">
+                                <div class="col-12 col-md-3">
+                                    <label class="form-label fw-semibold">Entry Date *</label>
+                                    <input type="date" name="entry_date" id="pe_entry_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                                </div>
+                                <div class="col-12 col-md-5">
+                                    <label class="form-label fw-semibold">Select Production Lot *</label>
+                                    <select name="lot_id" id="pe_lot_id" class="form-select fw-bold text-primary">
+                                        <option value="">-- Choose Factory Lot --</option>
+                                        <?php foreach ($lots as $l): ?>
+                                            <option value="<?= $l['id'] ?>" <?= ($preselectedLotId === $l['id'] || (isset($_POST['lot_id']) && $_POST['lot_id'] == $l['id'])) ? 'selected' : '' ?>>
+                                                LOT #<?= clean($l['lot_number']) ?> — <?= clean($l['product_name']) ?> (<?= $l['design_number'] ? 'Design #' . clean($l['design_number']) : 'No Design' ?>) [<?= $l['total_pieces'] ?> pcs]
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label fw-semibold">Stage Operation *</label>
+                                    <select name="operation_id" id="pe_operation_id" class="form-select fw-bold text-dark">
+                                        <option value="">-- Select Lot First --</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Universal Lot Info Banner -->
+                            <div id="opLotInfoCard" class="alert alert-light border shadow-sm p-3 rounded-3 mb-3 d-none">
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                    <div>
+                                        <span class="fs-5 fw-bold text-dark me-2" id="opLotTitle">LOT #---</span>
+                                        <span class="badge bg-primary" id="opLotPiecesBadge">0 pcs planned</span>
+                                        <span class="badge bg-secondary ms-1" id="opLotShiftBadge">Single Shift</span>
+                                        <span class="badge bg-info-subtle text-info-emphasis ms-1" id="opLotSizeBadge">Single Size</span>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="small fw-semibold text-muted">Current Stage:</span>
+                                        <span class="badge bg-dark fs-6" id="opStageBadge">Initial Output</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ================================================================= -->
                             <!-- SECTION 0: OPERATOR INITIAL PRODUCTION RUN (NO COLORS NEEDED) -->
                             <!-- ================================================================= -->
                             <div id="operatorSection" class="mt-2">
-                                <!-- Top Row: Date & Lot Selector -->
-                                <div class="row g-3 mb-3">
-                                    <div class="col-12 col-md-3">
-                                        <label class="form-label fw-semibold">Entry Date *</label>
-                                        <input type="date" name="entry_date" id="op_entry_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
-                                    </div>
-                                    <div class="col-12 col-md-5">
-                                        <label class="form-label fw-semibold">Select Production Lot *</label>
-                                        <select name="lot_id" id="op_lot_id" class="form-select fw-bold text-primary">
-                                            <option value="">-- Choose Factory Lot --</option>
-                                            <?php foreach ($lots as $l): ?>
-                                                <option value="<?= $l['id'] ?>" <?= ($preselectedLotId === $l['id'] || (isset($_POST['lot_id']) && $_POST['lot_id'] == $l['id'])) ? 'selected' : '' ?>>
-                                                    LOT #<?= clean($l['lot_number']) ?> — <?= clean($l['product_name']) ?> (<?= $l['design_number'] ? 'Design #' . clean($l['design_number']) : 'No Design' ?>) [<?= $l['total_pieces'] ?> pcs]
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                    <div class="col-12 col-md-4">
-                                        <label class="form-label fw-semibold">Initial Stage Operation *</label>
-                                        <select name="operation_id" id="op_operation_id" class="form-select fw-bold text-dark">
-                                            <option value="">-- Select Lot First --</option>
-                                        </select>
-                                    </div>
-                                </div>
-
                                 <!-- Hidden state inputs for operator initial entry -->
                                 <input type="hidden" name="shift_type" id="op_shift_type" value="Single Shift">
                                 <input type="hidden" name="size_mode" id="op_size_mode" value="Single Size">
@@ -1025,22 +1308,6 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <input type="hidden" name="night_minutes_per_piece" id="op_night_minutes_hidden" value="0.0">
                                 <input type="hidden" name="night_worker_min_rate" id="op_night_min_rate_hidden" value="2.50">
                                 <input type="hidden" name="night_rate" id="op_night_rate_hidden" value="0.00">
-
-                                <!-- Lot Info Banner -->
-                                <div id="opLotInfoCard" class="alert alert-light border shadow-sm p-3 rounded-3 mb-3 d-none">
-                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-                                        <div>
-                                            <span class="fs-5 fw-bold text-dark me-2" id="opLotTitle">LOT #---</span>
-                                            <span class="badge bg-primary" id="opLotPiecesBadge">0 pcs planned</span>
-                                            <span class="badge bg-secondary ms-1" id="opLotShiftBadge">Single Shift</span>
-                                            <span class="badge bg-info-subtle text-info-emphasis ms-1" id="opLotSizeBadge">Single Size</span>
-                                        </div>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <span class="small fw-semibold text-muted">First Stage:</span>
-                                            <span class="badge bg-dark fs-6" id="opStageBadge">Initial Output</span>
-                                        </div>
-                                    </div>
-                                </div>
 
                                 <!-- Placeholder if no lot selected -->
                                 <div id="operatorPlaceholder" class="p-5 text-center text-muted border border-dashed rounded-3 mb-3">
@@ -1183,40 +1450,187 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         ✓ Total Pieces: <span id="lblOpSumTotal">0</span> / <span id="lblOpLotPlanned">0</span> pcs
                                     </div>
 
+                                    <!-- GARMENT ELEMENTS BREAKDOWN TABLE (WHOLE SWEATER OR INDIVIDUAL PIECES) -->
+                                    <div id="opElementsSection" class="border rounded-3 p-3 bg-white mb-3 shadow-sm">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <h6 class="fw-bold mb-0 text-dark">
+                                                <i class="bi bi-puzzle-fill text-primary me-1"></i> Garment Elements Breakdown (حصوں کی تقسیم — سویٹر یا الگ الگ حصے)
+                                            </h6>
+                                            <span class="badge bg-light text-muted border small">Auto-synced with Operator Pieces</span>
+                                        </div>
+                                        <div class="table-responsive">
+                                            <table class="table table-bordered align-middle text-center mb-0" id="opElementsTable" style="font-size: 0.85rem;">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th class="text-start">Element (حصہ)</th>
+                                                        <th>Target</th>
+                                                        <th>☀️ Day Pieces</th>
+                                                        <th>🌙 Night Pieces</th>
+                                                        <th>Total</th>
+                                                        <th>Balance</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="opElementsTbody">
+                                                    <tr><td colspan="6" class="text-muted">Select a lot to view element details...</td></tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
                                     <!-- Action Button -->
                                     <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold shadow-sm" id="btnSubmitOperatorEntry">
-                                        <i class="bi bi-check2-circle me-1"></i> Save Operator Initial Production Entry (آپریٹر انٹری محفوظ کریں)
+                                        <i class="bi bi-check2-circle me-1"></i> Save Operator Production Entry (آپریٹر انٹری محفوظ کریں)
                                     </button>
                                 </div>
+                            </div>
+
+                            <!-- ================================================================= -->
+                            <!-- SECTION 1: CUTTING MASTER PRODUCTION ENTRY (STAGE 2) -->
+                            <!-- ================================================================= -->
+                            <div id="cuttingSection" class="mt-2 d-none">
+                                <div class="card border border-warning-subtle bg-light p-3 rounded-3 mb-3 shadow-sm">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <span class="fw-bold text-dark fs-6"><i class="bi bi-scissors text-danger me-1"></i> ✂️ Stage 2: Cutting Master Production (کٹنگ ماسٹر کی انٹری)</span>
+                                        <span class="badge bg-warning-subtle text-warning-emphasis border" id="cutRateBadge">Rate: Rs. 5.00/pc</span>
+                                    </div>
+                                    <div class="row g-3 align-items-center mb-3">
+                                        <div class="col-12 col-md-5">
+                                            <label class="form-label small fw-semibold text-muted mb-1">Cutting Master (کٹنگ ماسٹر) *</label>
+                                            <select name="cutting_worker_id" id="cut_worker_id" class="form-select fw-semibold">
+                                                <option value="">-- Choose Cutting Master --</option>
+                                                <?php foreach ($cuttingWorkers as $w): ?>
+                                                    <option value="<?= $w['id'] ?>" data-minrate="<?= $w['rate_per_minute'] ?>" <?= (stripos($w['name'], 'Cut') !== false ? 'selected' : '') ?>><?= clean($w['name']) ?> (<?= clean($w['code']) ?>)</option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <div class="col-12 col-md-3">
+                                            <label class="form-label small fw-semibold text-muted mb-1">Shift (شفٹ)</label>
+                                            <select name="cutting_shift" id="cut_shift" class="form-select fw-semibold">
+                                                <option value="Day Shift">☀️ Day Shift</option>
+                                                <option value="Night Shift">🌙 Night Shift</option>
+                                                <option value="General">General</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-12 col-md-4">
+                                            <label class="form-label small fw-semibold text-muted mb-1">Whole Sweaters Cut (مکمل سویٹر کٹنگ) *</label>
+                                            <div class="input-group">
+                                                <input type="number" name="cutting_whole_pieces" id="cut_whole_pieces" class="form-control form-control-lg fw-bold text-center text-primary fs-4" min="0" placeholder="0">
+                                                <span class="input-group-text fw-bold">pcs</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Real-time SAM Minutes & Rate Calculation Scheme for Cutting -->
+                                    <div class="p-3 bg-white border rounded-2 mb-3 shadow-sm">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label class="form-label small fw-bold text-dark mb-0">
+                                                <i class="bi bi-calculator text-primary me-1"></i> Rate & Time Scheme for Specific Lot (ریئل ٹائم ریٹ و وقت کا تعین)
+                                            </label>
+                                            <span class="badge bg-light text-muted border small" id="lblCutFormula">Minutes × Rate/min = Piece Rate</span>
+                                        </div>
+                                        <div class="row g-3">
+                                            <div class="col-12 col-md-4">
+                                                <label class="form-label small fw-semibold text-muted mb-1">وقت فی پیس (SAM Minutes)</label>
+                                                <div class="input-group input-group-sm">
+                                                    <input type="number" name="cutting_minutes" id="cut_minutes" class="form-control fw-bold text-center text-primary" step="0.1" min="0" value="2.0">
+                                                    <span class="input-group-text px-2 small text-muted">min</span>
+                                                </div>
+                                                <div class="form-text small" style="font-size: 10px;">لاٹ کٹنگ کا معیاری وقت</div>
+                                            </div>
+                                            <div class="col-12 col-md-4">
+                                                <label class="form-label small fw-semibold text-muted mb-1">کاریگر ریٹ فی منٹ (Rs/min)</label>
+                                                <div class="input-group input-group-sm">
+                                                    <span class="input-group-text px-2 small text-muted">Rs</span>
+                                                    <input type="number" name="cutting_min_rate" id="cut_min_rate" class="form-control fw-bold text-center text-success" step="0.05" min="0" value="2.50">
+                                                    <span class="input-group-text px-2 small text-muted">/m</span>
+                                                </div>
+                                                <div class="form-text small" style="font-size: 10px;">ماسٹر پروفائل ریٹ فی منٹ</div>
+                                            </div>
+                                            <div class="col-12 col-md-4">
+                                                <label class="form-label small fw-semibold text-muted mb-1">فائنل پیس ریٹ (Piece Rate)</label>
+                                                <div class="input-group input-group-sm">
+                                                    <span class="input-group-text px-2 small text-muted">Rs</span>
+                                                    <input type="number" name="rate" id="cut_rate" class="form-control fw-bold text-end text-dark" step="0.25" min="0" value="5.00">
+                                                    <span class="input-group-text px-2 small text-muted">/pc</span>
+                                                </div>
+                                                <div class="form-text small" style="font-size: 10px;">ریئل ٹائم خودکار حساب</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                                        <span class="text-muted small">Earned Labour: <strong class="text-success fs-5 ms-1" id="lblCutLabour">Rs. 0.00</strong></span>
+                                        <span class="small text-muted" id="cutLotPlannedNotice">Batch: 0 pcs</span>
+                                    </div>
+                                </div>
+
+                                <!-- Color x Size Cutting Distribution Matrix -->
+                                <div class="card border border-warning-subtle rounded-3 bg-white mb-3 shadow-sm" id="cutMatrixCard">
+                                    <div class="card-header bg-warning-subtle border-warning-subtle d-flex flex-wrap justify-content-between align-items-center gap-2 py-2">
+                                        <div>
+                                            <h6 class="fw-bold mb-0 text-dark">
+                                                <i class="bi bi-grid-3x3-gap-fill text-warning me-1"></i> Color & Size Cutting Distribution (رنگ اور سائز وائز کٹنگ کی گنتی)
+                                            </h6>
+                                            <span class="small text-muted">🟢 کٹ گئے (Good) | 🔴 خراب پیس (Rejected) | 🟡 ری ورک (Rework)</span>
+                                        </div>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <button type="button" class="btn btn-sm btn-outline-dark fw-bold" id="btnFillAllCutting">
+                                                <i class="bi bi-lightning-charge-fill text-warning me-1"></i> ⚡ 1-Click Fill Planned
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnClearCutting">Clear</button>
+                                        </div>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <div class="table-responsive">
+                                            <table class="table table-bordered table-sm align-middle text-center mb-0" id="cutMatrixTable" style="font-size: 0.85rem;">
+                                                <thead class="table-light" id="cutMatrixThead">
+                                                    <tr><th>Select a lot to load color & size distribution...</th></tr>
+                                                </thead>
+                                                <tbody id="cutMatrixTbody">
+                                                </tbody>
+                                                <tfoot class="table-light fw-bold" id="cutMatrixTfoot">
+                                                </tfoot>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Elements Cutting Progress Table -->
+                                <div class="card border p-3 rounded-3 bg-white mb-3 shadow-sm">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="fw-bold mb-0 text-dark">
+                                            <i class="bi bi-puzzle-fill text-danger me-1"></i> Garment Elements Cutting Progress (اعضاء کی کٹنگ - موصولہ بمقابلہ کٹ گئے)
+                                        </h6>
+                                        <span class="small text-muted">Enter whole sweaters above OR edit individual parts below</span>
+                                    </div>
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered align-middle text-center mb-0" id="cutElementsTable" style="font-size: 0.85rem;">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th class="text-start">Element (حصہ)</th>
+                                                    <th>Ratio</th>
+                                                    <th>Ready from Operator</th>
+                                                    <th>Already Cut</th>
+                                                    <th style="width: 140px;">Now Cutting (اب کٹ رہے ہیں)</th>
+                                                    <th>Remaining to Cut</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="cutElementsTbody">
+                                                <tr><td colspan="6" class="text-muted">Select a lot to view cutting progress...</td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="btn btn-warning btn-lg w-100 fw-bold shadow-sm" id="btnSubmitCutting">
+                                    <i class="bi bi-scissors me-1"></i> Save Cutting Production Entry (کٹنگ انٹری محفوظ کریں)
+                                </button>
                             </div>
 
                             <!-- ================================================================= -->
                             <!-- DOWNSTREAM FIELDS CONTAINER (FOR MATRIX & SINGLE ITEM MODES) -->
                             <!-- ================================================================= -->
                             <div id="downstreamCommonFields" class="row g-3 d-none">
-                                <!-- Common Fields: Date, Lot, Operation -->
-                                <div class="col-12 col-md-3">
-                                    <label class="form-label fw-semibold">Entry Date *</label>
-                                    <input type="date" name="matrix_entry_date" id="pe_entry_date" class="form-control" value="<?= date('Y-m-d') ?>">
-                                </div>
-                                <div class="col-12 col-md-5">
-                                    <label class="form-label fw-semibold">Select Lot Number *</label>
-                                    <select name="matrix_lot_id" id="pe_lot_id" class="form-select fw-bold text-primary">
-                                        <option value="">-- Choose Factory Lot --</option>
-                                        <?php foreach ($lots as $l): ?>
-                                            <option value="<?= $l['id'] ?>" <?= ($preselectedLotId === $l['id'] || (isset($_POST['lot_id']) && $_POST['lot_id'] == $l['id'])) ? 'selected' : '' ?>>
-                                                LOT #<?= clean($l['lot_number']) ?> — <?= clean($l['product_name']) ?> (<?= $l['design_number'] ? 'Design #' . clean($l['design_number']) : 'No Design' ?>) [<?= $l['total_pieces'] ?> pcs]
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div class="col-12 col-md-4">
-                                    <label class="form-label fw-semibold">Select Operation *</label>
-                                    <select name="matrix_operation_id" id="pe_operation_id" class="form-select fw-bold text-dark">
-                                        <option value="">-- Select Lot First --</option>
-                                    </select>
-                                </div>
-
                                 <!-- Worker & Piece Rate Scheme -->
                                 <div class="col-12 col-md-5">
                                     <div class="d-flex justify-content-between align-items-center mb-1">
@@ -1532,6 +1946,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const lblCalculatedPieceRate = document.getElementById('lblCalculatedPieceRate');
     const lblTotalBatchTime = document.getElementById('lblTotalBatchTime');
     const preselectedOpId = <?= (int)$preselectedOpId ?>;
+    const preselectedMode = <?= json_encode($preselectedMode) ?>;
 
     // Mode Toggle Elements (3 Modes)
     const btnModeOperator = document.getElementById('btnModeOperator');
@@ -1543,9 +1958,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const matrixSection = document.getElementById('matrixSection');
     const singleSection = document.getElementById('singleSection');
 
-    // Operator Mode Elements
-    const opLotSelect = document.getElementById('op_lot_id');
-    const opOperationSelect = document.getElementById('op_operation_id');
+    // Operator Mode Elements (mapped to unified top selectors)
+    const opLotSelect = lotSelect;
+    const opOperationSelect = opSelect;
     const opPlaceholder = document.getElementById('operatorPlaceholder');
     const opActiveCards = document.getElementById('operatorActiveCards');
     const opLotInfoCard = document.getElementById('opLotInfoCard');
@@ -1585,52 +2000,494 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let currentOpLotData = null;
 
+    const btnModeCutting = document.getElementById('btnModeCutting');
+    const cuttingSection = document.getElementById('cuttingSection');
+    const cutWorker = document.getElementById('cut_worker_id');
+    const cutWholePcs = document.getElementById('cut_whole_pieces');
+    const lblCutLabour = document.getElementById('lblCutLabour');
+    const cutElementsTbody = document.getElementById('cutElementsTbody');
+    const opElementsTbody = document.getElementById('opElementsTbody');
+
     function switchMode(mode) {
         modeInput.value = mode;
-        if (mode === 'operator_initial') {
-            btnModeOperator.className = 'btn btn-primary fw-semibold';
-            btnModeMatrix.className = 'btn btn-outline-secondary fw-semibold';
-            btnModeSingle.className = 'btn btn-outline-secondary fw-semibold';
 
+        if (btnModeOperator) btnModeOperator.className = 'btn btn-outline-secondary fw-semibold';
+        if (btnModeCutting) btnModeCutting.className = 'btn btn-outline-secondary fw-semibold';
+        if (btnModeMatrix) btnModeMatrix.className = 'btn btn-outline-secondary fw-semibold';
+        if (btnModeSingle) btnModeSingle.className = 'btn btn-outline-secondary fw-semibold';
+
+        const goodInput = document.getElementById('pe_good_qty');
+        const varSelect = document.getElementById('pe_variant_key');
+        if (goodInput) goodInput.removeAttribute('required');
+        if (varSelect) varSelect.removeAttribute('required');
+
+        if (mode === 'operator_initial') {
+            if (btnModeOperator) btnModeOperator.className = 'btn btn-primary fw-semibold';
             operatorSection.classList.remove('d-none');
+            if (cuttingSection) cuttingSection.classList.add('d-none');
             downstreamCommonFields.classList.add('d-none');
             matrixSection.classList.add('d-none');
             singleSection.classList.add('d-none');
 
-            if (lotSelect.value && !opLotSelect.value) {
-                opLotSelect.value = lotSelect.value;
-                opLotSelect.dispatchEvent(new Event('change'));
+            // Select operator operation in dropdown if available
+            for (let opt of opSelect.options) {
+                const t = opt.textContent.toLowerCase();
+                if (t.includes('operat') || t.includes('knitt')) {
+                    opSelect.value = opt.value;
+                    break;
+                }
+            }
+        } else if (mode === 'cutting') {
+            if (btnModeCutting) btnModeCutting.className = 'btn btn-warning fw-bold text-dark';
+            operatorSection.classList.add('d-none');
+            if (cuttingSection) cuttingSection.classList.remove('d-none');
+            downstreamCommonFields.classList.add('d-none');
+            matrixSection.classList.add('d-none');
+            singleSection.classList.add('d-none');
+
+            // Select cutting operation in dropdown if available
+            let cuttingOpVal = null;
+            for (let opt of opSelect.options) {
+                if (opt.textContent.toLowerCase().includes('cut')) {
+                    opSelect.value = opt.value;
+                    cuttingOpVal = opt.value;
+                    break;
+                }
+            }
+
+            updateCuttingRate(false);
+
+            if (lotSelect.value && cuttingOpVal) {
+                loadCuttingMatrixGrid(lotSelect.value, cuttingOpVal);
+            }
+
+            if (currentOpLotData && currentOpLotData.elements) {
+                renderCuttingElements(currentOpLotData.elements, parseInt(cutWholePcs ? cutWholePcs.value : 0) || 0);
             }
         } else if (mode === 'matrix') {
-            btnModeOperator.className = 'btn btn-outline-secondary fw-semibold';
-            btnModeMatrix.className = 'btn btn-primary fw-semibold';
-            btnModeSingle.className = 'btn btn-outline-secondary fw-semibold';
-
+            if (btnModeMatrix) btnModeMatrix.className = 'btn btn-primary fw-semibold';
             operatorSection.classList.add('d-none');
+            if (cuttingSection) cuttingSection.classList.add('d-none');
             downstreamCommonFields.classList.remove('d-none');
             matrixSection.classList.remove('d-none');
             singleSection.classList.add('d-none');
 
-            if (opLotSelect.value && !lotSelect.value) {
-                lotSelect.value = opLotSelect.value;
-                lotSelect.dispatchEvent(new Event('change'));
+            // If current selected operation is operator or cutting, switch to first downstream
+            const curText = opSelect.options[opSelect.selectedIndex] ? opSelect.options[opSelect.selectedIndex].textContent.toLowerCase() : '';
+            if (curText.includes('operat') || curText.includes('knitt') || curText.includes('cut')) {
+                for (let opt of opSelect.options) {
+                    const t = opt.textContent.toLowerCase();
+                    if (opt.value && !t.includes('operat') && !t.includes('knitt') && !t.includes('cut')) {
+                        opSelect.value = opt.value;
+                        opSelect.dispatchEvent(new Event('change'));
+                        break;
+                    }
+                }
             }
         } else if (mode === 'single') {
-            btnModeOperator.className = 'btn btn-outline-secondary fw-semibold';
-            btnModeMatrix.className = 'btn btn-outline-secondary fw-semibold';
-            btnModeSingle.className = 'btn btn-primary fw-semibold';
-
+            if (btnModeSingle) btnModeSingle.className = 'btn btn-primary fw-semibold';
             operatorSection.classList.add('d-none');
+            if (cuttingSection) cuttingSection.classList.add('d-none');
             downstreamCommonFields.classList.remove('d-none');
             matrixSection.classList.add('d-none');
             singleSection.classList.remove('d-none');
 
-            if (opLotSelect.value && !lotSelect.value) {
-                lotSelect.value = opLotSelect.value;
-                lotSelect.dispatchEvent(new Event('change'));
-            }
+            if (goodInput) goodInput.setAttribute('required', 'required');
+            if (varSelect) varSelect.setAttribute('required', 'required');
+            checkBalance();
         }
     }
+
+    if (btnModeCutting) {
+        btnModeCutting.addEventListener('click', () => switchMode('cutting'));
+    }
+
+    function renderOperatorElements(elements, dayPcs, nightPcs) {
+        if (!opElementsTbody) return;
+        if (!elements || elements.length === 0) {
+            opElementsTbody.innerHTML = '<tr><td colspan="6" class="text-muted py-3">No anatomical elements defined for this product.</td></tr>';
+            return;
+        }
+        let html = '';
+        elements.forEach(el => {
+            const mult = parseInt(el.multiplier || el.quantity || 1);
+            const req = parseInt(el.required_pieces) || 0;
+            let defDay = (dayPcs > 0 ? Math.min(req, dayPcs * mult) : parseInt(el.operator1_pieces || 0));
+            let defNight = (nightPcs > 0 ? Math.min(Math.max(0, req - defDay), nightPcs * mult) : parseInt(el.operator2_pieces || 0));
+            if (defDay + defNight > req) {
+                defNight = Math.max(0, req - defDay);
+            }
+            const total = defDay + defNight;
+            const bal = Math.max(0, req - total);
+            html += `
+                <tr data-elid="${el.id}" data-mult="${mult}" data-req="${req}">
+                    <td class="text-start fw-bold text-dark">${el.element_name} <span class="badge bg-light text-muted border">×${mult}</span></td>
+                    <td class="fw-bold text-muted">${req}</td>
+                    <td style="width: 120px;">
+                        <input type="number" name="elements[${el.id}][op1_pieces]" class="form-control form-control-sm text-center fw-bold op-el-day" value="${defDay}" min="0" max="${req}" title="Max planned: ${req}">
+                    </td>
+                    <td style="width: 120px;">
+                        <input type="number" name="elements[${el.id}][op2_pieces]" class="form-control form-control-sm text-center fw-bold op-el-night" value="${defNight}" min="0" max="${req}" title="Max planned: ${req}">
+                    </td>
+                    <td class="fw-bold text-primary op-el-total">${total}</td>
+                    <td class="fw-bold op-el-bal ${bal > 0 ? 'text-warning' : 'text-success'}">
+                        ${bal > 0 ? (bal + ' pending') : '✓ Done'}
+                    </td>
+                    <input type="hidden" name="elements[${el.id}][required]" value="${req}">
+                </tr>
+            `;
+        });
+        opElementsTbody.innerHTML = html;
+
+        // Attach input listeners for manual element adjustments with ceiling enforcement
+        opElementsTbody.querySelectorAll('input').forEach(inp => {
+            inp.addEventListener('input', function() {
+                const tr = this.closest('tr');
+                const req = parseInt(tr.dataset.req) || 0;
+                let dayInp = tr.querySelector('.op-el-day');
+                let nightInp = tr.querySelector('.op-el-night');
+                let d = parseInt(dayInp ? dayInp.value : 0) || 0;
+                let n = parseInt(nightInp ? nightInp.value : 0) || 0;
+
+                // Non-negative constraint
+                if (d < 0) { d = 0; if (dayInp) dayInp.value = 0; }
+                if (n < 0) { n = 0; if (nightInp) nightInp.value = 0; }
+
+                // Ceiling constraint: Day + Night cannot exceed planned Target (req)
+                if (d + n > req) {
+                    if (this.classList.contains('op-el-day')) {
+                        if (d > req) { d = req; this.value = req; }
+                        n = Math.max(0, req - d);
+                        if (nightInp) nightInp.value = n;
+                    } else {
+                        if (n > req) { n = req; this.value = req; }
+                        d = Math.max(0, req - n);
+                        if (dayInp) dayInp.value = d;
+                    }
+                }
+
+                tr.dataset.customEdited = '1';
+                const tot = d + n;
+                const bal = Math.max(0, req - tot);
+                tr.querySelector('.op-el-total').textContent = tot;
+                const balTd = tr.querySelector('.op-el-bal');
+                balTd.textContent = bal > 0 ? (bal + ' pending') : '✓ Done';
+                balTd.className = 'fw-bold op-el-bal ' + (bal > 0 ? 'text-warning' : 'text-success');
+            });
+        });
+    }
+
+    function syncElementsFromOperatorPieces() {
+        if (!opElementsTbody) return;
+        const isDouble = (currentOpLotData && currentOpLotData.lot && currentOpLotData.lot.shift_type === 'Double Shift');
+        const dayPcs = isDouble 
+            ? (parseInt(opDoubleDayPieces ? opDoubleDayPieces.value : 0) || 0)
+            : (parseInt(opSinglePieces ? opSinglePieces.value : 0) || 0);
+        const nightPcs = isDouble 
+            ? (parseInt(opDoubleNightPieces ? opDoubleNightPieces.value : 0) || 0)
+            : 0;
+
+        const rows = opElementsTbody.querySelectorAll('tr[data-elid]');
+        if (rows.length === 0 && currentOpLotData && currentOpLotData.elements) {
+            renderOperatorElements(currentOpLotData.elements, dayPcs, nightPcs);
+            return;
+        }
+
+        rows.forEach(tr => {
+            const mult = parseInt(tr.dataset.mult) || 1;
+            const req = parseInt(tr.dataset.req) || 0;
+
+            let d = Math.min(req, dayPcs * mult);
+            let n = isDouble ? Math.min(Math.max(0, req - d), nightPcs * mult) : 0;
+            if (d + n > req) {
+                n = Math.max(0, req - d);
+            }
+
+            const dayInp = tr.querySelector('.op-el-day');
+            const nightInp = tr.querySelector('.op-el-night');
+
+            if (dayInp) dayInp.value = d;
+            if (nightInp) nightInp.value = n;
+
+            const tot = d + n;
+            const bal = Math.max(0, req - tot);
+            tr.querySelector('.op-el-total').textContent = tot;
+            const balTd = tr.querySelector('.op-el-bal');
+            if (balTd) {
+                balTd.textContent = bal > 0 ? (bal + ' pending') : '✓ Done';
+                balTd.className = 'fw-bold op-el-bal ' + (bal > 0 ? 'text-warning' : 'text-success');
+            }
+        });
+    }
+
+    function renderCuttingElements(elements, wholeCutPcs) {
+        if (!cutElementsTbody) return;
+        if (!elements || elements.length === 0) {
+            cutElementsTbody.innerHTML = '<tr><td colspan="6" class="text-muted py-3">No anatomical elements defined for this product.</td></tr>';
+            return;
+        }
+        let html = '';
+        elements.forEach(el => {
+            const mult = parseInt(el.multiplier || el.quantity || 1);
+            const ready = parseInt(el.operator_total || 0);
+            const alreadyCut = parseInt(el.cut_pieces || 0);
+            const defNowCut = (wholeCutPcs > 0 ? (wholeCutPcs * mult) : Math.max(0, ready - alreadyCut));
+            const rem = Math.max(0, ready - (alreadyCut + defNowCut));
+            html += `
+                <tr data-elid="${el.id}" data-mult="${mult}" data-ready="${ready}" data-cut="${alreadyCut}">
+                    <td class="text-start fw-bold text-dark">${el.element_name}</td>
+                    <td><span class="badge bg-light text-muted border">×${mult}</span></td>
+                    <td class="fw-bold text-primary">${ready}</td>
+                    <td class="fw-bold text-secondary">${alreadyCut}</td>
+                    <td>
+                        <input type="number" name="elements_cut[${el.id}]" class="form-control form-control-sm text-center fw-bold text-danger border-warning cut-el-input" value="${defNowCut}" min="0">
+                    </td>
+                    <td class="fw-bold cut-el-rem ${rem > 0 ? 'text-warning' : 'text-success'}">
+                        ${rem > 0 ? (rem + ' remaining') : '✓ All Cut'}
+                    </td>
+                </tr>
+            `;
+        });
+        cutElementsTbody.innerHTML = html;
+
+        cutElementsTbody.querySelectorAll('.cut-el-input').forEach(inp => {
+            inp.addEventListener('input', function() {
+                const tr = this.closest('tr');
+                const ready = parseInt(tr.dataset.ready) || 0;
+                const alreadyCut = parseInt(tr.dataset.cut) || 0;
+                const now = parseInt(this.value) || 0;
+                const rem = Math.max(0, ready - (alreadyCut + now));
+                const remTd = tr.querySelector('.cut-el-rem');
+                remTd.textContent = rem > 0 ? (rem + ' remaining') : '✓ All Cut';
+                remTd.className = 'fw-bold cut-el-rem ' + (rem > 0 ? 'text-warning' : 'text-success');
+            });
+        });
+    }
+
+    const cutMinutesInput = document.getElementById('cut_minutes');
+    const cutMinRateInput = document.getElementById('cut_min_rate');
+    const cutRateInput = document.getElementById('cut_rate');
+    const cutRateBadge = document.getElementById('cutRateBadge');
+    const cutMatrixThead = document.getElementById('cutMatrixThead');
+    const cutMatrixTbody = document.getElementById('cutMatrixTbody');
+    const cutMatrixTfoot = document.getElementById('cutMatrixTfoot');
+    const btnFillAllCutting = document.getElementById('btnFillAllCutting');
+    const btnClearCutting = document.getElementById('btnClearCutting');
+
+    function updateCuttingRate(fromDirectRate = false) {
+        const mins = parseFloat(cutMinutesInput ? cutMinutesInput.value : 0) || 0;
+        const minRate = parseFloat(cutMinRateInput ? cutMinRateInput.value : 0) || 2.50;
+
+        if (!fromDirectRate && cutRateInput) {
+            if (mins > 0 && minRate > 0) {
+                cutRateInput.value = (mins * minRate).toFixed(2);
+            }
+        }
+
+        const currentRate = parseFloat(cutRateInput ? cutRateInput.value : 0) || 5.00;
+        if (cutRateBadge) {
+            cutRateBadge.textContent = 'Rate: Rs. ' + currentRate.toFixed(2) + '/pc (' + mins.toFixed(1) + 'm @ ' + minRate.toFixed(2) + '/m)';
+        }
+
+        const whole = parseInt(cutWholePcs ? cutWholePcs.value : 0) || 0;
+        if (lblCutLabour) {
+            lblCutLabour.textContent = 'Rs. ' + (whole * currentRate).toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+    }
+
+    if (cutWorker) {
+        cutWorker.addEventListener('change', function() {
+            const opt = this.options[this.selectedIndex];
+            if (opt && opt.dataset.minrate && cutMinRateInput) {
+                cutMinRateInput.value = parseFloat(opt.dataset.minrate).toFixed(2);
+                updateCuttingRate(false);
+            }
+        });
+    }
+
+    if (cutMinutesInput) cutMinutesInput.addEventListener('input', () => updateCuttingRate(false));
+    if (cutMinRateInput) cutMinRateInput.addEventListener('input', () => updateCuttingRate(false));
+    if (cutRateInput) cutRateInput.addEventListener('input', () => updateCuttingRate(true));
+
+    if (cutWholePcs) {
+        cutWholePcs.addEventListener('input', function() {
+            const whole = parseInt(this.value) || 0;
+            const rate = parseFloat(cutRateInput ? cutRateInput.value : 0) || 5.00;
+            if (lblCutLabour) {
+                lblCutLabour.textContent = 'Rs. ' + (whole * rate).toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
+            if (currentOpLotData && currentOpLotData.elements) {
+                renderCuttingElements(currentOpLotData.elements, whole);
+            }
+        });
+    }
+
+    function loadCuttingMatrixGrid(lotId, opId) {
+        if (!lotId || !opId || !cutMatrixTbody) return;
+        fetch(`<?= BASE_URL ?>modules/production/ajax.php?action=get_lot_stage_matrix&lot_id=${lotId}&operation_id=${opId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    renderCuttingMatrixTable(data);
+                }
+            })
+            .catch(err => console.error('Cutting matrix load error:', err));
+    }
+
+    function renderCuttingMatrixTable(data) {
+        if (!cutMatrixThead || !cutMatrixTbody) return;
+        const colors = data.colors || [];
+        const sizes = data.sizes || [];
+        const grid = data.grid || {};
+
+        if (colors.length === 0 || sizes.length === 0) {
+            cutMatrixThead.innerHTML = '<tr><th class="p-2 text-muted">No variants defined for this lot.</th></tr>';
+            cutMatrixTbody.innerHTML = '';
+            return;
+        }
+
+        let thHtml = '<tr><th class="text-start py-2 px-3" style="min-width: 150px;">Color (رنگ و کوڈ)</th>';
+        sizes.forEach(sz => {
+            thHtml += `<th class="py-2 px-2" style="min-width: 140px;">${sz.name} (${sz.code})</th>`;
+        });
+        thHtml += '<th class="py-2 px-3" style="min-width: 100px;">Color Total</th></tr>';
+        cutMatrixThead.innerHTML = thHtml;
+
+        let tbodyHtml = '';
+        colors.forEach(c => {
+            tbodyHtml += `<tr data-color-id="${c.id}">
+                <td class="text-start py-2 px-3 fw-bold">
+                    <span class="d-inline-block rounded-circle me-1 border" style="width: 12px; height: 12px; background: ${c.hex_code || '#6c757d'}; vertical-align: middle;"></span>
+                    ${c.name} <span class="badge bg-light text-dark border ms-1">[${c.color_code}]</span>
+                </td>`;
+
+            sizes.forEach(sz => {
+                const cell = (grid[c.id] && grid[c.id][sz.id]) ? grid[c.id][sz.id] : { planned: 0, pending: 0 };
+                const planned = parseInt(cell.planned) || 0;
+                tbodyHtml += `
+                    <td class="p-2 border">
+                        <div class="small fw-semibold text-muted mb-1">Plan: <strong>${planned}</strong> pcs</div>
+                        <div class="input-group input-group-sm mb-1">
+                            <span class="input-group-text px-1 bg-success-subtle text-success fw-bold small" title="Good Cut Pieces">🟢</span>
+                            <input type="number" name="matrix[${c.id}][${sz.id}][good]" class="form-control form-control-sm text-center fw-bold cut-cell-good" data-planned="${planned}" value="0" min="0" placeholder="0">
+                        </div>
+                        <div class="d-flex gap-1">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text px-1 bg-danger-subtle text-danger small" title="Rejected / Defect Cut Pieces">🔴</span>
+                                <input type="number" name="matrix[${c.id}][${sz.id}][rejected]" class="form-control form-control-sm text-center cut-cell-rej" value="0" min="0" placeholder="0">
+                            </div>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text px-1 bg-warning-subtle text-warning-emphasis small" title="Rework Pieces">🟡</span>
+                                <input type="number" name="matrix[${c.id}][${sz.id}][rework]" class="form-control form-control-sm text-center cut-cell-rew" value="0" min="0" placeholder="0">
+                            </div>
+                        </div>
+                    </td>
+                `;
+            });
+
+            tbodyHtml += `<td class="py-2 px-3 fw-bold text-primary cut-row-total">0 pcs</td></tr>`;
+        });
+        cutMatrixTbody.innerHTML = tbodyHtml;
+
+        // Footer Totals
+        let tfootHtml = `<tr>
+            <td class="text-start py-2 px-3">Total Cutting Output:</td>`;
+        sizes.forEach(sz => {
+            tfootHtml += `<td class="py-2 text-center cut-col-total" data-size-id="${sz.id}">0</td>`;
+        });
+        tfootHtml += `<td class="py-2 px-3 text-success fs-6" id="cutMatrixGrandTotal">0 pcs</td></tr>`;
+        if (cutMatrixTfoot) cutMatrixTfoot.innerHTML = tfootHtml;
+
+        // Attach real-time input event listeners
+        cutMatrixTbody.querySelectorAll('input').forEach(inp => {
+            inp.addEventListener('input', recalculateCuttingMatrixTotals);
+        });
+
+        // Auto fill planned pieces button
+        if (btnFillAllCutting) {
+            btnFillAllCutting.onclick = function() {
+                cutMatrixTbody.querySelectorAll('.cut-cell-good').forEach(inp => {
+                    inp.value = parseInt(inp.dataset.planned) || 0;
+                });
+                cutMatrixTbody.querySelectorAll('.cut-cell-rej, .cut-cell-rew').forEach(inp => {
+                    inp.value = 0;
+                });
+                recalculateCuttingMatrixTotals();
+            };
+        }
+
+        // Clear cutting matrix button
+        if (btnClearCutting) {
+            btnClearCutting.onclick = function() {
+                cutMatrixTbody.querySelectorAll('input').forEach(inp => {
+                    inp.value = 0;
+                });
+                recalculateCuttingMatrixTotals();
+            };
+        }
+    }
+
+    function recalculateCuttingMatrixTotals() {
+        if (!cutMatrixTbody) return;
+        let grandGood = 0;
+        let grandRej = 0;
+        let grandRew = 0;
+
+        cutMatrixTbody.querySelectorAll('tr[data-color-id]').forEach(tr => {
+            let rowGood = 0;
+            tr.querySelectorAll('.cut-cell-good').forEach(inp => {
+                rowGood += parseInt(inp.value) || 0;
+            });
+            tr.querySelectorAll('.cut-cell-rej').forEach(inp => {
+                grandRej += parseInt(inp.value) || 0;
+            });
+            tr.querySelectorAll('.cut-cell-rew').forEach(inp => {
+                grandRew += parseInt(inp.value) || 0;
+            });
+            grandGood += rowGood;
+            const rowTotTd = tr.querySelector('.cut-row-total');
+            if (rowTotTd) rowTotTd.textContent = rowGood + ' pcs';
+        });
+
+        // Update column totals
+        if (cutMatrixTfoot) {
+            cutMatrixTfoot.querySelectorAll('.cut-col-total').forEach(td => {
+                const sId = td.dataset.sizeId;
+                let colGood = 0;
+                cutMatrixTbody.querySelectorAll(`input[name*="[${sId}][good]"]`).forEach(inp => {
+                    colGood += parseInt(inp.value) || 0;
+                });
+                td.textContent = colGood;
+            });
+            const grandEl = document.getElementById('cutMatrixGrandTotal');
+            if (grandEl) grandEl.textContent = grandGood + ' pcs';
+        }
+
+        // Auto-update Whole Sweaters Cut input and labour
+        if (cutWholePcs) {
+            cutWholePcs.value = grandGood;
+            const rate = parseFloat(cutRateInput ? cutRateInput.value : 0) || 5.00;
+            if (lblCutLabour) {
+                lblCutLabour.textContent = 'Rs. ' + (grandGood * rate).toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
+        }
+
+        // Sync Garment Elements Cutting Progress
+        if (currentOpLotData && currentOpLotData.elements) {
+            renderCuttingElements(currentOpLotData.elements, grandGood);
+        }
+    }
+
+    function onOperatorPiecesChanged() {
+        const day = parseInt(opDoubleDayPieces ? opDoubleDayPieces.value : 0) || 0;
+        const night = parseInt(opDoubleNightPieces ? opDoubleNightPieces.value : 0) || 0;
+        if (currentOpLotData && currentOpLotData.elements) {
+            renderOperatorElements(currentOpLotData.elements, day, night);
+        }
+    }
+    if (opDoubleDayPieces) opDoubleDayPieces.addEventListener('input', onOperatorPiecesChanged);
+    if (opDoubleNightPieces) opDoubleNightPieces.addEventListener('input', onOperatorPiecesChanged);
+
 
     btnModeOperator.addEventListener('click', () => switchMode('operator_initial'));
     btnModeMatrix.addEventListener('click', () => switchMode('matrix'));
@@ -1676,27 +2533,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (minInput) minInput.addEventListener('input', () => updateRateCalculation(false));
     if (minRateInput) minRateInput.addEventListener('input', () => updateRateCalculation(false));
 
-    // Toggle Modes
-    btnModeMatrix.addEventListener('click', function() {
-        modeInput.value = 'matrix';
-        btnModeMatrix.className = 'btn btn-primary fw-semibold';
-        btnModeSingle.className = 'btn btn-outline-secondary fw-semibold';
-        matrixSection.classList.remove('d-none');
-        singleSection.classList.add('d-none');
-        goodInput.removeAttribute('required');
-        varSelect.removeAttribute('required');
-    });
-
-    btnModeSingle.addEventListener('click', function() {
-        modeInput.value = 'single';
-        btnModeSingle.className = 'btn btn-primary fw-semibold';
-        btnModeMatrix.className = 'btn btn-outline-secondary fw-semibold';
-        singleSection.classList.remove('d-none');
-        matrixSection.classList.add('d-none');
-        goodInput.setAttribute('required', 'required');
-        varSelect.setAttribute('required', 'required');
-        checkBalance();
-    });
+    // Mode buttons already wired via switchMode()
 
     function calculateSingleLabour() {
         const good = parseInt(goodInput.value) || 0;
@@ -1738,6 +2575,13 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
+                    currentOpLotData = data;
+                    if (data.elements) {
+                        const dayInit = parseInt(opDoubleDayPieces ? opDoubleDayPieces.value : 0) || 0;
+                        const nightInit = parseInt(opDoubleNightPieces ? opDoubleNightPieces.value : 0) || 0;
+                        renderOperatorElements(data.elements, dayInit, nightInit);
+                        renderCuttingElements(data.elements, parseInt(cutWholePcs ? cutWholePcs.value : 0) || 0);
+                    }
                     // Populate operations
                     opSelect.innerHTML = '<option value="">-- Choose Operation --</option>';
                     data.operations.forEach(op => {
@@ -1785,6 +2629,21 @@ document.addEventListener('DOMContentLoaded', function() {
                         loadWorkersForOperation(preselectedOpId);
                         loadMatrixGrid(lotId, preselectedOpId);
                         checkBalance();
+
+                        if (preselectedMode) {
+                            switchMode(preselectedMode);
+                        } else {
+                            const selText = selectedOpt ? selectedOpt.textContent.toLowerCase() : '';
+                            if (selText.includes('cut')) {
+                                switchMode('cutting');
+                            } else if (selText.includes('operat') || selText.includes('knitt')) {
+                                switchMode('operator_initial');
+                            } else {
+                                switchMode('matrix');
+                            }
+                        }
+                    } else if (preselectedMode) {
+                        switchMode(preselectedMode);
                     }
 
                     if (callback) callback();
@@ -1876,6 +2735,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // When operation changes, update SAM minutes, load workers, and load matrix grid!
     opSelect.addEventListener('change', function() {
+        const selectedText = this.options[this.selectedIndex] ? this.options[this.selectedIndex].textContent.toLowerCase() : '';
+        if (selectedText.includes('cut')) {
+            switchMode('cutting');
+        } else if (selectedText.includes('operat') || selectedText.includes('knitt')) {
+            switchMode('operator_initial');
+        } else if (this.value) {
+            switchMode('matrix');
+        }
         const selectedOpt = this.options[this.selectedIndex];
         if (selectedOpt) {
             if (minInput && selectedOpt.dataset.minutes) {
@@ -2537,6 +3404,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 opSinglePieces.value = totalPieces;
             }
             recalcOperatorTotals();
+            syncElementsFromOperatorPieces();
+            syncElementsFromOperatorPieces();
         } else {
             // DOUBLE SHIFT
             singleShiftCard.classList.add('d-none');
@@ -2571,6 +3440,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 opDoubleNightPieces.value = totalPieces - dayHalf;
             }
             recalcOperatorTotals();
+            syncElementsFromOperatorPieces();
+            syncElementsFromOperatorPieces();
         }
 
         // Multi-Size handling
@@ -2592,7 +3463,7 @@ document.addEventListener('DOMContentLoaded', function() {
         opDoubleNightWorker.addEventListener('change', updateOperatorRatesAndQuantities);
     }
 
-    // Auto-balance Day and Night pieces in real-time
+    // Auto-balance Day and Night pieces in real-time & sync element breakdown
     if (opDoubleDayPieces) {
         opDoubleDayPieces.addEventListener('input', function() {
             if (!currentOpLotData) return;
@@ -2601,6 +3472,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const nightVal = Math.max(0, total - dayVal);
             if (opDoubleNightPieces) opDoubleNightPieces.value = nightVal;
             recalcOperatorTotals();
+            syncElementsFromOperatorPieces();
         });
     }
 
@@ -2612,11 +3484,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const dayVal = Math.max(0, total - nightVal);
             if (opDoubleDayPieces) opDoubleDayPieces.value = dayVal;
             recalcOperatorTotals();
+            syncElementsFromOperatorPieces();
         });
     }
 
     if (opSinglePieces) {
-        opSinglePieces.addEventListener('input', recalcOperatorTotals);
+        opSinglePieces.addEventListener('input', function() {
+            recalcOperatorTotals();
+            syncElementsFromOperatorPieces();
+        });
     }
 
     // Helper buttons
@@ -2628,6 +3504,7 @@ document.addEventListener('DOMContentLoaded', function() {
             opDoubleDayPieces.value = half;
             opDoubleNightPieces.value = total - half;
             recalcOperatorTotals();
+            syncElementsFromOperatorPieces();
         });
     }
 
@@ -2638,6 +3515,7 @@ document.addEventListener('DOMContentLoaded', function() {
             opDoubleDayPieces.value = total;
             opDoubleNightPieces.value = 0;
             recalcOperatorTotals();
+            syncElementsFromOperatorPieces();
         });
     }
 
@@ -2648,6 +3526,7 @@ document.addEventListener('DOMContentLoaded', function() {
             opDoubleDayPieces.value = 0;
             opDoubleNightPieces.value = total;
             recalcOperatorTotals();
+            syncElementsFromOperatorPieces();
         });
     }
 
@@ -2731,12 +3610,16 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Initialize default mode: Operator Initial Entry
-    switchMode('operator_initial');
+    // Initialize mode according to URL or default to Operator Initial Entry
+    if (preselectedMode) {
+        switchMode(preselectedMode);
+    } else if (!preselectedOpId) {
+        switchMode('operator_initial');
+    }
 
-    // Trigger preselected lot if passed
-    if (opLotSelect && opLotSelect.value) {
-        opLotSelect.dispatchEvent(new Event('change'));
+    // Trigger lot load on page load if preselected lot exists
+    if (lotSelect && lotSelect.value) {
+        loadLotData(lotSelect.value);
     }
 
     // Intercept form submission for validation
@@ -2768,6 +3651,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     opSingleWorker.focus();
                     return;
                 }
+            }
+            return;
+        }
+
+        if (mode === 'cutting') {
+            const cutWorker = document.getElementById('cut_worker_id');
+            if (!cutWorker || !cutWorker.value) {
+                e.preventDefault();
+                alert('Please select a Cutting Master before saving.');
+                if (cutWorker) cutWorker.focus();
+                return;
+            }
+            const whole = parseInt(cutWholePcs ? cutWholePcs.value : 0) || 0;
+            if (whole <= 0) {
+                e.preventDefault();
+                alert('Please enter at least 1 cut piece before saving, or click "⚡ 1-Click Fill Planned".');
+                if (cutWholePcs) cutWholePcs.focus();
+                return;
             }
             return;
         }

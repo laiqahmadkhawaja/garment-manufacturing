@@ -81,8 +81,20 @@ CREATE TABLE `warehouses` (
 DROP TABLE IF EXISTS `colors`;
 CREATE TABLE `colors` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `color_code` VARCHAR(50) NULL,
     `name` VARCHAR(50) NOT NULL UNIQUE,
-    `hex_code` VARCHAR(10) NULL DEFAULT '#cccccc'
+    `hex_code` VARCHAR(10) NULL DEFAULT '#cccccc',
+    `yarn_stock_kg` DECIMAL(12,2) NOT NULL DEFAULT 0.00
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS `garment_types`;
+CREATE TABLE `garment_types` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `name` VARCHAR(80) NOT NULL,
+    `code` VARCHAR(30) NULL,
+    `sort_order` INT DEFAULT 0,
+    `is_active` TINYINT(1) DEFAULT 1,
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 DROP TABLE IF EXISTS `sizes`;
@@ -137,6 +149,9 @@ CREATE TABLE `product_elements` (
     `product_id` INT NOT NULL,
     `element_name` VARCHAR(100) NOT NULL,
     `quantity` INT NOT NULL DEFAULT 1,
+    `multiplier` INT NOT NULL DEFAULT 1,
+    `tracks_at_operator` TINYINT(1) DEFAULT 1,
+    `default_sam_minutes` DECIMAL(6,2) DEFAULT 0.00,
     `notes` VARCHAR(255) NULL,
     `sort_order` INT NOT NULL DEFAULT 0,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -148,6 +163,9 @@ CREATE TABLE `designs` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `design_number` VARCHAR(60) NOT NULL,
     `name` VARCHAR(120) NOT NULL,
+    `sketch_image` VARCHAR(255) NULL,
+    `machine_type` VARCHAR(60) DEFAULT 'CMS 430',
+    `measurements_json` JSON NULL,
     `product_id` INT NOT NULL,
     `picture` VARCHAR(255) NULL,
     `specifications` TEXT NULL,
@@ -266,18 +284,48 @@ CREATE TABLE `lots` (
     `design_number` VARCHAR(100) NULL,
     `design_id` INT NULL,
     `supervisor_name` VARCHAR(100) NULL,
+    `shift_type` ENUM('Single Shift', 'Double Shift') DEFAULT 'Single Shift',
+    `operator_id` INT NULL,
+    `night_operator_id` INT NULL,
     `expected_date` DATE NULL,
     `instructions` TEXT NULL,
     `total_pieces` INT NOT NULL DEFAULT 0,
     `total_colors` INT NOT NULL DEFAULT 0,
     `total_sizes` INT NOT NULL DEFAULT 0,
+    `size_mode` ENUM('Single Size', 'Multi Size') DEFAULT 'Single Size',
+    `single_size_id` INT NULL,
+    `has_anatomy_variants` TINYINT(1) DEFAULT 0,
+    `anatomy_breakdown` LONGTEXT NULL,
     `status` ENUM('Draft', 'In Production', 'Production Completed', 'Partially Packed', 'Ready Stock', 'Partially Dispatched', 'Dispatched', 'Closed') NOT NULL DEFAULT 'Draft',
     `created_by` INT NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (`product_id`) REFERENCES `products`(`id`),
     FOREIGN KEY (`design_id`) REFERENCES `designs`(`id`) ON DELETE SET NULL,
+    FOREIGN KEY (`operator_id`) REFERENCES `workers`(`id`) ON DELETE SET NULL,
+    FOREIGN KEY (`night_operator_id`) REFERENCES `workers`(`id`) ON DELETE SET NULL,
     FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS `lot_operator_element_entries`;
+CREATE TABLE `lot_operator_element_entries` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `lot_id` INT NOT NULL,
+    `element_id` INT NOT NULL,
+    `entry_date` DATE NOT NULL,
+    `operator1_id` INT NULL,
+    `operator1_pieces` INT DEFAULT 0,
+    `operator2_id` INT NULL,
+    `operator2_pieces` INT DEFAULT 0,
+    `total_pieces` INT GENERATED ALWAYS AS (operator1_pieces + operator2_pieces) STORED,
+    `cut_pieces` INT NOT NULL DEFAULT 0,
+    `required_pieces` INT NOT NULL,
+    `minutes_spent` DECIMAL(8,2) DEFAULT 0.00,
+    `notes` VARCHAR(255) NULL,
+    `created_by` INT NULL,
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (`lot_id`) REFERENCES `lots`(`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`element_id`) REFERENCES `product_elements`(`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 DROP TABLE IF EXISTS `lot_variants`;
@@ -285,6 +333,7 @@ CREATE TABLE `lot_variants` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `lot_id` INT NOT NULL,
     `color_id` INT NOT NULL,
+    `color_code` VARCHAR(50) NULL,
     `size_id` INT NOT NULL,
     `quantity` INT NOT NULL DEFAULT 0,
     UNIQUE KEY `uq_lot_var` (`lot_id`, `color_id`, `size_id`),
@@ -315,8 +364,9 @@ CREATE TABLE `production_entries` (
     `lot_id` INT NOT NULL,
     `operation_id` INT NOT NULL,
     `worker_id` INT NOT NULL,
-    `color_id` INT NOT NULL,
-    `size_id` INT NOT NULL,
+    `shift` ENUM('Day Shift', 'Night Shift', 'General') DEFAULT 'General',
+    `color_id` INT NULL,
+    `size_id` INT NULL,
     `qty_received` INT NOT NULL DEFAULT 0,
     `good_qty` INT NOT NULL DEFAULT 0,
     `rejected_qty` INT NOT NULL DEFAULT 0,
@@ -343,8 +393,8 @@ CREATE TABLE `production_rejections` (
     `production_entry_id` INT NULL,
     `lot_id` INT NOT NULL,
     `operation_id` INT NOT NULL,
-    `color_id` INT NOT NULL,
-    `size_id` INT NOT NULL,
+    `color_id` INT NULL,
+    `size_id` INT NULL,
     `quantity` INT NOT NULL,
     `reason` VARCHAR(255) NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -361,8 +411,8 @@ CREATE TABLE `production_rework` (
     `production_entry_id` INT NULL,
     `lot_id` INT NOT NULL,
     `operation_id` INT NOT NULL,
-    `color_id` INT NOT NULL,
-    `size_id` INT NOT NULL,
+    `color_id` INT NULL,
+    `size_id` INT NULL,
     `quantity` INT NOT NULL,
     `notes` VARCHAR(255) NULL,
     `status` ENUM('Pending', 'In Progress', 'Resolved') NOT NULL DEFAULT 'Pending',
@@ -928,11 +978,13 @@ INSERT INTO `departments` (`id`, `code`, `name`, `description`, `is_active`) VAL
 (4, 'DEP-SAFE', 'Safety & Overlock', 'Edge safety, overlocking and interlock sewing', 1),
 (5, 'DEP-FINISH', 'Finishing & Buttoning', 'Buttons, buttonholes (kaj), trims, threads', 1),
 (6, 'DEP-PRESS', 'Pressing & Ironing', 'Steam press, crease setting, ironing', 1),
-(7, 'DEP-PACK', 'Packing & Quality Warehouse', 'Quality check, polybagging, boxing, barcoding', 1);
+(7, 'DEP-PACK', 'Packing & Quality Warehouse', 'Quality check, polybagging, boxing, barcoding', 1),
+(8, 'DEP-KNIT', 'Machine Knitting', 'Flat machine operators and panel knitting', 1);
 
 -- Operations
 INSERT INTO `operations` (`id`, `code`, `name`, `department_id`, `sequence`, `is_mandatory`, `default_rate`, `rate_unit`, `is_active`) VALUES
-(1, 'OP-CUT', 'Cutting', 1, 10, 1, 3.00, 'Per piece', 1),
+(10, 'OP-OPERATOR', 'Operator Entry (مشین آپریٹر / نٹنگ)', 8, 1, 1, 5.00, 'Per piece', 1),
+(1, 'OP-CUT', 'Cutting', 1, 2, 1, 3.00, 'Per piece', 1),
 (2, 'OP-TAIL', 'Tailoring', 2, 20, 1, 5.00, 'Per piece', 1),
 (3, 'OP-SAFE', 'Safety (Overlock)', 4, 30, 1, 3.00, 'Per piece', 1),
 (4, 'OP-STITCH', 'Stitching', 3, 40, 1, 12.00, 'Per piece', 1),

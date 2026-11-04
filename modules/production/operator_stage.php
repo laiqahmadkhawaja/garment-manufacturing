@@ -9,6 +9,10 @@ require_once __DIR__ . '/../../config/auth.php';
 
 require_login();
 
+$lotId = (int)($_GET['lot_id'] ?? 0);
+redirect("modules/production/index.php" . ($lotId > 0 ? "?lot_id=" . $lotId : ""));
+exit;
+
 $pageTitle = 'Stage 1: Operator Element Production';
 $activeNav = 'production_entry';
 $db = get_db();

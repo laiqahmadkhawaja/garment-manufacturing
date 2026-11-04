@@ -951,6 +951,55 @@ $subOpsPassed = ($arifDone === 100 && $asadDone === 100);
 $scenario35Passed = ($renderPassed && $subOpsPassed);
 assert_test("35. Printable Job Card & Multi-Worker Sub-Operations", $scenario35Passed, "Printable Job Card verified with A4 layout; Arif (Pockets: 100 pcs) & Asad (Gala: 100 pcs) recorded into worker matrix with separate ledgers");
 
+// =========================================================================
+// SCENARIO 36: UNIFIED OPERATOR DAY/NIGHT & CUTTING ELEMENT-WISE ENTRY
+// =========================================================================
+echo "\n--- TESTING SCENARIO 36: UNIFIED OPERATOR & CUTTING ELEMENT PROGRESS ---\n";
+
+$lot36Num = 'LOT-TEST-CUT-' . time();
+$db->prepare("INSERT INTO lots (lot_number, lot_date, product_id, total_pieces, shift_type, operator_id, night_operator_id, status)
+              VALUES (?, CURDATE(), 1, 200, 'Double Shift', ?, ?, 'Draft')")
+   ->execute([$lot36Num, $wLatifId, $wAmirId]);
+$lotId36 = (int)$db->lastInsertId();
+
+$peList36 = $db->query("SELECT id, multiplier, quantity FROM product_elements WHERE product_id = 1 ORDER BY sort_order ASC")->fetchAll();
+foreach ($peList36 as $pel) {
+    $m = (int)($pel['quantity'] ?: $pel['multiplier'] ?: 1);
+    $req = $m * 200;
+    $p1 = $m * 100;
+    $p2 = $m * 100;
+    $db->prepare("INSERT INTO lot_operator_element_entries (lot_id, element_id, entry_date, operator1_id, operator1_pieces, operator2_id, operator2_pieces, required_pieces, cut_pieces)
+                  VALUES (?, ?, CURDATE(), ?, ?, ?, ?, ?, 0)")
+       ->execute([$lotId36, $pel['id'], $wLatifId, $p1, $wAmirId, $p2, $req]);
+}
+
+$wCutterStmt = $db->query("SELECT id FROM workers WHERE name LIKE '%Raza%' OR name LIKE '%Cutter%' LIMIT 1");
+$wCutterId = (int)$wCutterStmt->fetchColumn() ?: $wLatifId;
+
+$peCutNum = 'PE-CUT-' . time();
+$db->prepare("INSERT INTO production_entries (entry_number, entry_date, lot_id, operation_id, worker_id, shift, qty_received, good_qty, rate, labour_amount, notes)
+              VALUES (?, CURDATE(), ?, 1, ?, 'Day Shift', 100, 100, 5.00, 500.00, 'Cutting 100 complete garments')")
+   ->execute([$peCutNum, $lotId36, $wCutterId]);
+$peCutId = (int)$db->lastInsertId();
+
+foreach ($peList36 as $pel) {
+    $m = (int)($pel['quantity'] ?: $pel['multiplier'] ?: 1);
+    $cutQty = $m * 100;
+    $db->prepare("UPDATE lot_operator_element_entries SET cut_pieces = cut_pieces + ? WHERE lot_id = ? AND element_id = ?")
+       ->execute([$cutQty, $lotId36, $pel['id']]);
+}
+
+$db->prepare("INSERT INTO worker_ledger (worker_id, transaction_date, transaction_type, reference_type, reference_id, lot_id, operation_id, credit, running_balance, description)
+              VALUES (?, CURDATE(), 'Labour', 'PRODUCTION_ENTRY', ?, ?, 1, 500.00, 500.00, 'Cutting batch 100 pcs')")
+   ->execute([$wCutterId, $peCutId, $lotId36]);
+
+$frontCut = (int)$db->query("SELECT cut_pieces FROM lot_operator_element_entries WHERE lot_id = $lotId36 AND element_id IN (SELECT id FROM product_elements WHERE element_name LIKE '%Front%')")->fetchColumn();
+$sleevesCut = (int)$db->query("SELECT cut_pieces FROM lot_operator_element_entries WHERE lot_id = $lotId36 AND element_id IN (SELECT id FROM product_elements WHERE element_name LIKE '%Sleeve%')")->fetchColumn();
+$cuttingDone36 = (int)$db->query("SELECT SUM(good_qty) FROM production_entries WHERE lot_id = $lotId36 AND operation_id = 1")->fetchColumn();
+
+$scenario36Passed = ($frontCut === 100 && $sleevesCut === 200 && $cuttingDone36 === 100);
+assert_test("36. Unified Operator Day/Night & Cutting Element-Wise Progress", $scenario36Passed, "Day (100) + Night (100) recorded on 1 page; Cutting Master cut 100 pcs (Front: 100 cut, Sleeves: 200 cut, 100 remaining); Labour Rs. 500 credited");
+
 echo "\n========================================================================\n";
 echo "TEST SUITE SUMMARY: $passCount PASSED, $failCount FAILED\n";
 echo "========================================================================\n";

@@ -34,6 +34,7 @@ if ($action === 'get_lot_operations_and_variants') {
 
     // Applicable operations and their sub-operations for this lot
     $opStmt = $db->prepare("SELECT o.id AS operation_id, 
+                            COALESCE(lws.sequence, o.sequence) AS sequence,
                             COALESCE(lws.sequence, (COALESCE(p_op.sequence, 10) + (o.sequence / 100))) AS effective_seq,
                             o.name AS op_name, o.code AS op_code, o.default_rate, o.estimated_minutes,
                             o.parent_id, p_op.name AS parent_op_name, dep.name AS dept_name,
@@ -68,12 +69,28 @@ if ($action === 'get_lot_operations_and_variants') {
     $sStmt->execute([$lotId, $lotId]);
     $lotSizes = $sStmt->fetchAll();
 
+    // Garment elements with operator & cutting progress for this lot
+    $elemStmt = $db->prepare("SELECT pe.id, pe.element_name, pe.quantity, pe.multiplier,
+                                     COALESCE(loe.required_pieces, (pe.quantity * l.total_pieces)) AS required_pieces,
+                                     COALESCE(loe.operator1_pieces, 0) AS operator1_pieces,
+                                     COALESCE(loe.operator2_pieces, 0) AS operator2_pieces,
+                                     COALESCE(loe.total_pieces, 0) AS operator_total,
+                                     COALESCE(loe.cut_pieces, 0) AS cut_pieces
+                              FROM product_elements pe
+                              JOIN lots l ON pe.product_id = l.product_id
+                              LEFT JOIN lot_operator_element_entries loe ON loe.element_id = pe.id AND loe.lot_id = l.id
+                              WHERE l.id = ?
+                              ORDER BY pe.sort_order ASC, pe.id ASC");
+    $elemStmt->execute([$lotId]);
+    $lotElements = $elemStmt->fetchAll();
+
     json_response([
         'status' => 'success',
         'lot' => $lot,
         'operations' => $operations,
         'variants' => $variants,
-        'sizes' => $lotSizes
+        'sizes' => $lotSizes,
+        'elements' => $lotElements
     ]);
 }
 

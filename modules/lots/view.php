@@ -675,8 +675,17 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <?php endif; ?>
                                             </td>
                                             <td class="text-end">
-                                                <?php if ($pending > 0): ?>
-                                                    <a href="<?= BASE_URL ?>modules/production/index.php?lot_id=<?= $lot['id'] ?>&operation_id=<?= $ws['operation_id'] ?>" class="btn btn-sm btn-outline-warning py-0 px-2 fw-semibold" style="font-size: 0.78rem;">
+                                                <?php if ($pending > 0): 
+                                                    $opNameLower = strtolower($ws['op_name']);
+                                                    if (strpos($opNameLower, 'operat') !== false || strpos($opNameLower, 'knitt') !== false) {
+                                                        $btnMode = 'operator_initial';
+                                                    } elseif (strpos($opNameLower, 'cut') !== false) {
+                                                        $btnMode = 'cutting';
+                                                    } else {
+                                                        $btnMode = 'matrix';
+                                                    }
+                                                ?>
+                                                    <a href="<?= BASE_URL ?>modules/production/index.php?lot_id=<?= $lot['id'] ?>&operation_id=<?= $ws['operation_id'] ?>&mode=<?= $btnMode ?>" class="btn btn-sm btn-outline-warning py-0 px-2 fw-semibold" style="font-size: 0.78rem;">
                                                         <i class="bi bi-plus-lg me-1"></i> Record
                                                     </a>
                                                 <?php else: ?>

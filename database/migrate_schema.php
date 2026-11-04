@@ -164,4 +164,27 @@ $db->exec("CREATE TABLE IF NOT EXISTS lot_operator_element_entries (
 )");
 echo "[✓] Verified lot_operator_element_entries table\n";
 
+$loeCols = $db->query("SHOW COLUMNS FROM lot_operator_element_entries")->fetchAll(PDO::FETCH_COLUMN);
+if (!in_array('cut_pieces', $loeCols)) {
+    $db->exec("ALTER TABLE lot_operator_element_entries ADD COLUMN cut_pieces INT NOT NULL DEFAULT 0 AFTER total_pieces");
+    echo "[✓] Added cut_pieces to lot_operator_element_entries\n";
+}
+
+// 9. Guarantee Operator Entry operation exists at sequence 1 (first stage before cutting)
+$opCheck = $db->query("SELECT id FROM operations WHERE code = 'OP-OPERATOR' OR name LIKE '%Operator Entry%' LIMIT 1")->fetchColumn();
+if (!$opCheck) {
+    $deptId = (int)$db->query("SELECT id FROM departments WHERE name LIKE '%Knitt%' OR name LIKE '%Machine%' LIMIT 1")->fetchColumn();
+    if (!$deptId) {
+        $db->exec("INSERT INTO departments (name, code, description) VALUES ('Machine Knitting', 'DEP-KNIT', 'Flat machine operators and panel knitting')");
+        $deptId = (int)$db->lastInsertId();
+    }
+    $db->prepare("INSERT INTO operations (sequence, name, code, department_id, default_rate, is_active)
+                  VALUES (1, 'Operator Entry (مشین آپریٹر / نٹنگ)', 'OP-OPERATOR', ?, 5.00, 1)")
+       ->execute([$deptId]);
+    echo "[✓] Created Operator Entry operation at sequence 1\n";
+} else {
+    $db->exec("UPDATE operations SET sequence = 1 WHERE id = $opCheck");
+    $db->exec("UPDATE operations SET sequence = 2 WHERE code = 'OP-CUT'");
+}
+
 echo "[SUCCESS] Schema migration complete.\n";
