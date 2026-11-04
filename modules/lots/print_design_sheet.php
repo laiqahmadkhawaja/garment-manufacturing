@@ -106,13 +106,18 @@ $designDisplay = $lot['design_number'] ?: '39/26';
     <style>
         @page {
             size: A4 portrait;
-            margin: 8mm 8mm 8mm 8mm;
+            margin: 5mm 6mm 5mm 6mm;
+        }
+        * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
         }
         body {
-            background: #fff !important;
+            background: #f8fafc;
             color: #000;
-            font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
-            font-size: 12px;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Tahoma, Arial, sans-serif;
+            font-size: 11px;
             line-height: 1.25;
             direction: rtl;
             text-align: right;
@@ -120,93 +125,202 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             margin: 0;
         }
         .sheet-container {
-            max-width: 820px;
-            margin: 0 auto;
+            max-width: 840px;
+            margin: 15px auto;
             background: #fff;
+            padding: 10px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+            border-radius: 4px;
         }
         .form-section {
             border: 2px solid #000;
-            padding: 8px 10px;
-            margin-bottom: 12px;
+            padding: 6px 8px;
+            margin-bottom: 8px;
             position: relative;
             background: #fff;
         }
-        .section-header-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        /* Rigid Header Table - Prevents BiDi Flipping & Cell Wrapping */
+        .header-grid-tbl {
+            width: 100%;
+            table-layout: fixed;
+            border-collapse: collapse;
             border-bottom: 2px solid #000;
-            padding-bottom: 6px;
-            margin-bottom: 8px;
-            font-weight: bold;
-            font-size: 13px;
+            margin-bottom: 6px;
         }
-        .perforated-divider {
-            border-top: 2px dashed #666;
-            margin: 14px 0;
+        .header-grid-tbl td {
+            padding: 3px 4px;
+            vertical-align: middle;
+            font-size: 11.5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .lbl {
+            font-weight: 700;
+            color: #111;
+            margin-left: 2px;
+        }
+        .val {
+            color: #000;
+        }
+        .badge-boxed {
+            border: 1px solid #000;
+            padding: 1px 5px;
+            background: #f8fafc;
+            border-radius: 2px;
+            font-weight: 700;
+            font-size: 11px;
+            display: inline-block;
+        }
+        .badge-lot-dark {
+            background: #000;
+            color: #fff;
+            padding: 1px 6px;
+            border-radius: 2px;
+            font-weight: 800;
+            font-family: Consolas, monospace;
+            font-size: 11px;
+            display: inline-block;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: middle;
+        }
+        /* Perforated Cutting Line */
+        .perforated-cut-divider {
             position: relative;
             text-align: center;
+            margin: 10px 0;
+            height: 14px;
         }
-        .perforated-divider span {
+        .perforated-cut-divider .cut-line {
+            border-top: 2px dashed #555;
             position: absolute;
-            top: -10px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #fff;
-            padding: 0 10px;
-            font-size: 10px;
-            color: #666;
-            font-weight: bold;
+            top: 7px;
+            left: 0;
+            right: 0;
         }
+        .perforated-cut-divider .cut-label {
+            position: relative;
+            display: inline-block;
+            background: #fff;
+            padding: 0 12px;
+            font-size: 9.5px;
+            font-weight: 700;
+            color: #444;
+            line-height: 14px;
+        }
+        /* Grids and Tables */
         .tbl-grid {
             width: 100%;
             border-collapse: collapse;
-            font-size: 11px;
+            font-size: 10.5px;
             text-align: center;
+            margin-bottom: 0;
         }
         .tbl-grid th, .tbl-grid td {
             border: 1px solid #000;
-            padding: 4px 5px;
+            padding: 3px 4px;
             vertical-align: middle;
+            line-height: 1.2;
         }
         .tbl-grid th {
-            background-color: #f1f1f1 !important;
-            font-weight: bold;
+            background-color: #f1f3f5 !important;
+            font-weight: 700;
             color: #000;
         }
-        .sweater-sketch-box {
+        /* Prototype Sweater Card */
+        .sweater-card {
             border: 1px solid #000;
-            padding: 6px;
+            padding: 5px;
             text-align: center;
             background: #fafafa;
-            border-radius: 4px;
+            border-radius: 2px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
         .sketch-svg {
             max-width: 100%;
-            height: 120px;
+            height: 82px;
+            margin: 0 auto;
+            display: block;
         }
-        .badge-lot {
-            font-size: 14px;
-            font-weight: 800;
-            font-family: monospace;
-            border: 1px solid #000;
-            padding: 2px 8px;
-            border-radius: 3px;
+        .sketch-meta {
+            border-top: 1px dashed #777;
+            padding-top: 3px;
+            margin-top: 3px;
+            font-size: 9px;
+            line-height: 1.2;
+            text-align: right;
         }
+        .sketch-meta div {
+            display: flex;
+            justify-content: space-between;
+        }
+        /* Cutting Section Grid */
+        .tbl-cutting {
+            table-layout: fixed;
+            width: 100%;
+        }
+        .tbl-cutting th {
+            font-size: 9.5px;
+            padding: 3px 1px;
+            word-break: break-word;
+            white-space: normal;
+            line-height: 1.1;
+        }
+        .tbl-cutting td {
+            padding: 2px;
+        }
+        .copy-footer-note {
+            font-size: 9px;
+            color: #555;
+            margin-top: 4px;
+            font-weight: 600;
+            text-align: left;
+            direction: ltr;
+        }
+        /* Top Navigation Bar */
         .no-print-bar {
-            background: #1e293b;
+            background: #0f172a;
             color: #fff;
-            padding: 10px 15px;
+            padding: 10px 18px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         }
         @media print {
+            body { 
+                background: #fff !important; 
+                font-size: 10px !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
             .no-print-bar { display: none !important; }
-            body { font-size: 11px; }
-            .form-section { page-break-inside: avoid; }
-            .sheet-container { width: 100% !important; max-width: 100% !important; }
+            .sheet-container { 
+                width: 100% !important; 
+                max-width: 100% !important; 
+                margin: 0 !important;
+                padding: 0 !important;
+                box-shadow: none !important;
+            }
+            .form-section { 
+                page-break-inside: avoid;
+                margin-bottom: 6px !important; 
+                padding: 4px 6px !important;
+            }
+            .perforated-cut-divider { 
+                margin: 6px 0 !important; 
+            }
+            .badge-lot-dark {
+                background: #000 !important;
+                color: #fff !important;
+            }
         }
     </style>
 </head>
@@ -215,20 +329,23 @@ $designDisplay = $lot['design_number'] ?: '39/26';
 <!-- Top Navigation Bar (Hidden on Print) -->
 <div class="no-print-bar">
     <div class="d-flex align-items-center gap-3">
-        <h5 class="mb-0 fw-bold"><i class="bi bi-printer me-2"></i>لاٹ ڈیزائن پرچہ (4-Copy Print Sheet)</h5>
-        <span class="badge bg-primary fs-6 font-monospace">#<?= clean($lot['lot_number']) ?></span>
+        <h5 class="mb-0 fw-bold"><i class="bi bi-printer me-2"></i>لاٹ ڈیزائن پرچہ (4-Copy Design Sheet)</h5>
+        <span class="badge bg-primary fs-6 font-monospace" dir="ltr">#<?= clean($lot['lot_number']) ?></span>
     </div>
     <div class="d-flex align-items-center gap-2">
         <div class="btn-group btn-group-sm" role="group">
-            <a href="?id=<?= $lotId ?>&copy=all" class="btn btn-outline-light <?= $copyFilter === 'all' ? 'active' : '' ?>">All 4 Copies</a>
-            <a href="?id=<?= $lotId ?>&copy=operator" class="btn btn-outline-light <?= $copyFilter === 'operator' ? 'active' : '' ?>">Operator Copy</a>
-            <a href="?id=<?= $lotId ?>&copy=cutting" class="btn btn-outline-light <?= $copyFilter === 'cutting' ? 'active' : '' ?>">Cutting Master</a>
-            <a href="?id=<?= $lotId ?>&copy=bandplate" class="btn btn-outline-light <?= $copyFilter === 'bandplate' ? 'active' : '' ?>">Band Print Expense</a>
+            <a href="?id=<?= $lotId ?>&copy=all" class="btn btn-outline-light <?= $copyFilter === 'all' ? 'active' : '' ?>">تمام کاپیاں (All 4)</a>
+            <a href="?id=<?= $lotId ?>&copy=operator" class="btn btn-outline-light <?= $copyFilter === 'operator' ? 'active' : '' ?>">آپریٹر کاپی</a>
+            <a href="?id=<?= $lotId ?>&copy=factory" class="btn btn-outline-light <?= $copyFilter === 'factory' ? 'active' : '' ?>">فیکٹری کاپی</a>
+            <a href="?id=<?= $lotId ?>&copy=cutting" class="btn btn-outline-light <?= $copyFilter === 'cutting' ? 'active' : '' ?>">کٹائی ماسٹر</a>
+            <a href="?id=<?= $lotId ?>&copy=bandplate" class="btn btn-outline-light <?= $copyFilter === 'bandplate' ? 'active' : '' ?>">بینڈ فلیٹ خرچہ</a>
         </div>
         <button onclick="window.print()" class="btn btn-success btn-sm fw-bold px-3">
-            <i class="bi bi-printer-fill me-1"></i> Print Sheet (پرنٹ کریں)
+            <i class="bi bi-printer-fill me-1"></i> پرنٹ کریں (Print Sheet)
         </button>
-        <a href="<?= BASE_URL ?>modules/lots/view.php?id=<?= $lotId ?>" class="btn btn-outline-secondary btn-sm text-white">Back to Lot</a>
+        <a href="<?= BASE_URL ?>modules/lots/view.php?id=<?= $lotId ?>" class="btn btn-outline-secondary btn-sm text-white">
+            <i class="bi bi-arrow-right me-1"></i> Back to Lot
+        </a>
     </div>
 </div>
 
@@ -239,65 +356,78 @@ $designDisplay = $lot['design_number'] ?: '39/26';
     <!-- ======================================================================= -->
     <?php if (in_array($copyFilter, ['all', 'operator'])): ?>
     <div class="form-section">
-        <!-- Section Header -->
-        <div class="section-header-bar">
-            <div>
-                <span>آپریٹر: </span> <span class="text-decoration-underline"><?= clean($operatorDisplay) ?></span>
-                <span class="ms-3">مشین: </span> <span class="badge-lot bg-light"><?= clean($machine) ?></span>
-            </div>
-            <div>
-                <span>تاریخ: </span> <span><?= format_date($lot['lot_date']) ?></span>
-                <span class="ms-3">سائز: </span> <span class="badge-lot bg-light"><?= clean($sizeDisplay) ?></span>
-            </div>
-            <div>
-                <span>ڈیزائن نمبر: </span> <span class="badge-lot bg-light"><?= clean($designDisplay) ?></span>
-                <span class="ms-3">تعداد: </span> <span class="badge-lot bg-light"><?= (int)$lot['total_pieces'] ?></span>
-                <span class="ms-3">لاٹ نمبر: </span> <span class="badge-lot bg-dark text-white font-monospace"><?= clean($lot['lot_number']) ?></span>
-            </div>
-        </div>
+        <!-- Section Header Table (Guaranteed BiDi Isolation & Alignment) -->
+        <table class="header-grid-tbl">
+            <tr>
+                <td style="width: 25%;">
+                    <span class="lbl">آپریٹر:</span> <span class="val fw-bold"><?= clean($operatorDisplay) ?></span>
+                </td>
+                <td style="width: 17%;">
+                    <span class="lbl">مشین:</span> <span class="badge-boxed" dir="ltr"><?= clean($machine) ?></span>
+                </td>
+                <td style="width: 15%;">
+                    <span class="lbl">سائز:</span> <span class="badge-boxed" dir="ltr"><?= clean($sizeDisplay) ?></span>
+                </td>
+                <td style="width: 15%;">
+                    <span class="lbl">ڈیزائن:</span> <span class="badge-boxed" dir="ltr"><?= clean($designDisplay) ?></span>
+                </td>
+                <td style="width: 11%;">
+                    <span class="lbl">تعداد:</span> <span class="badge-boxed" dir="ltr"><?= (int)$lot['total_pieces'] ?></span>
+                </td>
+                <td style="width: 17%; text-align: left;">
+                    <span class="lbl">لاٹ #:</span> <span class="badge-lot-dark" dir="ltr"><?= clean($lot['lot_number']) ?></span>
+                </td>
+            </tr>
+        </table>
 
-        <div class="row g-2 align-items-center">
-            <!-- Left: Sweater Sketch with Measurements -->
-            <div class="col-3">
-                <div class="sweater-sketch-box">
-                    <svg class="sketch-svg" viewBox="0 0 160 140" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <!-- Body -->
-                        <path d="M45 35 L115 35 L120 120 L40 120 Z" stroke="#000" stroke-width="2" fill="#f8fafc"/>
-                        <!-- Ribbed Border -->
-                        <rect x="40" y="112" width="80" height="8" stroke="#000" stroke-width="1.5" fill="#e2e8f0"/>
-                        <line x1="50" y1="112" x2="50" y2="120" stroke="#000"/>
-                        <line x1="60" y1="112" x2="60" y2="120" stroke="#000"/>
-                        <line x1="70" y1="112" x2="70" y2="120" stroke="#000"/>
-                        <line x1="80" y1="112" x2="80" y2="120" stroke="#000"/>
-                        <line x1="90" y1="112" x2="90" y2="120" stroke="#000"/>
-                        <line x1="100" y1="112" x2="100" y2="120" stroke="#000"/>
-                        <line x1="110" y1="112" x2="110" y2="120" stroke="#000"/>
-                        <!-- Neck (V-Neck / Round) -->
-                        <path d="M65 35 L80 60 L95 35 Z" stroke="#000" stroke-width="1.5" fill="#ffffff"/>
-                        <!-- Sleeves -->
-                        <?php if (empty($lot['has_anatomy_variants']) || !empty($lot['with_sleeves_qty'])): ?>
-                            <path d="M45 35 L15 80 L28 85 L50 55" stroke="#000" stroke-width="1.5" fill="#f8fafc"/>
-                            <path d="M115 35 L145 80 L132 85 L110 55" stroke="#000" stroke-width="1.5" fill="#f8fafc"/>
-                        <?php else: ?>
-                            <!-- Sleeveless Cross lines -->
-                            <line x1="20" y1="40" x2="45" y2="70" stroke="#dc2626" stroke-width="2" stroke-dasharray="3,3"/>
-                            <line x1="140" y1="40" x2="115" y2="70" stroke="#dc2626" stroke-width="2" stroke-dasharray="3,3"/>
-                        <?php endif; ?>
-                    </svg>
-                    <div class="d-flex justify-content-between align-items-center mt-1 px-1 small fw-bold">
-                        <span>منٹ: <strong class="badge bg-light text-dark border"><?= clean($samMins) ?></strong></span>
-                        <span class="text-muted" style="font-size: 10px;"><?= clean($lot['product_name']) ?></span>
-                    </div>
-                </div>
+        <!-- Body Columns: Right=Color table (42%), Center=Measurements (34%), Left=Prototype sketch (24%) -->
+        <div class="row g-2 align-items-stretch">
+            <!-- Col 1 (Right): Color Table with Piece Breakdown -->
+            <div class="col-5">
+                <table class="tbl-grid">
+                    <thead>
+                        <tr>
+                            <th style="width: 24%;">رنگ نمبر</th>
+                            <th style="width: 36%;">رنگ نام</th>
+                            <th style="width: 20%;">تعداد</th>
+                            <th style="width: 20%;">پلا/بازو</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($colorSummary as $cs): ?>
+                            <tr>
+                                <td class="fw-bold font-monospace" dir="ltr"><?= clean($cs['color_code']) ?></td>
+                                <td>
+                                    <div class="d-flex align-items-center justify-content-center gap-1">
+                                        <span class="rounded-circle border d-inline-block" style="width: 8px; height: 8px; background: <?= clean($cs['hex_code']) ?>;"></span>
+                                        <span><?= clean($cs['color_name']) ?></span>
+                                    </div>
+                                </td>
+                                <td class="fw-bold" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
+                                <td dir="ltr"><?= (int)$cs['total_qty'] ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        <?php for ($i = count($colorSummary); $i < 4; $i++): ?>
+                            <tr><td>&nbsp;</td><td></td><td></td><td></td></tr>
+                        <?php endfor; ?>
+                    </tbody>
+                    <tfoot>
+                        <tr class="table-light fw-bold">
+                            <td colspan="2" class="text-start pe-2">کل تعداد:</td>
+                            <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
+                            <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
+                        </tr>
+                    </tfoot>
+                </table>
             </div>
 
-            <!-- Center: Palla Measurements & Color Scheme -->
+            <!-- Col 2 (Center): Palla Measurements & Color Scheme -->
             <div class="col-4">
                 <table class="tbl-grid">
                     <thead>
                         <tr>
-                            <th colspan="2">پلا پیمائش</th>
-                            <th colspan="4">کلر سکیم</th>
+                            <th colspan="2" style="width: 45%;">پلا پیمائش</th>
+                            <th colspan="4" style="width: 55%;">کلر سکیم</th>
                         </tr>
                         <tr>
                             <th>تفصیل</th>
@@ -311,75 +441,81 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                     <tbody>
                         <tr>
                             <td class="fw-bold">لمبائی</td>
-                            <td><?= clean($plaLen) ?></td>
-                            <td></td><td></td><td></td><td></td>
+                            <td class="fw-bold" dir="ltr"><?= clean($plaLen) ?></td>
+                            <td dir="ltr">41</td><td></td><td></td><td></td>
                         </tr>
                         <tr>
                             <td class="fw-bold">چوڑائی</td>
-                            <td><?= clean($plaWid) ?></td>
-                            <td></td><td></td><td></td><td></td>
+                            <td class="fw-bold" dir="ltr"><?= clean($plaWid) ?></td>
+                            <td dir="ltr">45</td><td></td><td></td><td></td>
                         </tr>
                         <tr>
                             <td class="fw-bold">بارڈر</td>
-                            <td><?= clean($plaBor) ?></td>
-                            <td></td><td></td><td></td><td></td>
+                            <td class="fw-bold" dir="ltr"><?= clean($plaBor) ?></td>
+                            <td dir="ltr">46</td><td></td><td></td><td></td>
+                        </tr>
+                        <tr>
+                            <td class="fw-bold">منٹ</td>
+                            <td class="fw-bold" dir="ltr"><?= clean($samMins) ?></td>
+                            <td dir="ltr">43</td><td></td><td></td><td></td>
                         </tr>
                     </tbody>
                 </table>
             </div>
 
-            <!-- Right: Color Table with Piece Allocations -->
-            <div class="col-5">
-                <table class="tbl-grid">
-                    <thead>
-                        <tr>
-                            <th style="width: 25%;">رنگ نمبر</th>
-                            <th style="width: 35%;">رنگ نام</th>
-                            <th style="width: 20%;">تعداد</th>
-                            <th style="width: 20%;">پلا / بازو</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($colorSummary as $cs): ?>
-                            <tr>
-                                <td class="fw-bold font-monospace fs-6"><?= clean($cs['color_code']) ?></td>
-                                <td>
-                                    <div class="d-flex align-items-center justify-content-center gap-1">
-                                        <span class="rounded-circle border d-inline-block" style="width: 10px; height: 10px; background: <?= clean($cs['hex_code']) ?>;"></span>
-                                        <span><?= clean($cs['color_name']) ?></span>
-                                    </div>
-                                </td>
-                                <td class="fw-bold fs-6"><?= (int)$cs['total_qty'] ?></td>
-                                <td class="small"><?= (int)$cs['total_qty'] ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                        <!-- Blank rows if fewer than 4 colors -->
-                        <?php for ($i = count($colorSummary); $i < 4; $i++): ?>
-                            <tr>
-                                <td>&nbsp;</td><td></td><td></td><td></td>
-                            </tr>
-                        <?php endfor; ?>
-                    </tbody>
-                    <tfoot>
-                        <tr class="table-light fw-bold">
-                            <td colspan="2" class="text-start pe-2">کل پیسز:</td>
-                            <td class="fs-6"><?= (int)$lot['total_pieces'] ?></td>
-                            <td>144</td>
-                        </tr>
-                    </tfoot>
-                </table>
+            <!-- Col 3 (Left): Sweater Prototype Sketch & SAM Box -->
+            <div class="col-3">
+                <div class="sweater-card">
+                    <svg class="sketch-svg" viewBox="0 0 160 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Body -->
+                        <path d="M45 32 L115 32 L120 115 L40 115 Z" stroke="#000" stroke-width="2" fill="#ffffff"/>
+                        <!-- Ribbed Border -->
+                        <rect x="40" y="107" width="80" height="8" stroke="#000" stroke-width="1.5" fill="#f1f5f9"/>
+                        <line x1="50" y1="107" x2="50" y2="115" stroke="#000"/>
+                        <line x1="60" y1="107" x2="60" y2="115" stroke="#000"/>
+                        <line x1="70" y1="107" x2="70" y2="115" stroke="#000"/>
+                        <line x1="80" y1="107" x2="80" y2="115" stroke="#000"/>
+                        <line x1="90" y1="107" x2="90" y2="115" stroke="#000"/>
+                        <line x1="100" y1="107" x2="100" y2="115" stroke="#000"/>
+                        <line x1="110" y1="107" x2="110" y2="115" stroke="#000"/>
+                        <!-- Neck (V-Neck) -->
+                        <path d="M65 32 L80 56 L95 32 Z" stroke="#000" stroke-width="1.5" fill="#ffffff"/>
+                        <!-- Sleeves -->
+                        <?php if (empty($lot['has_anatomy_variants']) || !empty($lot['with_sleeves_qty'])): ?>
+                            <path d="M45 32 L15 75 L28 80 L50 50" stroke="#000" stroke-width="1.5" fill="#ffffff"/>
+                            <path d="M115 32 L145 75 L132 80 L110 50" stroke="#000" stroke-width="1.5" fill="#ffffff"/>
+                        <?php else: ?>
+                            <!-- Sleeveless Cross lines -->
+                            <line x1="20" y1="36" x2="45" y2="65" stroke="#dc2626" stroke-width="2" stroke-dasharray="3,3"/>
+                            <line x1="140" y1="36" x2="115" y2="65" stroke="#dc2626" stroke-width="2" stroke-dasharray="3,3"/>
+                        <?php endif; ?>
+                    </svg>
+
+                    <div class="d-flex justify-content-between align-items-center px-1 my-1">
+                        <span class="small fw-bold">منٹ: <strong class="badge-boxed" dir="ltr"><?= clean($samMins) ?></strong></span>
+                        <span class="badge bg-light text-dark border" style="font-size: 9px;"><?= clean($lot['product_name']) ?></span>
+                    </div>
+
+                    <div class="sketch-meta">
+                        <div><span>DESIGN:</span> <strong dir="ltr"><?= clean($designDisplay) ?></strong></div>
+                        <div><span>NUMBER:</span> <span dir="ltr"><?= clean($lot['product_code'] ?: '—') ?></span></div>
+                        <div><span>YARN:</span> <span><?= clean($lot['yarn_type'] ?? 'Wool') ?></span></div>
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="text-start small text-muted mt-1" style="font-size: 10px;">
-            نقل نمبر 1: آپریٹر کاپی (Machine Operator Record)
+
+        <div class="copy-footer-note">
+            Copy #1: Machine Operator Record (نقل نمبر 1: آپریٹر کاپی)
         </div>
     </div>
     <?php endif; ?>
 
     <!-- Perforated Line -->
     <?php if ($copyFilter === 'all'): ?>
-        <div class="perforated-divider">
-            <span>✂ یہاں سے کاٹیں (Perforated Cutting Line) ✂</span>
+        <div class="perforated-cut-divider">
+            <div class="cut-line"></div>
+            <div class="cut-label"><i class="bi bi-scissors me-1"></i> یہاں سے کاٹیں (Perforated Cutting Line) <i class="bi bi-scissors ms-1"></i></div>
         </div>
     <?php endif; ?>
 
@@ -388,75 +524,50 @@ $designDisplay = $lot['design_number'] ?: '39/26';
     <!-- ======================================================================= -->
     <?php if (in_array($copyFilter, ['all', 'factory'])): ?>
     <div class="form-section">
-        <div class="section-header-bar">
-            <div>
-                <span>آپریٹر: </span> <span class="text-decoration-underline"><?= clean($operatorDisplay) ?></span>
-                <span class="ms-3">مشین: </span> <span class="badge-lot bg-light"><?= clean($machine) ?></span>
-            </div>
-            <div>
-                <span>تاریخ: </span> <span><?= format_date($lot['lot_date']) ?></span>
-                <span class="ms-3">سائز: </span> <span class="badge-lot bg-light"><?= clean($sizeDisplay) ?></span>
-            </div>
-            <div>
-                <span>ڈیزائن نمبر: </span> <span class="badge-lot bg-light"><?= clean($designDisplay) ?></span>
-                <span class="ms-3">تعداد: </span> <span class="badge-lot bg-light"><?= (int)$lot['total_pieces'] ?></span>
-                <span class="ms-3">لاٹ نمبر: </span> <span class="badge-lot bg-dark text-white font-monospace"><?= clean($lot['lot_number']) ?></span>
-            </div>
-        </div>
+        <table class="header-grid-tbl">
+            <tr>
+                <td style="width: 25%;">
+                    <span class="lbl">آپریٹر:</span> <span class="val fw-bold"><?= clean($operatorDisplay) ?></span>
+                </td>
+                <td style="width: 17%;">
+                    <span class="lbl">مشین:</span> <span class="badge-boxed" dir="ltr"><?= clean($machine) ?></span>
+                </td>
+                <td style="width: 15%;">
+                    <span class="lbl">سائز:</span> <span class="badge-boxed" dir="ltr"><?= clean($sizeDisplay) ?></span>
+                </td>
+                <td style="width: 15%;">
+                    <span class="lbl">ڈیزائن:</span> <span class="badge-boxed" dir="ltr"><?= clean($designDisplay) ?></span>
+                </td>
+                <td style="width: 11%;">
+                    <span class="lbl">تعداد:</span> <span class="badge-boxed" dir="ltr"><?= (int)$lot['total_pieces'] ?></span>
+                </td>
+                <td style="width: 17%; text-align: left;">
+                    <span class="lbl">لاٹ #:</span> <span class="badge-lot-dark" dir="ltr"><?= clean($lot['lot_number']) ?></span>
+                </td>
+            </tr>
+        </table>
 
-        <div class="row g-2 align-items-center">
-            <!-- Palla & Bazo Measurements Side by Side -->
-            <div class="col-6">
-                <div class="row g-1">
-                    <div class="col-6">
-                        <table class="tbl-grid">
-                            <thead>
-                                <tr><th colspan="2">پلا پیمائش</th></tr>
-                            </thead>
-                            <tbody>
-                                <tr><td>لمبائی</td><td class="fw-bold"><?= clean($plaLen) ?></td></tr>
-                                <tr><td>چوڑائی</td><td class="fw-bold"><?= clean($plaWid) ?></td></tr>
-                                <tr><td>بارڈر</td><td class="fw-bold"><?= clean($plaBor) ?></td></tr>
-                                <tr><td>منٹ</td><td class="fw-bold"><?= clean($samMins) ?></td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="col-6">
-                        <table class="tbl-grid">
-                            <thead>
-                                <tr><th colspan="2">بازو پیمائش</th></tr>
-                            </thead>
-                            <tbody>
-                                <tr><td>لمبائی</td><td class="fw-bold"><?= clean($bazoLen) ?></td></tr>
-                                <tr><td>چوڑائی</td><td class="fw-bold"><?= clean($bazoWid) ?></td></tr>
-                                <tr><td>بارڈر</td><td class="fw-bold"><?= clean($bazoBor) ?></td></tr>
-                                <tr><td>منٹ</td><td class="fw-bold"><?= clean($samMins) ?></td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Right: Color Table with Palla / Bazo Breakdown -->
+        <div class="row g-2 align-items-stretch">
+            <!-- Right: Color Breakdown Table (50%) -->
             <div class="col-6">
                 <table class="tbl-grid">
                     <thead>
                         <tr>
-                            <th>رنگ نمبر</th>
-                            <th>رنگ نام</th>
-                            <th>پلا تعداد</th>
-                            <th>بازو تعداد</th>
-                            <th>کل تعداد</th>
+                            <th style="width: 20%;">رنگ نمبر</th>
+                            <th style="width: 32%;">رنگ نام</th>
+                            <th style="width: 16%;">پلا تعداد</th>
+                            <th style="width: 16%;">بازو تعداد</th>
+                            <th style="width: 16%;">کل تعداد</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($colorSummary as $cs): ?>
                             <tr>
-                                <td class="fw-bold font-monospace"><?= clean($cs['color_code']) ?></td>
+                                <td class="fw-bold font-monospace" dir="ltr"><?= clean($cs['color_code']) ?></td>
                                 <td><?= clean($cs['color_name']) ?></td>
-                                <td><?= (int)$cs['total_qty'] ?></td>
-                                <td><?= (int)$cs['total_qty'] * 2 ?></td>
-                                <td class="fw-bold"><?= (int)$cs['total_qty'] ?></td>
+                                <td dir="ltr"><?= (int)$cs['total_qty'] ?></td>
+                                <td dir="ltr"><?= (int)$cs['total_qty'] * 2 ?></td>
+                                <td class="fw-bold" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
                             </tr>
                         <?php endforeach; ?>
                         <?php for ($i = count($colorSummary); $i < 4; $i++): ?>
@@ -466,24 +577,58 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                     <tfoot>
                         <tr class="table-light fw-bold">
                             <td colspan="2" class="text-start pe-2">ٹوٹل:</td>
-                            <td><?= (int)$lot['total_pieces'] ?></td>
-                            <td><?= (int)$lot['total_pieces'] * 2 ?></td>
-                            <td><?= (int)$lot['total_pieces'] ?></td>
+                            <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
+                            <td dir="ltr"><?= (int)$lot['total_pieces'] * 2 ?></td>
+                            <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
                         </tr>
                     </tfoot>
                 </table>
             </div>
+
+            <!-- Left: Side-by-side Palla & Bazo Measurements (50%) -->
+            <div class="col-6">
+                <div class="row g-1">
+                    <div class="col-6">
+                        <table class="tbl-grid">
+                            <thead>
+                                <tr><th colspan="2">پلا پیمائش</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>لمبائی</td><td class="fw-bold" dir="ltr"><?= clean($plaLen) ?></td></tr>
+                                <tr><td>چوڑائی</td><td class="fw-bold" dir="ltr"><?= clean($plaWid) ?></td></tr>
+                                <tr><td>بارڈر</td><td class="fw-bold" dir="ltr"><?= clean($plaBor) ?></td></tr>
+                                <tr><td>منٹ</td><td class="fw-bold" dir="ltr"><?= clean($samMins) ?></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="col-6">
+                        <table class="tbl-grid">
+                            <thead>
+                                <tr><th colspan="2">بازو پیمائش</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>لمبائی</td><td class="fw-bold" dir="ltr"><?= clean($bazoLen) ?></td></tr>
+                                <tr><td>چوڑائی</td><td class="fw-bold" dir="ltr"><?= clean($bazoWid) ?></td></tr>
+                                <tr><td>بارڈر</td><td class="fw-bold" dir="ltr"><?= clean($bazoBor) ?></td></tr>
+                                <tr><td>منٹ</td><td class="fw-bold" dir="ltr"><?= clean($samMins) ?></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="text-start small text-muted mt-1" style="font-size: 10px;">
-            نقل نمبر 2: فیکٹری کاپی (Factory Permanent Book Copy)
+
+        <div class="copy-footer-note">
+            Copy #2: Factory Permanent Book Copy (نقل نمبر 2: فیکٹری کاپی)
         </div>
     </div>
     <?php endif; ?>
 
     <!-- Perforated Line -->
     <?php if ($copyFilter === 'all'): ?>
-        <div class="perforated-divider">
-            <span>✂ یہاں سے کاٹیں (Cutting Master Section) ✂</span>
+        <div class="perforated-cut-divider">
+            <div class="cut-line"></div>
+            <div class="cut-label"><i class="bi bi-scissors me-1"></i> یہاں سے کاٹیں (Cutting Master Section) <i class="bi bi-scissors ms-1"></i></div>
         </div>
     <?php endif; ?>
 
@@ -492,72 +637,77 @@ $designDisplay = $lot['design_number'] ?: '39/26';
     <!-- ======================================================================= -->
     <?php if (in_array($copyFilter, ['all', 'cutting'])): ?>
     <div class="form-section">
-        <div class="section-header-bar">
-            <div>
-                <span>کٹائی ماسٹر: </span> <span class="text-decoration-underline fw-bold">علی رضا (یا کٹنگ ماسٹر)</span>
-                <span class="ms-3">کٹنگ تاریخ: </span> <span>____________________</span>
-            </div>
-            <div>
-                <span>لاٹ نمبر: </span> <span class="badge-lot bg-dark text-white font-monospace"><?= clean($lot['lot_number']) ?></span>
-                <span class="ms-3">ڈیزائن نمبر: </span> <span class="badge-lot bg-light"><?= clean($designDisplay) ?></span>
-                <span class="ms-3">سائز: </span> <span class="badge-lot bg-light"><?= clean($sizeDisplay) ?></span>
-                <span class="ms-3">تعداد: </span> <span class="badge-lot bg-light"><?= (int)$lot['total_pieces'] ?></span>
-            </div>
-        </div>
+        <table class="header-grid-tbl">
+            <tr>
+                <td style="width: 25%;">
+                    <span class="lbl">کٹائی ماسٹر:</span> <span class="val fw-bold">علی رضا (کٹنگ ماسٹر)</span>
+                </td>
+                <td style="width: 17%;">
+                    <span class="lbl">تاریخ:</span> <span class="val" dir="ltr">_________________</span>
+                </td>
+                <td style="width: 15%;">
+                    <span class="lbl">سائز:</span> <span class="badge-boxed" dir="ltr"><?= clean($sizeDisplay) ?></span>
+                </td>
+                <td style="width: 15%;">
+                    <span class="lbl">ڈیزائن:</span> <span class="badge-boxed" dir="ltr"><?= clean($designDisplay) ?></span>
+                </td>
+                <td style="width: 11%;">
+                    <span class="lbl">تعداد:</span> <span class="badge-boxed" dir="ltr"><?= (int)$lot['total_pieces'] ?></span>
+                </td>
+                <td style="width: 17%; text-align: left;">
+                    <span class="lbl">لاٹ #:</span> <span class="badge-lot-dark" dir="ltr"><?= clean($lot['lot_number']) ?></span>
+                </td>
+            </tr>
+        </table>
 
-        <div class="row g-2 align-items-center">
-            <!-- Small sweater thumbnail -->
-            <div class="col-2 text-center">
-                <svg class="sketch-svg" style="height: 80px;" viewBox="0 0 160 140" fill="none">
-                    <path d="M45 35 L115 35 L120 120 L40 120 Z" stroke="#000" stroke-width="2" fill="#f8fafc"/>
-                    <path d="M65 35 L80 60 L95 35 Z" stroke="#000" stroke-width="1.5" fill="#ffffff"/>
-                    <path d="M45 35 L15 80 L28 85 L50 55" stroke="#000" stroke-width="1.5" fill="#f8fafc"/>
-                    <path d="M115 35 L145 80 L132 85 L110 55" stroke="#000" stroke-width="1.5" fill="#f8fafc"/>
-                </svg>
-            </div>
+        <!-- Dynamic Garment Types Grid (Zero Scrollbar - Fixed Table Layout) -->
+        <table class="tbl-grid tbl-cutting">
+            <thead>
+                <tr>
+                    <th style="width: 7%;">خاکہ</th>
+                    <?php foreach ($garmentTypes as $gt): ?>
+                        <th><?= clean($gt['name']) ?></th>
+                    <?php endforeach; ?>
+                    <th style="width: 9%;">کل کٹنگ</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Row 1: Pieces Cut -->
+                <tr>
+                    <td rowspan="2" class="p-1 text-center" style="vertical-align: middle; background: #fafafa;">
+                        <svg class="sketch-svg" style="height: 48px; width: 100%; max-width: 55px;" viewBox="0 0 160 140" fill="none">
+                            <path d="M45 32 L115 32 L120 115 L40 115 Z" stroke="#000" stroke-width="2" fill="#fff"/>
+                            <path d="M65 32 L80 56 L95 32 Z" stroke="#000" stroke-width="1.5" fill="#fff"/>
+                            <path d="M45 32 L15 75 L28 80 L50 50" stroke="#000" stroke-width="1.5" fill="#fff"/>
+                            <path d="M115 32 L145 75 L132 80 L110 50" stroke="#000" stroke-width="1.5" fill="#fff"/>
+                        </svg>
+                    </td>
+                    <?php foreach ($garmentTypes as $gt): ?>
+                        <td style="height: 24px;"></td>
+                    <?php endforeach; ?>
+                    <td class="fw-bold" style="height: 24px;"></td>
+                </tr>
+                <!-- Row 2: Secondary Notes or Colors -->
+                <tr>
+                    <?php foreach ($garmentTypes as $gt): ?>
+                        <td style="height: 24px;"></td>
+                    <?php endforeach; ?>
+                    <td style="height: 24px;"></td>
+                </tr>
+            </tbody>
+        </table>
 
-            <!-- Dynamic Garment Types Grid -->
-            <div class="col-10">
-                <div class="table-responsive">
-                    <table class="tbl-grid">
-                        <thead>
-                            <tr>
-                                <?php foreach ($garmentTypes as $gt): ?>
-                                    <th style="min-width: 60px; font-size: 10px;"><?= clean($gt['name']) ?></th>
-                                <?php endforeach; ?>
-                                <th style="min-width: 70px;">کل کٹنگ</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- Row 1: Pieces cut -->
-                            <tr>
-                                <?php foreach ($garmentTypes as $gt): ?>
-                                    <td style="height: 32px;"></td>
-                                <?php endforeach; ?>
-                                <td class="fw-bold"></td>
-                            </tr>
-                            <!-- Row 2: Secondary notes or color -->
-                            <tr>
-                                <?php foreach ($garmentTypes as $gt): ?>
-                                    <td style="height: 32px;"></td>
-                                <?php endforeach; ?>
-                                <td></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        <div class="text-start small text-muted mt-1" style="font-size: 10px;">
-            نقل نمبر 3: کٹائی ماسٹر کاپی (Cutting Department Traveller) — تمام اقسام متحرک و ایڈمن سے قابلِ تبدیل ہیں
+        <div class="copy-footer-note">
+            Copy #3: Cutting Department Traveller (نقل نمبر 3: کٹائی ماسٹر کاپی) — تمام اقسام متحرک و ایڈمن سے قابلِ تبدیل ہیں
         </div>
     </div>
     <?php endif; ?>
 
     <!-- Perforated Line -->
     <?php if ($copyFilter === 'all'): ?>
-        <div class="perforated-divider">
-            <span>✂ یہاں سے کاٹیں (Band Plate / Hand Print Expense) ✂</span>
+        <div class="perforated-cut-divider">
+            <div class="cut-line"></div>
+            <div class="cut-label"><i class="bi bi-scissors me-1"></i> یہاں سے کاٹیں (Band Plate / Hand Print Expense) <i class="bi bi-scissors ms-1"></i></div>
         </div>
     <?php endif; ?>
 
@@ -566,62 +716,71 @@ $designDisplay = $lot['design_number'] ?: '39/26';
     <!-- ======================================================================= -->
     <?php if (in_array($copyFilter, ['all', 'bandplate'])): ?>
     <div class="form-section">
-        <div class="section-header-bar">
-            <div>
-                <span class="fs-6 fw-bold">بینڈ فلیٹ خرچہ / ہینڈ پرنٹ لاگ (Band Plate & Print Cost)</span>
-            </div>
-            <div>
-                <span>لاٹ نمبر: </span> <span class="badge-lot bg-dark text-white font-monospace"><?= clean($lot['lot_number']) ?></span>
-                <span class="ms-3">ڈیزائن نمبر: </span> <span class="badge-lot bg-light"><?= clean($designDisplay) ?></span>
-            </div>
-        </div>
+        <table class="header-grid-tbl">
+            <tr>
+                <td style="width: 38%;">
+                    <span class="lbl fw-bold">بینڈ فلیٹ خرچہ / ہینڈ پرنٹ لاگ (Band Plate & Print)</span>
+                </td>
+                <td style="width: 15%;">
+                    <span class="lbl">سائز:</span> <span class="badge-boxed" dir="ltr"><?= clean($sizeDisplay) ?></span>
+                </td>
+                <td style="width: 15%;">
+                    <span class="lbl">ڈیزائن:</span> <span class="badge-boxed" dir="ltr"><?= clean($designDisplay) ?></span>
+                </td>
+                <td style="width: 14%;">
+                    <span class="lbl">تعداد:</span> <span class="badge-boxed" dir="ltr"><?= (int)$lot['total_pieces'] ?></span>
+                </td>
+                <td style="width: 18%; text-align: left;">
+                    <span class="lbl">لاٹ #:</span> <span class="badge-lot-dark" dir="ltr"><?= clean($lot['lot_number']) ?></span>
+                </td>
+            </tr>
+        </table>
 
-        <div class="table-responsive">
-            <table class="tbl-grid">
-                <thead>
+        <table class="tbl-grid" style="table-layout: fixed; width: 100%;">
+            <thead>
+                <tr>
+                    <th style="width: 22%;">رنگ (Color)</th>
+                    <th style="width: 11%;">لمبی ٹیپ</th>
+                    <th style="width: 10%;">وی (V)</th>
+                    <th style="width: 11%;">کالر</th>
+                    <th style="width: 10%;">بون</th>
+                    <th style="width: 11%;">پاکٹ</th>
+                    <th style="width: 11%;">گول گلا</th>
+                    <th style="width: 14%;">کل تعداد</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($colorSummary as $cs): ?>
                     <tr>
-                        <th style="width: 15%;">رنگ (Color)</th>
-                        <th style="width: 12%;">لمبی ٹیپ</th>
-                        <th style="width: 10%;">وی</th>
-                        <th style="width: 10%;">کالر</th>
-                        <th style="width: 10%;">بون</th>
-                        <th style="width: 12%;">پاکٹ</th>
-                        <th style="width: 15%;">گول گلا</th>
-                        <th style="width: 16%;">کل تعداد (Total)</th>
+                        <td class="fw-bold font-monospace" dir="ltr"><?= clean($cs['color_code']) ?> (<?= clean($cs['color_name']) ?>)</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td dir="ltr"><?= (int)$cs['total_qty'] ?></td>
+                        <td dir="ltr"><?= (int)$cs['total_qty'] ?></td>
+                        <td class="fw-bold" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
                     </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($colorSummary as $cs): ?>
-                        <tr>
-                            <td class="fw-bold font-monospace"><?= clean($cs['color_code']) ?> (<?= clean($cs['color_name']) ?>)</td>
-                            <td></td>
-                            <td></td>
-                            <td></td>
-                            <td></td>
-                            <td><?= (int)$cs['total_qty'] ?></td>
-                            <td><?= (int)$cs['total_qty'] ?></td>
-                            <td class="fw-bold fs-6"><?= (int)$cs['total_qty'] ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                    <?php for ($i = count($colorSummary); $i < 4; $i++): ?>
-                        <tr>
-                            <td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
-                        </tr>
-                    <?php endfor; ?>
-                </tbody>
-                <tfoot>
-                    <tr class="table-light fw-bold">
-                        <td class="text-start pe-2">ٹوٹل پیسز:</td>
-                        <td></td><td></td><td></td><td></td>
-                        <td><?= (int)$lot['total_pieces'] ?></td>
-                        <td><?= (int)$lot['total_pieces'] ?></td>
-                        <td class="fs-6"><?= (int)$lot['total_pieces'] ?></td>
+                <?php endforeach; ?>
+                <?php for ($i = count($colorSummary); $i < 4; $i++): ?>
+                    <tr>
+                        <td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
                     </tr>
-                </tfoot>
-            </table>
-        </div>
-        <div class="text-start small text-muted mt-1" style="font-size: 10px;">
-            نقل نمبر 4: بینڈ فلیٹ / ہینڈ پرنٹ خرچہ شیٹ (Head Fit & Band Plate Record)
+                <?php endfor; ?>
+            </tbody>
+            <tfoot>
+                <tr class="table-light fw-bold">
+                    <td class="text-start pe-2">ٹوٹل پیسز:</td>
+                    <td></td><td></td><td></td><td></td>
+                    <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
+                    <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
+                    <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <div class="copy-footer-note">
+            Copy #4: Head Fit & Band Plate Record (نقل نمبر 4: بینڈ فلیٹ / ہینڈ پرنٹ خرچہ شیٹ)
         </div>
     </div>
     <?php endif; ?>
