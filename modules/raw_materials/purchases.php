@@ -39,8 +39,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $itemStmt->execute([$purchaseId, $materialId, $quantity, $unitPrice, $totalAmount]);
 
             // Increase raw material stock
+            $curCostStmt = $db->prepare("SELECT cost_price FROM materials WHERE id = ?");
+            $curCostStmt->execute([$materialId]);
+            $existingCost = (float)$curCostStmt->fetchColumn();
+
             $up = $db->prepare("UPDATE materials SET current_stock = current_stock + ?, cost_price = ? WHERE id = ?");
-            $up->execute([$quantity, $unitPrice > 0 ? $unitPrice : $costPrice, $materialId]);
+            $up->execute([$quantity, $unitPrice > 0 ? $unitPrice : $existingCost, $materialId]);
 
             // Record in inventory_transactions
             $tx = $db->prepare("INSERT INTO inventory_transactions 
@@ -50,7 +54,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
             log_audit('PURCHASE_MATERIAL', 'material_purchases', $purchaseId, null, ['amount' => $totalAmount, 'quantity' => $quantity]);
             $db->commit();
-            redirect('modules/raw_materials/purchases.php', "Purchase #$purNum recorded successfully! Raw stock updated.");
+
+            $retLotId = (int)($_POST['lot_id'] ?? $_GET['lot_id'] ?? 0);
+            if ($retLotId > 0) {
+                redirect('modules/lots/view.php?id=' . $retLotId, "Purchase #$purNum recorded successfully! Raw stock updated. You can now issue remaining quota.");
+            } else {
+                redirect('modules/raw_materials/purchases.php', "Purchase #$purNum recorded successfully! Raw stock updated.");
+            }
         } catch (Exception $e) {
             $db->rollBack();
             set_flash('danger', 'Error recording purchase: ' . $e->getMessage());
@@ -98,6 +108,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <form method="POST" action="">
                     <input type="hidden" name="action" value="create_purchase">
                     <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+                    <input type="hidden" name="lot_id" value="<?= (int)($_GET['lot_id'] ?? 0) ?>">
 
                     <div class="row g-3">
                         <div class="col-12 col-md-3">
@@ -123,7 +134,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <select name="material_id" id="purMaterial" class="form-select" required>
                                 <option value="">-- Choose Raw Material --</option>
                                 <?php foreach ($materials as $m): ?>
-                                    <option value="<?= $m['id'] ?>" data-cost="<?= $m['cost_price'] ?>">
+                                    <option value="<?= $m['id'] ?>" data-cost="<?= $m['cost_price'] ?>" <?= (isset($_GET['material_id']) && (int)$_GET['material_id'] === (int)$m['id']) ? 'selected' : '' ?>>
                                         <?= clean($m['name']) ?> (<?= clean($m['code']) ?>) [<?= clean($m['unit_code']) ?>]
                                     </option>
                                 <?php endforeach; ?>

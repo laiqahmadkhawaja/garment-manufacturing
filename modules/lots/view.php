@@ -260,7 +260,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     </div>
                 </div>
                 <div class="d-flex flex-wrap gap-2 align-self-stretch align-self-md-auto">
-                    <a href="<?= BASE_URL ?>modules/raw_materials/stock_in.php" class="btn btn-danger btn-sm d-inline-flex align-items-center gap-1 shadow-sm">
+                    <a href="<?= BASE_URL ?>modules/raw_materials/stock_in.php?lot_id=<?= $lot['id'] ?>" class="btn btn-danger btn-sm d-inline-flex align-items-center gap-1 shadow-sm">
                         <i class="bi bi-plus-circle-fill"></i>
                         <span>اسٹاک شامل کریں (Stock In)</span>
                     </a>
@@ -768,7 +768,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 </div>
                             </div>
                             <div class="d-flex flex-wrap gap-2 align-self-stretch align-self-md-auto">
-                                <a href="<?= BASE_URL ?>modules/raw_materials/stock_in.php" class="btn btn-outline-danger btn-sm text-nowrap">
+                                <a href="<?= BASE_URL ?>modules/raw_materials/stock_in.php?lot_id=<?= $lot['id'] ?>" class="btn btn-outline-danger btn-sm text-nowrap">
                                     <i class="bi bi-box-arrow-in-down me-1"></i> اسٹاک خریدیں / داخل کریں
                                 </a>
                                 <form method="POST" action="" class="d-inline">

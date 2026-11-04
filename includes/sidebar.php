@@ -66,7 +66,11 @@ $activeNav = $activeNav ?? 'dashboard';
         <div class="nav-section-title">Inventory & Packing</div>
         <a href="<?= BASE_URL ?>modules/raw_materials/index.php" class="nav-link <?= $activeNav === 'raw_materials' ? 'active' : '' ?>">
             <i class="bi bi-boxes"></i>
-            <span>Raw Materials</span>
+            <span>Raw Materials Stock</span>
+        </a>
+        <a href="<?= BASE_URL ?>modules/raw_materials/stock_in.php" class="nav-link <?= $activeNav === 'material_purchases' ? 'active' : '' ?>">
+            <i class="bi bi-cart-plus-fill text-success"></i>
+            <span>Stock In / Purchases</span>
         </a>
         <a href="<?= BASE_URL ?>modules/raw_materials/issues.php" class="nav-link <?= $activeNav === 'material_issues' ? 'active' : '' ?>">
             <i class="bi bi-box-arrow-right"></i>
