@@ -108,7 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // Also post to production_entries for Stage 1 (Knitting/Operator) if available in workflow
-        $s1Stmt = $db->prepare("SELECT lws.operation_id, o.name AS op_name 
+        $s1Stmt = $db->prepare("SELECT lws.operation_id, o.name AS op_name, o.default_rate 
                                FROM lot_workflow_steps lws 
                                JOIN operations o ON lws.operation_id = o.id 
                                WHERE lws.lot_id = ? ORDER BY lws.sequence ASC LIMIT 1");
@@ -117,20 +117,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($s1Op && $totalBatchGood > 0) {
             $s1OpId = (int)$s1Op['operation_id'];
+            $defaultRate = (float)($s1Op['default_rate'] ?? 0.00);
+
             // Record Op1 contribution
             $op1Sum = 0;
             foreach ($entriesData as $vals) $op1Sum += (int)($vals['op1_pieces'] ?? 0);
             $avgOp1Pieces = count($entriesData) > 0 ? round($op1Sum / count($entriesData)) : 0;
 
             if ($op1Id && $avgOp1Pieces > 0) {
-                $chkP = $db->prepare("SELECT id FROM production_entries WHERE lot_id = ? AND operation_id = ? AND worker_id = ? LIMIT 1");
+                $chkP = $db->prepare("SELECT id, rate FROM production_entries WHERE lot_id = ? AND operation_id = ? AND worker_id = ? LIMIT 1");
                 $chkP->execute([$lotId, $s1OpId, $op1Id]);
-                $peId = $chkP->fetchColumn();
-                if ($peId) {
-                    $db->prepare("UPDATE production_entries SET good_qty = ?, entry_date = ? WHERE id = ?")->execute([$avgOp1Pieces, $entryDate, $peId]);
+                $peRow = $chkP->fetch();
+                if ($peRow) {
+                    $rateToUse = (float)($peRow['rate'] ?: $defaultRate);
+                    $db->prepare("UPDATE production_entries SET good_qty = ?, qty_received = ?, labour_amount = round(? * rate, 2), entry_date = ? WHERE id = ?")
+                       ->execute([$avgOp1Pieces, $avgOp1Pieces, $avgOp1Pieces, $entryDate, $peRow['id']]);
                 } else {
-                    $db->prepare("INSERT INTO production_entries (lot_id, operation_id, worker_id, entry_date, good_qty, shift, created_by) VALUES (?, ?, ?, ?, ?, 'Day Shift', ?)")
-                       ->execute([$lotId, $s1OpId, $op1Id, $entryDate, $avgOp1Pieces, $_SESSION['user_id'] ?? null]);
+                    $peDoc1 = generate_doc_number('PE-', 'production_entries', 'entry_number');
+                    $db->prepare("INSERT INTO production_entries 
+                        (entry_number, lot_id, operation_id, worker_id, entry_date, qty_received, good_qty, rate, labour_amount, shift, notes, created_by) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Day Shift', 'Stage 1 Machine Operator Output', ?)")
+                       ->execute([$peDoc1, $lotId, $s1OpId, $op1Id, $entryDate, $avgOp1Pieces, $avgOp1Pieces, $defaultRate, round($avgOp1Pieces * $defaultRate, 2), $_SESSION['user_id'] ?? null]);
                 }
             }
 
@@ -140,14 +147,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $avgOp2Pieces = count($entriesData) > 0 ? round($op2Sum / count($entriesData)) : 0;
 
             if ($op2Id && $avgOp2Pieces > 0) {
-                $chkP = $db->prepare("SELECT id FROM production_entries WHERE lot_id = ? AND operation_id = ? AND worker_id = ? LIMIT 1");
+                $chkP = $db->prepare("SELECT id, rate FROM production_entries WHERE lot_id = ? AND operation_id = ? AND worker_id = ? LIMIT 1");
                 $chkP->execute([$lotId, $s1OpId, $op2Id]);
-                $peId = $chkP->fetchColumn();
-                if ($peId) {
-                    $db->prepare("UPDATE production_entries SET good_qty = ?, entry_date = ? WHERE id = ?")->execute([$avgOp2Pieces, $entryDate, $peId]);
+                $peRow = $chkP->fetch();
+                if ($peRow) {
+                    $rateToUse = (float)($peRow['rate'] ?: $defaultRate);
+                    $db->prepare("UPDATE production_entries SET good_qty = ?, qty_received = ?, labour_amount = round(? * rate, 2), entry_date = ? WHERE id = ?")
+                       ->execute([$avgOp2Pieces, $avgOp2Pieces, $avgOp2Pieces, $entryDate, $peRow['id']]);
                 } else {
-                    $db->prepare("INSERT INTO production_entries (lot_id, operation_id, worker_id, entry_date, good_qty, shift, created_by) VALUES (?, ?, ?, ?, ?, 'Night Shift', ?)")
-                       ->execute([$lotId, $s1OpId, $op2Id, $entryDate, $avgOp2Pieces, $_SESSION['user_id'] ?? null]);
+                    $peDoc2 = generate_doc_number('PE-', 'production_entries', 'entry_number');
+                    if (isset($peDoc1) && $peDoc2 === $peDoc1) {
+                        preg_match('/\d+$/', $peDoc1, $m);
+                        $n = isset($m[0]) ? (int)$m[0] + 1 : 1;
+                        $peDoc2 = 'PE-' . str_pad((string)$n, 4, '0', STR_PAD_LEFT);
+                    }
+                    $db->prepare("INSERT INTO production_entries 
+                        (entry_number, lot_id, operation_id, worker_id, entry_date, qty_received, good_qty, rate, labour_amount, shift, notes, created_by) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Night Shift', 'Stage 1 Machine Operator Output', ?)")
+                       ->execute([$peDoc2, $lotId, $s1OpId, $op2Id, $entryDate, $avgOp2Pieces, $avgOp2Pieces, $defaultRate, round($avgOp2Pieces * $defaultRate, 2), $_SESSION['user_id'] ?? null]);
                 }
             }
         }
