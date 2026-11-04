@@ -165,11 +165,26 @@ $designDisplay = $lot['design_number'] ?: '39/26';
         }
         .form-section {
             border: 1.5px solid #000;
-            padding: 4px 6px;
-            margin-bottom: 5px;
+            padding: 5px 7px;
+            margin-bottom: 6px;
             position: relative;
             background: #fff;
+            min-height: 245px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
             page-break-inside: avoid;
+        }
+        .section-body-row {
+            flex: 1 1 auto;
+            display: flex;
+            align-items: stretch;
+            margin-bottom: 4px;
+        }
+        .section-col-flex {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
         }
         /* Header Table */
         .header-grid-tbl {
@@ -332,52 +347,75 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             }
             html, body { 
                 background: #fff !important; 
-                font-size: 11px !important;
+                font-size: 11.5px !important;
                 padding: 0 !important;
                 margin: 0 !important;
+                width: 100% !important;
                 height: 100% !important;
+                overflow: hidden !important;
             }
             .no-print-bar { display: none !important; }
             .sheet-container { 
                 width: 100% !important; 
                 max-width: 100% !important; 
+                height: 288mm !important;
+                max-height: 288mm !important;
                 margin: 0 !important;
                 padding: 0 !important;
                 box-shadow: none !important;
+                border-radius: 0 !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+                overflow: hidden !important;
+                box-sizing: border-box !important;
             }
             .form-section { 
+                height: 69mm !important;
+                min-height: 69mm !important;
+                max-height: 69mm !important;
+                margin: 0 !important; 
+                padding: 2.2mm 3.5mm !important;
                 page-break-inside: avoid !important;
-                margin-bottom: 4px !important; 
-                padding: 3px 5px !important;
+                page-break-after: avoid !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+                box-sizing: border-box !important;
+                overflow: hidden !important;
+            }
+            .section-body-row {
+                flex: 1 1 auto !important;
+                display: flex !important;
+                align-items: stretch !important;
+                margin-bottom: 1mm !important;
+                min-height: 0 !important;
+            }
+            .section-col-flex {
+                display: flex !important;
+                flex-direction: column !important;
+                height: 100% !important;
+                min-height: 0 !important;
             }
             .perforated-cut-divider { 
-                margin: 3px 0 !important; 
-                height: 12px !important;
+                height: 3.5mm !important;
+                min-height: 3.5mm !important;
+                max-height: 3.5mm !important;
+                margin: 0 !important; 
+                line-height: 3.5mm !important;
+                overflow: hidden !important;
+            }
+            .perforated-cut-divider .cut-line {
+                top: 1.75mm !important;
+                border-top: 1px dashed #666 !important;
             }
             .perforated-cut-divider .cut-label {
-                font-size: 9px !important;
-                line-height: 12px !important;
-                padding: 0 8px !important;
+                font-size: 8px !important;
+                line-height: 3.5mm !important;
+                padding: 0 6px !important;
             }
-            .tbl-grid th, .tbl-grid td {
-                padding: 1.5px 2px !important;
-                font-size: 10.5px !important;
-                line-height: 1.3 !important;
-            }
-            .tbl-cutting th {
-                font-size: 9.5px !important;
-                padding: 1.5px 1px !important;
-            }
-            .tbl-cutting td {
-                height: 22px !important;
-                padding: 1px !important;
-            }
-            .sketch-svg {
-                height: 60px !important;
-            }
-            .badge-lot-dark {
-                background: #000 !important;
-                color: #fff !important;
+            .header-grid-tbl {
+                margin-bottom: 1.5mm !important;
             }
             .header-grid-tbl td {
                 padding: 1.5px 2px !important;
@@ -386,6 +424,57 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             }
             .lbl {
                 font-size: 12px !important;
+            }
+            .tbl-grid {
+                height: 100% !important;
+                width: 100% !important;
+                flex: 1 1 auto !important;
+            }
+            .tbl-grid th, .tbl-grid td {
+                padding: 2px 2px !important;
+                font-size: 10.5px !important;
+                line-height: 1.3 !important;
+            }
+            .tbl-cutting {
+                height: 100% !important;
+                flex: 1 1 auto !important;
+                margin-bottom: 1mm !important;
+            }
+            .tbl-cutting th {
+                font-size: 9.5px !important;
+                padding: 2px 1px !important;
+                line-height: 1.2 !important;
+            }
+            .tbl-cutting td {
+                height: auto !important;
+                padding: 1px !important;
+            }
+            .sweater-card {
+                height: 100% !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+                padding: 2px 3px !important;
+            }
+            .sketch-svg {
+                max-height: 36mm !important;
+                min-height: 28mm !important;
+                height: 100% !important;
+            }
+            .sketch-meta {
+                font-size: 8.5px !important;
+                line-height: 1.15 !important;
+                padding-top: 1px !important;
+                margin-top: 1px !important;
+            }
+            .copy-footer-note {
+                font-size: 8.5px !important;
+                margin-top: 1mm !important;
+                line-height: 1.2 !important;
+            }
+            .badge-lot-dark {
+                background: #000 !important;
+                color: #fff !important;
             }
         }
     </style>
@@ -445,9 +534,9 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             </tr>
         </table>
 
-        <div class="row g-2 align-items-stretch">
+        <div class="row g-2 align-items-stretch section-body-row">
             <!-- Col 1 (Right): Color Table with Piece Breakdown -->
-            <div class="col-5">
+            <div class="col-5 section-col-flex">
                 <table class="tbl-grid">
                     <thead>
                         <tr>
@@ -486,7 +575,7 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             </div>
 
             <!-- Col 2 (Center): Palla Measurements & Color Scheme -->
-            <div class="col-4">
+            <div class="col-4 section-col-flex">
                 <table class="tbl-grid">
                     <thead>
                         <tr>
@@ -528,7 +617,7 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             </div>
 
             <!-- Col 3 (Left): Sweater Prototype Sketch & SAM Box -->
-            <div class="col-3">
+            <div class="col-3 section-col-flex">
                 <div class="sweater-card">
                     <svg class="sketch-svg" viewBox="0 0 160 140" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <!-- Body -->
@@ -611,9 +700,9 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             </tr>
         </table>
 
-        <div class="row g-2 align-items-stretch">
+        <div class="row g-2 align-items-stretch section-body-row">
             <!-- Right: Color Breakdown Table (50%) -->
-            <div class="col-6">
+            <div class="col-6 section-col-flex">
                 <table class="tbl-grid">
                     <thead>
                         <tr>
@@ -650,9 +739,9 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             </div>
 
             <!-- Left: Side-by-side Palla & Bazo Measurements (50%) -->
-            <div class="col-6">
+            <div class="col-6 section-col-flex">
                 <div class="row g-1">
-                    <div class="col-6">
+                    <div class="col-6 section-col-flex">
                         <table class="tbl-grid">
                             <thead>
                                 <tr><th colspan="2">پلا پیمائش</th></tr>
@@ -665,7 +754,7 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                             </tbody>
                         </table>
                     </div>
-                    <div class="col-6">
+                    <div class="col-6 section-col-flex">
                         <table class="tbl-grid">
                             <thead>
                                 <tr><th colspan="2">بازو پیمائش</th></tr>
