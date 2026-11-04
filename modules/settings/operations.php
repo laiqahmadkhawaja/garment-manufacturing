@@ -55,6 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'create_department') {
+        check_csrf();
         $name = trim($_POST['name'] ?? '');
         $desc = trim($_POST['description'] ?? '');
 
@@ -62,12 +63,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             set_flash('danger', 'Department name is required.');
         } else {
             try {
-                $stmt = $db->prepare("INSERT INTO departments (name, description, is_active) VALUES (?, ?, 1)");
-                $stmt->execute([$name, $desc]);
-                log_audit('CREATE', 'departments', (int)$db->lastInsertId(), null, ['name' => $name]);
-                redirect('modules/settings/operations.php#departments', "Department '$name' created successfully!");
+                // Check if name already exists
+                $chk = $db->prepare("SELECT id FROM departments WHERE LOWER(TRIM(name)) = LOWER(?)");
+                $chk->execute([$name]);
+                if ($chk->fetch()) {
+                    set_flash('danger', "Department '$name' already exists.");
+                } else {
+                    // Generate clean unique code
+                    $baseCode = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $name));
+                    $code = !empty($baseCode) ? substr($baseCode, 0, 20) : 'DEP';
+                    $cChk = $db->prepare("SELECT id FROM departments WHERE code = ?");
+                    $cChk->execute([$code]);
+                    if ($cChk->fetch()) {
+                        $code = substr($code, 0, 15) . '-' . time();
+                    }
+
+                    $stmt = $db->prepare("INSERT INTO departments (code, name, description, is_active) VALUES (?, ?, ?, 1)");
+                    $stmt->execute([$code, $name, $desc]);
+                    log_audit('CREATE', 'departments', (int)$db->lastInsertId(), null, ['name' => $name, 'code' => $code]);
+                    redirect('modules/settings/operations.php#departments', "Department '$name' created successfully!");
+                }
             } catch (PDOException $e) {
-                set_flash('danger', 'Department name already exists or could not be saved.');
+                set_flash('danger', 'Error saving department: ' . $e->getMessage());
             }
         }
     }

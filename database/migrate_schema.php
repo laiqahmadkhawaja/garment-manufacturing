@@ -187,4 +187,9 @@ if (!$opCheck) {
     $db->exec("UPDATE operations SET sequence = 2 WHERE code = 'OP-CUT'");
 }
 
+// 10. Departments code nullability & existing code backfill
+$db->exec("UPDATE departments SET code = CONCAT('DEP-', id) WHERE code IS NULL OR code = ''");
+$db->exec("ALTER TABLE departments MODIFY COLUMN code VARCHAR(50) NULL DEFAULT NULL");
+echo "[✓] Departments code made nullable and backfilled\n";
+
 echo "[SUCCESS] Schema migration complete.\n";

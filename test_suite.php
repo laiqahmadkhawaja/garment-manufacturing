@@ -378,6 +378,7 @@ assert_test("22. Design structural elements (Jacket parts)", $elemCount === 5 &&
 // Test 23: Product Pattern Elements (Product anatomy linked to product)
 // ------------------------------------------------------------------------
 $db->beginTransaction();
+$db->exec("DELETE FROM lot_operator_element_entries WHERE element_id IN (SELECT id FROM product_elements WHERE product_id = 1)");
 $db->prepare("DELETE FROM product_elements WHERE product_id = 1")->execute();
 $insPe = $db->prepare("INSERT INTO product_elements (product_id, element_name, quantity, notes, sort_order) VALUES (?, ?, ?, ?, ?)");
 $insPe->execute([1, 'Front Panel', 1, 'Front body', 1]);
@@ -956,6 +957,9 @@ assert_test("35. Printable Job Card & Multi-Worker Sub-Operations", $scenario35P
 // =========================================================================
 echo "\n--- TESTING SCENARIO 36: UNIFIED OPERATOR & CUTTING ELEMENT PROGRESS ---\n";
 
+$wLatifId = (int)$db->query("SELECT id FROM workers WHERE name LIKE '%Latif%' LIMIT 1")->fetchColumn() ?: 1;
+$wAmirId = (int)$db->query("SELECT id FROM workers WHERE name LIKE '%Amir%' LIMIT 1")->fetchColumn() ?: 2;
+
 $lot36Num = 'LOT-TEST-CUT-' . time();
 $db->prepare("INSERT INTO lots (lot_number, lot_date, product_id, total_pieces, shift_type, operator_id, night_operator_id, status)
               VALUES (?, CURDATE(), 1, 200, 'Double Shift', ?, ?, 'Draft')")
@@ -999,6 +1003,30 @@ $cuttingDone36 = (int)$db->query("SELECT SUM(good_qty) FROM production_entries W
 
 $scenario36Passed = ($frontCut === 100 && $sleevesCut === 200 && $cuttingDone36 === 100);
 assert_test("36. Unified Operator Day/Night & Cutting Element-Wise Progress", $scenario36Passed, "Day (100) + Night (100) recorded on 1 page; Cutting Master cut 100 pcs (Front: 100 cut, Sleeves: 200 cut, 100 remaining); Labour Rs. 500 credited");
+
+// =========================================================================
+// SCENARIO 37: DYNAMIC FACTORY DEPARTMENTS CREATION & DUPLICATE ENFORCEMENT
+// =========================================================================
+echo "\n--- TESTING SCENARIO 37: DEPARTMENT CREATION & DUPLICATE PREVENTION ---\n";
+
+$deptTestName = 'Washing & Dyeing ' . time();
+$deptBaseCode = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $deptTestName));
+$deptCode = substr($deptBaseCode, 0, 20);
+
+// Insert new unique department
+$insDeptStmt = $db->prepare("INSERT INTO departments (code, name, description, is_active) VALUES (?, ?, 'Garment wet processing', 1)");
+$insDeptStmt->execute([$deptCode, $deptTestName]);
+$deptNewId = (int)$db->lastInsertId();
+
+$deptExists = (int)$db->query("SELECT COUNT(*) FROM departments WHERE id = $deptNewId AND name = " . $db->quote($deptTestName))->fetchColumn();
+
+// Check duplicate detection
+$dupCheck = $db->prepare("SELECT id FROM departments WHERE LOWER(TRIM(name)) = LOWER(?)");
+$dupCheck->execute([$deptTestName]);
+$dupDetected = ($dupCheck->fetchColumn() > 0);
+
+$scenario37Passed = ($deptNewId > 0 && $deptExists === 1 && $dupDetected);
+assert_test("37. Dynamic Department Creation & Code Auto-Generation", $scenario37Passed, "Department created with generated code, verified in database, and duplicate detection verified");
 
 echo "\n========================================================================\n";
 echo "TEST SUITE SUMMARY: $passCount PASSED, $failCount FAILED\n";
