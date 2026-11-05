@@ -44,15 +44,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // Save product pattern elements (Front, Back, Sleeves, etc.)
                 $savedElemCount = 0;
+                $elemSams = $_POST['element_sam'] ?? [];
                 if (is_array($elemNames) && !empty($elemNames)) {
-                    $insElem = $db->prepare("INSERT INTO product_elements (product_id, element_name, quantity, notes, sort_order) VALUES (?, ?, ?, ?, ?)");
+                    $insElem = $db->prepare("INSERT INTO product_elements (product_id, element_name, quantity, default_sam_minutes, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?)");
                     $sort = 1;
                     foreach ($elemNames as $idx => $eName) {
                         $eName = trim($eName);
                         if ($eName === '') continue;
                         $q = max(1, (int)($elemQtys[$idx] ?? 1));
+                        $sam = max(0, (float)($elemSams[$idx] ?? 0.00));
                         $notes = trim($elemNotes[$idx] ?? '');
-                        $insElem->execute([$newProductId, $eName, $q, $notes, $sort++]);
+                        $insElem->execute([$newProductId, $eName, $q, $sam, $notes, $sort++]);
                         $savedElemCount++;
                     }
                 }
@@ -423,15 +425,15 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <i class="bi bi-plus-circle me-1 text-primary"></i> 1-Click Quick Add Common Garment Parts:
                                     </div>
                                     <div class="d-flex flex-wrap gap-1" id="prodQuickChips">
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Front" data-qty="1" data-notes="Main front body">+ Front (1)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Back" data-qty="1" data-notes="Main back body">+ Back (1)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Sleeves" data-qty="2" data-notes="Left & right sleeves">+ Sleeves (2)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Pockets" data-qty="2" data-notes="Side welt / patch pockets">+ Pockets (2)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Collar / Neck" data-qty="1" data-notes="Ribbed collar / stand neck">+ Collar/Neck (1)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Hood" data-qty="1" data-notes="Detachable hood">+ Hood (1)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Cuffs" data-qty="2" data-notes="Wrist cuffs">+ Cuffs (2)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Bottom Hem" data-qty="1" data-notes="Elasticated rib / border">+ Bottom Hem (1)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Inner Lining" data-qty="1" data-notes="Inner silk/poly lining">+ Inner Lining (1)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Front" data-qty="1" data-sam="1.5" data-notes="Main front body">+ Front (1 · 1.5m)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Back" data-qty="1" data-sam="1.5" data-notes="Main back body">+ Back (1 · 1.5m)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Sleeves" data-qty="2" data-sam="2.0" data-notes="Left & right sleeves">+ Sleeves (2 · 2.0m)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Pockets" data-qty="2" data-sam="0.5" data-notes="Side welt / patch pockets">+ Pockets (2 · 0.5m)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Collar / Neck" data-qty="1" data-sam="1.0" data-notes="Ribbed collar / stand neck">+ Collar/Neck (1 · 1.0m)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Hood" data-qty="1" data-sam="1.5" data-notes="Detachable hood">+ Hood (1 · 1.5m)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Cuffs" data-qty="2" data-sam="1.0" data-notes="Wrist cuffs">+ Cuffs (2 · 1.0m)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Bottom Hem" data-qty="1" data-sam="1.0" data-notes="Elasticated rib / border">+ Bottom Hem (1 · 1.0m)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Inner Lining" data-qty="1" data-sam="2.0" data-notes="Inner silk/poly lining">+ Inner Lining (1 · 2.0m)</button>
                                     </div>
                                 </div>
 
@@ -441,8 +443,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <thead class="table-light small">
                                             <tr>
                                                 <th style="width: 45px;" class="text-center">#</th>
-                                                <th style="min-width: 200px;">Element / Component Name *</th>
-                                                <th style="width: 150px;" class="text-center">Qty Per Piece *</th>
+                                                <th style="min-width: 180px;">Element / Component Name *</th>
+                                                <th style="width: 140px;" class="text-center">Qty Per Unit *</th>
+                                                <th style="width: 120px;" class="text-center">⏱️ Est. SAM (منٹ)</th>
                                                 <th>Pattern / Fabric Notes</th>
                                                 <th style="width: 50px;" class="text-center">Action</th>
                                             </tr>
@@ -461,6 +464,8 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <span>Components: <strong id="lblProdElementsCount" class="text-dark">0</strong></span>
                                         <span class="vr"></span>
                                         <span>Total Pieces / Unit: <strong id="lblProdPiecesCount" class="text-primary fw-bold">0 pcs</strong></span>
+                                        <span class="vr"></span>
+                                        <span>Total SAM: <strong id="lblProdTotalSam" class="text-success fw-bold">0.0 mins</strong></span>
                                     </div>
                                 </div>
                             </div>
@@ -1089,9 +1094,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const pTbody = document.getElementById('prodElementsTbody');
     const lblCount = document.getElementById('lblProdElementsCount');
     const lblPcs = document.getElementById('lblProdPiecesCount');
+    const lblSam = document.getElementById('lblProdTotalSam');
     const btnAddProdRow = document.getElementById('btnAddProdElementRow');
 
-    function createProdRow(name = '', qty = 1, notes = '') {
+    function createProdRow(name = '', qty = 1, notes = '', sam = 0.0) {
         const tr = document.createElement('tr');
         tr.className = 'prod-element-row';
         tr.innerHTML = `
@@ -1104,6 +1110,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     <button type="button" class="btn btn-outline-secondary btn-pel-minus"><i class="bi bi-dash"></i></button>
                     <input type="number" name="element_qty[]" class="form-control text-center fw-bold pel-qty-val" value="${qty}" min="1" max="50" required>
                     <button type="button" class="btn btn-outline-secondary btn-pel-plus"><i class="bi bi-plus"></i></button>
+                </div>
+            </td>
+            <td>
+                <div class="input-group input-group-sm">
+                    <input type="number" step="0.1" min="0" name="element_sam[]" class="form-control text-center fw-bold text-primary pel-sam-val" value="${sam}" placeholder="0.0">
+                    <span class="input-group-text px-1 small text-muted">m</span>
                 </div>
             </td>
             <td>
@@ -1124,6 +1136,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const minus = tr.querySelector('.btn-pel-minus');
         const plus = tr.querySelector('.btn-pel-plus');
         const qty = tr.querySelector('.pel-qty-val');
+        const sam = tr.querySelector('.pel-sam-val');
         const remove = tr.querySelector('.btn-pel-remove');
 
         minus.addEventListener('click', function() {
@@ -1141,6 +1154,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         qty.addEventListener('input', recalcProdTotals);
+        if (sam) sam.addEventListener('input', recalcProdTotals);
 
         remove.addEventListener('click', function() {
             tr.remove();
@@ -1151,12 +1165,17 @@ document.addEventListener('DOMContentLoaded', function() {
     function recalcProdTotals() {
         const rows = pTbody.querySelectorAll('.prod-element-row');
         let totalPcs = 0;
+        let totalSam = 0;
         rows.forEach((r, i) => {
             r.querySelector('.p-row-idx').textContent = i + 1;
-            totalPcs += parseInt(r.querySelector('.pel-qty-val').value) || 0;
+            const q = parseInt(r.querySelector('.pel-qty-val').value) || 0;
+            const s = parseFloat(r.querySelector('.pel-sam-val') ? r.querySelector('.pel-sam-val').value : 0) || 0;
+            totalPcs += q;
+            totalSam += (q * s);
         });
-        lblCount.textContent = rows.length;
-        lblPcs.textContent = totalPcs + ' pcs';
+        if (lblCount) lblCount.textContent = rows.length;
+        if (lblPcs) lblPcs.textContent = totalPcs + ' pcs';
+        if (lblSam) lblSam.textContent = totalSam.toFixed(1) + ' mins';
     }
 
     function escapeHtml(text) {
@@ -1168,7 +1187,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (btnAddProdRow) {
         btnAddProdRow.addEventListener('click', function() {
-            createProdRow('', 1, '');
+            createProdRow('', 1, '', 0.0);
             const inputs = pTbody.querySelectorAll('input[name="element_name[]"]');
             if (inputs.length) inputs[inputs.length - 1].focus();
         });
@@ -1179,8 +1198,9 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             const name = this.getAttribute('data-name');
             const qty = parseInt(this.getAttribute('data-qty')) || 1;
+            const sam = parseFloat(this.getAttribute('data-sam')) || 0.0;
             const notes = this.getAttribute('data-notes') || '';
-            createProdRow(name, qty, notes);
+            createProdRow(name, qty, notes, sam);
         });
     });
 
@@ -1198,12 +1218,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (pJacket) {
         pJacket.addEventListener('click', function() {
             pTbody.innerHTML = '';
-            createProdRow('Front Panels', 2, 'Left & right overlap panels with zipper');
-            createProdRow('Back', 1, 'Full back body');
-            createProdRow('Sleeves', 2, 'Left and right sleeves');
-            createProdRow('Pockets', 2, 'Front side welt pockets');
-            createProdRow('Collar', 1, 'Stand / lapel collar');
-            createProdRow('Inner Lining', 1, 'Silk polyester inner body');
+            createProdRow('Front Panels', 2, 'Left & right overlap panels with zipper', 1.5);
+            createProdRow('Back', 1, 'Full back body', 1.5);
+            createProdRow('Sleeves', 2, 'Left and right sleeves', 2.0);
+            createProdRow('Pockets', 2, 'Front side welt pockets', 0.5);
+            createProdRow('Collar', 1, 'Stand / lapel collar', 1.0);
+            createProdRow('Inner Lining', 1, 'Silk polyester inner body', 2.0);
         });
     }
 
@@ -1211,11 +1231,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (pVest) {
         pVest.addEventListener('click', function() {
             pTbody.innerHTML = '';
-            createProdRow('Front Panels', 2, 'Left & right front vest panels');
-            createProdRow('Back', 1, 'Back panel with buckle adjuster');
-            createProdRow('Pockets', 2, 'Waist welt pockets');
-            createProdRow('V-Neck Collar', 1, 'V-neck border');
-            createProdRow('Inner Lining', 1, 'Breathable lining');
+            createProdRow('Front Panels', 2, 'Left & right front vest panels', 1.5);
+            createProdRow('Back', 1, 'Back panel with buckle adjuster', 1.5);
+            createProdRow('Pockets', 2, 'Waist welt pockets', 0.5);
+            createProdRow('V-Neck Collar', 1, 'V-neck border', 1.0);
+            createProdRow('Inner Lining', 1, 'Breathable lining', 1.5);
         });
     }
 
@@ -1223,21 +1243,22 @@ document.addEventListener('DOMContentLoaded', function() {
     if (pSweater) {
         pSweater.addEventListener('click', function() {
             pTbody.innerHTML = '';
-            createProdRow('Front', 1, 'Main knit front pattern');
-            createProdRow('Back', 1, 'Main knit back');
-            createProdRow('Sleeves', 2, 'Left and right knit sleeves');
-            createProdRow('Neck Rib', 1, 'Neck trim collar');
-            createProdRow('Bottom Hem Rib', 1, 'Elastic waist ribbing');
+            createProdRow('Front', 1, 'Main knit front pattern', 1.5);
+            createProdRow('Back', 1, 'Main knit back', 1.5);
+            createProdRow('Sleeves', 2, 'Left and right knit sleeves', 2.0);
+            createProdRow('Neck Rib', 1, 'Neck trim collar', 1.0);
+            createProdRow('Bottom Hem Rib', 1, 'Elastic waist ribbing', 1.0);
         });
     }
 
     // Load initial default rows for product
     if (pTbody && pTbody.children.length === 0) {
-        createProdRow('Front', 1, 'Main front body');
-        createProdRow('Back', 1, 'Main back body');
-        createProdRow('Sleeves', 2, 'Left & right sleeves');
-        createProdRow('Pockets', 2, 'Side pockets');
-        createProdRow('Collar / Neck', 1, 'Collar / Neck trim');
+        createProdRow('Front', 1, 'Main front body', 1.5);
+        createProdRow('Back', 1, 'Main back body', 1.5);
+        createProdRow('Sleeves', 2, 'Left & right sleeves', 2.0);
+        createProdRow('Pockets', 2, 'Side pockets', 0.5);
+        createProdRow('Collar / Neck', 1, 'Collar / Neck trim', 1.0);
+    }
     }
 
     // =========================================================================

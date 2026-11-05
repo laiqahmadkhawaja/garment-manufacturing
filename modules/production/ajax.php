@@ -70,7 +70,7 @@ if ($action === 'get_lot_operations_and_variants') {
     $lotSizes = $sStmt->fetchAll();
 
     // Garment elements with operator & cutting progress for this lot
-    $elemStmt = $db->prepare("SELECT pe.id, pe.element_name, pe.quantity, pe.multiplier,
+    $elemStmt = $db->prepare("SELECT pe.id, pe.element_name, pe.quantity, pe.multiplier, COALESCE(pe.default_sam_minutes, 0.00) AS default_sam_minutes,
                                      COALESCE(loe.required_pieces, (pe.quantity * l.total_pieces)) AS required_pieces,
                                      COALESCE(loe.operator1_pieces, 0) AS operator1_pieces,
                                      COALESCE(loe.operator2_pieces, 0) AS operator2_pieces,

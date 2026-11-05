@@ -1324,12 +1324,6 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <input type="hidden" name="shift_type" id="op_shift_type" value="Single Shift">
                                 <input type="hidden" name="size_mode" id="op_size_mode" value="Single Size">
                                 <input type="hidden" name="single_size_id" id="op_single_size_id" value="">
-                                <input type="hidden" name="day_minutes_per_piece" id="op_day_minutes_hidden" value="0.0">
-                                <input type="hidden" name="day_worker_min_rate" id="op_day_min_rate_hidden" value="2.50">
-                                <input type="hidden" name="day_rate" id="op_day_rate_hidden" value="0.00">
-                                <input type="hidden" name="night_minutes_per_piece" id="op_night_minutes_hidden" value="0.0">
-                                <input type="hidden" name="night_worker_min_rate" id="op_night_min_rate_hidden" value="2.50">
-                                <input type="hidden" name="night_rate" id="op_night_rate_hidden" value="0.00">
 
                                 <!-- Placeholder if no lot selected -->
                                 <div id="operatorPlaceholder" class="p-5 text-center text-muted border border-dashed rounded-3 mb-3">
@@ -1364,6 +1358,43 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 </div>
                                             </div>
                                         </div>
+
+                                        <!-- Real-Time Dynamic Rate & SAM Time Controls -->
+                                        <div class="p-2 bg-white border rounded-3 mt-3 shadow-xs">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <span class="small fw-bold text-dark"><i class="bi bi-stopwatch text-primary me-1"></i> Rate & SAM Time Scheme (وقت اور ریٹ کی تفصیل — ریل ٹائم ایڈٹ)</span>
+                                                <span class="text-muted small" style="font-size: 11px;">Minutes × Rate/min = Piece Rate</span>
+                                            </div>
+                                            <div class="row g-2 align-items-center">
+                                                <div class="col-12 col-md-4">
+                                                    <label class="form-label small fw-semibold text-muted mb-1" style="font-size: 11px;">⏱️ Avg Time / SAM (وقت فی پیس)</label>
+                                                    <div class="input-group input-group-sm">
+                                                        <input type="number" name="day_minutes_per_piece" id="op_single_minutes" class="form-control text-center fw-bold text-primary" step="0.1" min="0" value="0.0" placeholder="SAM Mins" title="Estimated time to produce 1 finished piece">
+                                                        <span class="input-group-text px-1 small text-muted">min</span>
+                                                    </div>
+                                                    <div class="form-text text-muted" style="font-size: 10px;">فرنٹ، بیک، بازو کا اوسط وقت</div>
+                                                </div>
+                                                <div class="col-12 col-md-4">
+                                                    <label class="form-label small fw-semibold text-muted mb-1" style="font-size: 11px;">⚡ Worker Minute Rate (ریٹ فی منٹ)</label>
+                                                    <div class="input-group input-group-sm">
+                                                        <span class="input-group-text px-1 small text-muted">Rs</span>
+                                                        <input type="number" name="day_worker_min_rate" id="op_single_min_rate" class="form-control text-center fw-bold text-success" step="0.05" min="0" value="2.50" placeholder="Rs/min" title="Worker minute rate from profile">
+                                                        <span class="input-group-text px-1 small text-muted">/m</span>
+                                                    </div>
+                                                    <div class="form-text text-muted" style="font-size: 10px;">پروفائل سے آٹو، یہاں تبدیل کر سکتے ہیں</div>
+                                                </div>
+                                                <div class="col-12 col-md-4">
+                                                    <label class="form-label small fw-semibold text-muted mb-1" style="font-size: 11px;">🏷️ Piece Rate (روپے فی پیس) *</label>
+                                                    <div class="input-group input-group-sm">
+                                                        <span class="input-group-text px-1 small text-muted">Rs</span>
+                                                        <input type="number" name="day_rate" id="op_single_rate" class="form-control text-center fw-bold text-dark" step="0.25" min="0" value="0.00" title="Final Piece Rate">
+                                                        <span class="input-group-text px-1 small text-muted">/pc</span>
+                                                    </div>
+                                                    <div class="form-text text-muted" style="font-size: 10px;">براہ راست ریٹ تبدیل کریں</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <div class="mt-2 text-end small">
                                             <span class="text-muted">Earned Labour:</span>
                                             <strong class="text-success fs-5 ms-1" id="lblSingleDayLabour">Rs. 0.00</strong>
@@ -1396,6 +1427,32 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                             <span class="input-group-text fw-bold">pcs</span>
                                                         </div>
                                                     </div>
+
+                                                    <!-- Dynamic Day Rate Controls -->
+                                                    <div class="p-2 bg-white border rounded-2 mb-2 mt-2">
+                                                        <div class="row g-2">
+                                                            <div class="col-4">
+                                                                <label class="form-label small fw-semibold text-muted mb-0" style="font-size: 10px;">⏱️ SAM (منٹ)</label>
+                                                                <div class="input-group input-group-sm">
+                                                                    <input type="number" name="day_minutes_per_piece" id="op_double_day_minutes" class="form-control form-control-sm text-center fw-bold text-primary" step="0.1" min="0" value="0.0">
+                                                                    <span class="input-group-text px-1 small text-muted" style="font-size: 10px;">m</span>
+                                                                </div>
+                                                            </div>
+                                                            <div class="col-4">
+                                                                <label class="form-label small fw-semibold text-muted mb-0" style="font-size: 10px;">⚡ Rate/min</label>
+                                                                <div class="input-group input-group-sm">
+                                                                    <input type="number" name="day_worker_min_rate" id="op_double_day_min_rate" class="form-control form-control-sm text-center fw-bold text-success" step="0.05" min="0" value="2.50">
+                                                                </div>
+                                                            </div>
+                                                            <div class="col-4">
+                                                                <label class="form-label small fw-semibold text-muted mb-0" style="font-size: 10px;">🏷️ Rate/pc *</label>
+                                                                <div class="input-group input-group-sm">
+                                                                    <input type="number" name="day_rate" id="op_double_day_rate" class="form-control form-control-sm text-center fw-bold text-dark" step="0.25" min="0" value="0.00">
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
                                                     <div class="d-flex justify-content-between align-items-center mt-auto pt-2 border-top">
                                                         <span class="text-muted small">Labour:</span>
                                                         <strong class="text-success fs-6" id="lblDoubleDayLabour">Rs. 0.00</strong>
@@ -1429,6 +1486,32 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                             <span class="input-group-text fw-bold">pcs</span>
                                                         </div>
                                                     </div>
+
+                                                    <!-- Dynamic Night Rate Controls -->
+                                                    <div class="p-2 bg-white border rounded-2 mb-2 mt-2">
+                                                        <div class="row g-2">
+                                                            <div class="col-4">
+                                                                <label class="form-label small fw-semibold text-muted mb-0" style="font-size: 10px;">⏱️ SAM (منٹ)</label>
+                                                                <div class="input-group input-group-sm">
+                                                                    <input type="number" name="night_minutes_per_piece" id="op_double_night_minutes" class="form-control form-control-sm text-center fw-bold text-primary" step="0.1" min="0" value="0.0">
+                                                                    <span class="input-group-text px-1 small text-muted" style="font-size: 10px;">m</span>
+                                                                </div>
+                                                            </div>
+                                                            <div class="col-4">
+                                                                <label class="form-label small fw-semibold text-muted mb-0" style="font-size: 10px;">⚡ Rate/min</label>
+                                                                <div class="input-group input-group-sm">
+                                                                    <input type="number" name="night_worker_min_rate" id="op_double_night_min_rate" class="form-control form-control-sm text-center fw-bold text-success" step="0.05" min="0" value="2.50">
+                                                                </div>
+                                                            </div>
+                                                            <div class="col-4">
+                                                                <label class="form-label small fw-semibold text-muted mb-0" style="font-size: 10px;">🏷️ Rate/pc *</label>
+                                                                <div class="input-group input-group-sm">
+                                                                    <input type="number" name="night_rate" id="op_double_night_rate" class="form-control form-control-sm text-center fw-bold text-dark" step="0.25" min="0" value="0.00">
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
                                                     <div class="d-flex justify-content-between align-items-center mt-auto pt-2 border-top">
                                                         <span class="text-muted small">Labour:</span>
                                                         <strong class="text-success fs-6" id="lblDoubleNightLabour">Rs. 0.00</strong>
@@ -1999,16 +2082,25 @@ document.addEventListener('DOMContentLoaded', function() {
     const opSinglePieces = document.getElementById('op_single_day_pieces');
     const opSingleRateBadge = document.getElementById('opSingleRateBadge');
     const lblSingleDayLabour = document.getElementById('lblSingleDayLabour');
+    const opSingleMinutes = document.getElementById('op_single_minutes');
+    const opSingleMinRate = document.getElementById('op_single_min_rate');
+    const opSingleRate = document.getElementById('op_single_rate');
 
     const opDoubleDayWorker = document.getElementById('op_double_day_worker');
     const opDoubleDayPieces = document.getElementById('op_double_day_pieces');
     const opDoubleDayRateBadge = document.getElementById('opDoubleDayRateBadge');
     const lblDoubleDayLabour = document.getElementById('lblDoubleDayLabour');
+    const opDoubleDayMinutes = document.getElementById('op_double_day_minutes');
+    const opDoubleDayMinRate = document.getElementById('op_double_day_min_rate');
+    const opDoubleDayRate = document.getElementById('op_double_day_rate');
 
     const opDoubleNightWorker = document.getElementById('op_double_night_worker');
     const opDoubleNightPieces = document.getElementById('op_double_night_pieces');
     const opDoubleNightRateBadge = document.getElementById('opDoubleNightRateBadge');
     const lblDoubleNightLabour = document.getElementById('lblDoubleNightLabour');
+    const opDoubleNightMinutes = document.getElementById('op_double_night_minutes');
+    const opDoubleNightMinRate = document.getElementById('op_double_night_min_rate');
+    const opDoubleNightRate = document.getElementById('op_double_night_rate');
 
     const btnSplit5050 = document.getElementById('btnSplit5050');
     const btnSet100Day = document.getElementById('btnSet100Day');
@@ -2157,9 +2249,15 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         let html = '';
+        let totalElemSam = 0;
         elements.forEach(el => {
             const mult = parseInt(el.quantity || el.multiplier || 1);
             const req = parseInt(el.required_pieces) || 0;
+            const sam = parseFloat(el.default_sam_minutes) || 0;
+            if (sam > 0) totalElemSam += (sam * mult);
+            const samBadge = sam > 0 
+                ? `<span class="badge bg-light text-primary border ms-1" style="font-size: 10px;" title="Estimated SAM / Average time per piece"><i class="bi bi-clock me-1"></i>${sam}m/pc</span>` 
+                : '';
             let defDay = (dayPcs > 0 ? Math.min(req, dayPcs * mult) : parseInt(el.operator1_pieces || 0));
             let defNight = isDouble ? (nightPcs > 0 ? Math.min(Math.max(0, req - defDay), nightPcs * mult) : parseInt(el.operator2_pieces || 0)) : 0;
             if (defDay + defNight > req) {
@@ -2171,7 +2269,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isDouble) {
                 html += `
                     <tr data-elid="${el.id}" data-mult="${mult}" data-req="${req}">
-                        <td class="text-start fw-bold text-dark">${el.element_name} <span class="badge bg-light text-muted border">×${mult}</span></td>
+                        <td class="text-start fw-bold text-dark">${el.element_name} <span class="badge bg-light text-muted border">×${mult}</span> ${samBadge}</td>
                         <td class="fw-bold text-muted">${req}</td>
                         <td style="width: 120px;">
                             <input type="number" name="elements[${el.id}][op1_pieces]" class="form-control form-control-sm text-center fw-bold op-el-day" value="${defDay}" min="0" max="${req}" title="Max planned: ${req}">
@@ -2189,7 +2287,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 html += `
                     <tr data-elid="${el.id}" data-mult="${mult}" data-req="${req}">
-                        <td class="text-start fw-bold text-dark">${el.element_name} <span class="badge bg-light text-muted border">×${mult}</span></td>
+                        <td class="text-start fw-bold text-dark">${el.element_name} <span class="badge bg-light text-muted border">×${mult}</span> ${samBadge}</td>
                         <td class="fw-bold text-muted">${req}</td>
                         <td style="width: 150px;">
                             <input type="number" name="elements[${el.id}][op1_pieces]" class="form-control form-control-sm text-center fw-bold op-el-day" value="${defDay}" min="0" max="${req}" title="Max planned: ${req}">
@@ -3456,6 +3554,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (lblOpLotPlanned) lblOpLotPlanned.textContent = totalPieces;
 
+        // Calculate total SAM from product elements if available, otherwise from operation estimated minutes
+        let totalElemSam = 0;
+        if (currentOpLotData && currentOpLotData.elements) {
+            currentOpLotData.elements.forEach(el => {
+                const sam = parseFloat(el.default_sam_minutes) || 0;
+                const mult = parseInt(el.quantity || el.multiplier || 1);
+                totalElemSam += (sam * mult);
+            });
+        }
+        const finalMins = totalElemSam > 0 ? totalElemSam : opMins;
+
         if (!isDouble) {
             // SINGLE SHIFT
             if (singleShiftCard) {
@@ -3472,14 +3581,17 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             const workerOpt = opSingleWorker ? opSingleWorker.selectedOptions[0] : null;
             const workerMinRate = workerOpt ? (parseFloat(workerOpt.dataset.minrate) || 2.50) : 2.50;
-            const pieceRate = opMins > 0 ? (opMins * workerMinRate) : opDefRate;
+            const pieceRate = finalMins > 0 ? (finalMins * workerMinRate) : opDefRate;
 
-            if (document.getElementById('op_day_minutes_hidden')) document.getElementById('op_day_minutes_hidden').value = opMins;
-            if (document.getElementById('op_day_min_rate_hidden')) document.getElementById('op_day_min_rate_hidden').value = workerMinRate;
-            if (document.getElementById('op_day_rate_hidden')) document.getElementById('op_day_rate_hidden').value = pieceRate.toFixed(2);
+            if (opSingleMinutes && !opSingleMinutes.dataset.userEdited) opSingleMinutes.value = finalMins > 0 ? finalMins.toFixed(1) : (opMins > 0 ? opMins.toFixed(1) : '0.0');
+            if (opSingleMinRate && !opSingleMinRate.dataset.userEdited) opSingleMinRate.value = workerMinRate.toFixed(2);
+            if (opSingleRate && !opSingleRate.dataset.userEdited) opSingleRate.value = pieceRate.toFixed(2);
 
             if (opSingleRateBadge) {
-                opSingleRateBadge.textContent = opMins > 0 ? `Rate: Rs. ${pieceRate.toFixed(2)}/pc (${opMins}m × Rs. ${workerMinRate}/m)` : `Rate: Rs. ${pieceRate.toFixed(2)}/pc (Fixed Rate)`;
+                const curR = parseFloat(opSingleRate ? opSingleRate.value : pieceRate) || 0;
+                const curM = parseFloat(opSingleMinutes ? opSingleMinutes.value : finalMins) || 0;
+                const curMR = parseFloat(opSingleMinRate ? opSingleMinRate.value : workerMinRate) || 0;
+                opSingleRateBadge.textContent = curM > 0 ? `Rate: Rs. ${curR.toFixed(2)}/pc (${curM}m × Rs. ${curMR.toFixed(2)}/m)` : `Rate: Rs. ${curR.toFixed(2)}/pc (Direct Rate)`;
             }
 
             if (opSinglePieces && (!opSinglePieces.value || parseInt(opSinglePieces.value, 10) === 0)) {
@@ -3503,25 +3615,31 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const dayWorkerOpt = opDoubleDayWorker ? opDoubleDayWorker.selectedOptions[0] : null;
             const dayMinRate = dayWorkerOpt ? (parseFloat(dayWorkerOpt.dataset.minrate) || 2.50) : 2.50;
-            const dayPieceRate = opMins > 0 ? (opMins * dayMinRate) : opDefRate;
+            const dayPieceRate = finalMins > 0 ? (finalMins * dayMinRate) : opDefRate;
 
             const nightWorkerOpt = opDoubleNightWorker ? opDoubleNightWorker.selectedOptions[0] : null;
             const nightMinRate = nightWorkerOpt ? (parseFloat(nightWorkerOpt.dataset.minrate) || 2.50) : 2.50;
-            const nightPieceRate = opMins > 0 ? (opMins * nightMinRate) : opDefRate;
+            const nightPieceRate = finalMins > 0 ? (finalMins * nightMinRate) : opDefRate;
 
-            if (document.getElementById('op_day_minutes_hidden')) document.getElementById('op_day_minutes_hidden').value = opMins;
-            if (document.getElementById('op_day_min_rate_hidden')) document.getElementById('op_day_min_rate_hidden').value = dayMinRate;
-            if (document.getElementById('op_day_rate_hidden')) document.getElementById('op_day_rate_hidden').value = dayPieceRate.toFixed(2);
+            if (opDoubleDayMinutes && !opDoubleDayMinutes.dataset.userEdited) opDoubleDayMinutes.value = finalMins > 0 ? finalMins.toFixed(1) : (opMins > 0 ? opMins.toFixed(1) : '0.0');
+            if (opDoubleDayMinRate && !opDoubleDayMinRate.dataset.userEdited) opDoubleDayMinRate.value = dayMinRate.toFixed(2);
+            if (opDoubleDayRate && !opDoubleDayRate.dataset.userEdited) opDoubleDayRate.value = dayPieceRate.toFixed(2);
 
-            if (document.getElementById('op_night_minutes_hidden')) document.getElementById('op_night_minutes_hidden').value = opMins;
-            if (document.getElementById('op_night_min_rate_hidden')) document.getElementById('op_night_min_rate_hidden').value = nightMinRate;
-            if (document.getElementById('op_night_rate_hidden')) document.getElementById('op_night_rate_hidden').value = nightPieceRate.toFixed(2);
+            if (opDoubleNightMinutes && !opDoubleNightMinutes.dataset.userEdited) opDoubleNightMinutes.value = finalMins > 0 ? finalMins.toFixed(1) : (opMins > 0 ? opMins.toFixed(1) : '0.0');
+            if (opDoubleNightMinRate && !opDoubleNightMinRate.dataset.userEdited) opDoubleNightMinRate.value = nightMinRate.toFixed(2);
+            if (opDoubleNightRate && !opDoubleNightRate.dataset.userEdited) opDoubleNightRate.value = nightPieceRate.toFixed(2);
 
             if (opDoubleDayRateBadge) {
-                opDoubleDayRateBadge.textContent = opMins > 0 ? `Rs. ${dayPieceRate.toFixed(2)}/pc (${opMins}m @ ${dayMinRate}/m)` : `Rs. ${dayPieceRate.toFixed(2)}/pc (Fixed Rate)`;
+                const curR = parseFloat(opDoubleDayRate ? opDoubleDayRate.value : dayPieceRate) || 0;
+                const curM = parseFloat(opDoubleDayMinutes ? opDoubleDayMinutes.value : finalMins) || 0;
+                const curMR = parseFloat(opDoubleDayMinRate ? opDoubleDayMinRate.value : dayMinRate) || 0;
+                opDoubleDayRateBadge.textContent = curM > 0 ? `Rs. ${curR.toFixed(2)}/pc (${curM}m @ ${curMR.toFixed(2)}/m)` : `Rs. ${curR.toFixed(2)}/pc`;
             }
             if (opDoubleNightRateBadge) {
-                opDoubleNightRateBadge.textContent = opMins > 0 ? `Rs. ${nightPieceRate.toFixed(2)}/pc (${opMins}m @ ${nightMinRate}/m)` : `Rs. ${nightPieceRate.toFixed(2)}/pc (Fixed Rate)`;
+                const curR = parseFloat(opDoubleNightRate ? opDoubleNightRate.value : nightPieceRate) || 0;
+                const curM = parseFloat(opDoubleNightMinutes ? opDoubleNightMinutes.value : finalMins) || 0;
+                const curMR = parseFloat(opDoubleNightMinRate ? opDoubleNightMinRate.value : nightMinRate) || 0;
+                opDoubleNightRateBadge.textContent = curM > 0 ? `Rs. ${curR.toFixed(2)}/pc (${curM}m @ ${curMR.toFixed(2)}/m)` : `Rs. ${curR.toFixed(2)}/pc`;
             }
 
             // Auto-balance default (e.g. 50/50 or day's current)
@@ -3629,16 +3747,16 @@ document.addEventListener('DOMContentLoaded', function() {
         let totalEntered = 0;
         if (!isDouble) {
             const dayPcs = parseInt(opSinglePieces.value, 10) || 0;
-            const rate = parseFloat(document.getElementById('op_day_rate_hidden').value) || 0;
+            const rate = parseFloat(opSingleRate ? opSingleRate.value : 0) || 0;
             if (lblSingleDayLabour) lblSingleDayLabour.textContent = `Rs. ${(dayPcs * rate).toFixed(2)}`;
             totalEntered = dayPcs;
         } else {
             const dayPcs = parseInt(opDoubleDayPieces.value, 10) || 0;
-            const dayRate = parseFloat(document.getElementById('op_day_rate_hidden').value) || 0;
+            const dayRate = parseFloat(opDoubleDayRate ? opDoubleDayRate.value : 0) || 0;
             if (lblDoubleDayLabour) lblDoubleDayLabour.textContent = `Rs. ${(dayPcs * dayRate).toFixed(2)}`;
 
             const nightPcs = parseInt(opDoubleNightPieces.value, 10) || 0;
-            const nightRate = parseFloat(document.getElementById('op_night_rate_hidden').value) || 0;
+            const nightRate = parseFloat(opDoubleNightRate ? opDoubleNightRate.value : 0) || 0;
             if (lblDoubleNightLabour) lblDoubleNightLabour.textContent = `Rs. ${(nightPcs * nightRate).toFixed(2)}`;
 
             totalEntered = dayPcs + nightPcs;
@@ -3655,6 +3773,54 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
+
+    // Dynamic real-time rate & SAM listeners for Operator cards
+    function wireRateSchemeListeners(minsEl, minRateEl, rateEl, badgeEl, recalcFn) {
+        if (minsEl) {
+            minsEl.addEventListener('input', function() {
+                this.dataset.userEdited = '1';
+                const m = parseFloat(this.value) || 0;
+                const mr = parseFloat(minRateEl ? minRateEl.value : 0) || 0;
+                if (rateEl) {
+                    rateEl.value = (m * mr).toFixed(2);
+                    rateEl.dataset.userEdited = '1';
+                }
+                if (badgeEl) {
+                    badgeEl.textContent = m > 0 ? `Rate: Rs. ${(m * mr).toFixed(2)}/pc (${m}m × Rs. ${mr.toFixed(2)}/m)` : `Rate: Rs. ${(m * mr).toFixed(2)}/pc`;
+                }
+                recalcFn();
+            });
+        }
+        if (minRateEl) {
+            minRateEl.addEventListener('input', function() {
+                this.dataset.userEdited = '1';
+                const mr = parseFloat(this.value) || 0;
+                const m = parseFloat(minsEl ? minsEl.value : 0) || 0;
+                if (rateEl) {
+                    rateEl.value = (m * mr).toFixed(2);
+                    rateEl.dataset.userEdited = '1';
+                }
+                if (badgeEl) {
+                    badgeEl.textContent = m > 0 ? `Rate: Rs. ${(m * mr).toFixed(2)}/pc (${m}m × Rs. ${mr.toFixed(2)}/m)` : `Rate: Rs. ${(m * mr).toFixed(2)}/pc`;
+                }
+                recalcFn();
+            });
+        }
+        if (rateEl) {
+            rateEl.addEventListener('input', function() {
+                this.dataset.userEdited = '1';
+                const r = parseFloat(this.value) || 0;
+                if (badgeEl) {
+                    badgeEl.textContent = `Rate: Rs. ${r.toFixed(2)}/pc (Custom Rate)`;
+                }
+                recalcFn();
+            });
+        }
+    }
+
+    wireRateSchemeListeners(opSingleMinutes, opSingleMinRate, opSingleRate, opSingleRateBadge, recalcOperatorTotals);
+    wireRateSchemeListeners(opDoubleDayMinutes, opDoubleDayMinRate, opDoubleDayRate, opDoubleDayRateBadge, recalcOperatorTotals);
+    wireRateSchemeListeners(opDoubleNightMinutes, opDoubleNightMinRate, opDoubleNightRate, opDoubleNightRateBadge, recalcOperatorTotals);
 
     function buildOpMultiSizeTable(isDouble) {
         if (!opMultiSizeTbody) return;
