@@ -49,8 +49,46 @@ if ($recipe) {
     $recipeItems = $biStmt->fetchAll();
 }
 
-// Fetch active workers/operators
-$operators = $db->query("SELECT id, code, name, worker_type FROM workers WHERE is_active = 1 ORDER BY name ASC")->fetchAll();
+// Fetch active machine operators
+$operatorSql = "SELECT DISTINCT w.id, w.code, w.name, w.worker_type 
+                FROM workers w 
+                LEFT JOIN departments d ON w.department_id = d.id 
+                WHERE w.is_active = 1 
+                  AND (
+                      d.name LIKE '%Operator%' 
+                      OR d.name LIKE '%Knitt%' 
+                      OR d.code = 'DEP-KNIT'
+                      OR w.id IN (
+                          SELECT wo.worker_id 
+                          FROM worker_operations wo 
+                          JOIN operations o ON wo.operation_id = o.id 
+                          WHERE o.code = 'OP-OPERATOR' OR o.name LIKE '%Operator%'
+                      )
+                      OR w.name LIKE '%Operator%'
+                      OR w.worker_type LIKE '%Operator%'
+                  )
+                ORDER BY w.name ASC";
+$operators = $db->query($operatorSql)->fetchAll();
+
+// Include currently assigned operator(s) if not already in list
+$assignedOpIds = array_filter([(int)($lot['operator_id'] ?? 0), (int)($lot['night_operator_id'] ?? 0)]);
+if (!empty($assignedOpIds)) {
+    $existingOpIds = array_column($operators, 'id');
+    foreach ($assignedOpIds as $aoId) {
+        if (!in_array($aoId, $existingOpIds)) {
+            $eOp = $db->prepare("SELECT id, code, name, worker_type FROM workers WHERE id = ?");
+            $eOp->execute([$aoId]);
+            $oRow = $eOp->fetch();
+            if ($oRow) {
+                $operators[] = $oRow;
+            }
+        }
+    }
+}
+
+if (empty($operators)) {
+    $operators = $db->query("SELECT id, code, name, worker_type FROM workers WHERE is_active = 1 ORDER BY name ASC")->fetchAll();
+}
 
 // Existing anatomy breakdown
 $anatomyData = !empty($lot['anatomy_breakdown']) ? json_decode($lot['anatomy_breakdown'], true) : [];

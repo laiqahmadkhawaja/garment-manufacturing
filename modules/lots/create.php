@@ -24,11 +24,31 @@ $products = $db->query("SELECT p.*, c.name AS category_name, wt.name AS template
                         LEFT JOIN workflow_templates wt ON p.default_workflow_template_id = wt.id
                         WHERE p.is_active = 1 ORDER BY p.name ASC")->fetchAll();
 
-// Fetch Operators / Workers
-$operators = $db->query("SELECT id, code, name, worker_type, rate_per_minute 
-                         FROM workers 
-                         WHERE is_active = 1 
-                         ORDER BY name ASC")->fetchAll();
+// Fetch ONLY Machine Operators for Lot Assignment
+$operatorSql = "SELECT DISTINCT w.id, w.code, w.name, w.worker_type, w.rate_per_minute 
+                FROM workers w 
+                LEFT JOIN departments d ON w.department_id = d.id 
+                WHERE w.is_active = 1 
+                  AND (
+                      d.name LIKE '%Operator%' 
+                      OR d.name LIKE '%Knitt%' 
+                      OR d.code = 'DEP-KNIT'
+                      OR w.id IN (
+                          SELECT wo.worker_id 
+                          FROM worker_operations wo 
+                          JOIN operations o ON wo.operation_id = o.id 
+                          WHERE o.code = 'OP-OPERATOR' OR o.name LIKE '%Operator%'
+                      )
+                      OR w.name LIKE '%Operator%'
+                      OR w.worker_type LIKE '%Operator%'
+                  )
+                ORDER BY w.name ASC";
+$operators = $db->query($operatorSql)->fetchAll();
+
+// Fallback to all active workers only if no specific operator is configured yet
+if (empty($operators)) {
+    $operators = $db->query("SELECT id, code, name, worker_type, rate_per_minute FROM workers WHERE is_active = 1 ORDER BY name ASC")->fetchAll();
+}
 
 // Fetch Colors double-sorted: 1st by Historical Lot Frequency, 2nd by Available Yarn Stock, 3rd by Code
 $colorSql = "SELECT c.*, 
