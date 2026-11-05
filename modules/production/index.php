@@ -411,6 +411,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $db->beginTransaction();
                 try {
+                    // Check available operator pieces for each element to prevent cutting more than operator ready
+                    $elemStmt = $db->prepare("SELECT pe.id, pe.element_name, pe.quantity, pe.multiplier,
+                                                     COALESCE(SUM(loe.total_pieces), 0) AS operator_total,
+                                                     COALESCE(SUM(loe.cut_pieces), 0) AS cut_pieces
+                                              FROM product_elements pe
+                                              JOIN lots l ON pe.product_id = l.product_id
+                                              LEFT JOIN lot_operator_element_entries loe ON loe.element_id = pe.id AND loe.lot_id = l.id
+                                              WHERE l.id = ?
+                                              GROUP BY pe.id, pe.element_name, pe.quantity, pe.multiplier");
+                    $elemStmt->execute([$lotId]);
+                    $dbLotElems = $elemStmt->fetchAll();
+
+                    $maxWholeReadyToCut = null;
+                    $elemAvailMap = [];
+                    foreach ($dbLotElems as $de) {
+                        $m = (int)($de['quantity'] ?: $de['multiplier'] ?: 1);
+                        if ($m <= 0) $m = 1;
+                        $avail = max(0, (int)$de['operator_total'] - (int)$de['cut_pieces']);
+                        $elemAvailMap[(int)$de['id']] = [
+                            'name' => $de['element_name'],
+                            'avail' => $avail,
+                            'mult' => $m
+                        ];
+                        $wholeForEl = (int)floor($avail / $m);
+                        if ($maxWholeReadyToCut === null || $wholeForEl < $maxWholeReadyToCut) {
+                            $maxWholeReadyToCut = $wholeForEl;
+                        }
+                    }
+                    if ($maxWholeReadyToCut === null) {
+                        $opCutStmt = $db->prepare("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries pe JOIN operations o ON pe.operation_id = o.id WHERE pe.lot_id = ? AND (o.name LIKE '%Operator%' OR o.name LIKE '%Knitt%')");
+                        $opCutStmt->execute([$lotId]);
+                        $maxWholeReadyToCut = (int)$opCutStmt->fetchColumn();
+                    }
+
+                    // Strict check: each element cut cannot exceed available ready pieces
+                    foreach ($elementsCut as $elId => $cutQty) {
+                        $elId = (int)$elId;
+                        $cutQty = (int)$cutQty;
+                        if ($cutQty <= 0) continue;
+                        if (isset($elemAvailMap[$elId])) {
+                            $avail = $elemAvailMap[$elId]['avail'];
+                            if ($cutQty > $avail) {
+                                throw new Exception("کٹنگ تعداد برائے {$elemAvailMap[$elId]['name']} ($cutQty پیسز) آپریٹر کے تیار کردہ پیسز ($avail پیسز) سے زیادہ درج نہیں ہو سکتی۔");
+                            }
+                        }
+                    }
+
+                    // Check matrix total good pieces
+                    $matrixData = $_POST['matrix'] ?? [];
+                    $matrixCheckGood = 0;
+                    if (!empty($matrixData)) {
+                        foreach ($matrixData as $cId => $sizes) {
+                            if (!is_array($sizes)) continue;
+                            foreach ($sizes as $sId => $vals) {
+                                $matrixCheckGood += (int)($vals['good'] ?? 0);
+                            }
+                        }
+                    }
+
+                    if ($matrixCheckGood > 0 && $matrixCheckGood > $maxWholeReadyToCut) {
+                        throw new Exception("رنگ و سائز میٹرکس کٹنگ تعداد ($matrixCheckGood پیسز) آپریٹر کے تیار کردہ پیسز ($maxWholeReadyToCut پیسز) سے زیادہ نہیں ہو سکتی۔");
+                    }
+                    if ($matrixCheckGood === 0 && $wholePieces > $maxWholeReadyToCut) {
+                        throw new Exception("مکمل سویٹر کٹنگ تعداد ($wholePieces پیسز) آپریٹر کے تیار کردہ پیسز ($maxWholeReadyToCut پیسز) سے زیادہ نہیں ہو سکتی۔");
+                    }
+
                     // Update cut_pieces in lot_operator_element_entries
                     $totalCutSum = 0;
                     $elementsCount = 0;
@@ -1721,6 +1787,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <input type="number" name="cutting_whole_pieces" id="cut_whole_pieces" class="form-control form-control-lg fw-bold text-center text-primary fs-4" min="0" placeholder="0">
                                                 <span class="input-group-text fw-bold">pcs</span>
                                             </div>
+                                            <div class="small fw-semibold text-primary mt-1" id="lblCutWholeMaxHint">
+                                                ✓ تیار موصولہ پیسز: <strong id="lblCutWholeMaxCount">0</strong> (زیادہ سے زیادہ کٹنگ کی گنجائش)
+                                            </div>
                                         </div>
                                     </div>
 
@@ -2164,6 +2233,26 @@ document.addEventListener('DOMContentLoaded', function() {
     const cutElementsTbody = document.getElementById('cutElementsTbody');
     const opElementsTbody = document.getElementById('opElementsTbody');
 
+    function getMaxWholeReadyToCut() {
+        if (!currentOpLotData || !currentOpLotData.elements || currentOpLotData.elements.length === 0) {
+            return (currentOpLotData && currentOpLotData.max_whole_ready_to_cut !== undefined)
+                ? parseInt(currentOpLotData.max_whole_ready_to_cut, 10)
+                : 0;
+        }
+        let minWhole = null;
+        currentOpLotData.elements.forEach(el => {
+            const mult = parseInt(el.quantity || el.multiplier || 1) || 1;
+            const ready = parseInt(el.operator_total || 0) || 0;
+            const alreadyCut = parseInt(el.cut_pieces || 0) || 0;
+            const avail = Math.max(0, ready - alreadyCut);
+            const wholeThisEl = Math.floor(avail / mult);
+            if (minWhole === null || wholeThisEl < minWhole) {
+                minWhole = wholeThisEl;
+            }
+        });
+        return minWhole !== null ? minWhole : 0;
+    }
+
     function switchMode(mode) {
         modeInput.value = mode;
 
@@ -2232,6 +2321,22 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             updateCuttingRate(false);
+
+            const maxWhole = getMaxWholeReadyToCut();
+            if (cutWholePcs) {
+                cutWholePcs.max = maxWhole;
+                if (!cutWholePcs.dataset.userEdited || parseInt(cutWholePcs.value, 10) > maxWhole || parseInt(cutWholePcs.value, 10) <= 0) {
+                    cutWholePcs.value = maxWhole > 0 ? maxWhole : 0;
+                }
+            }
+            const lblHint = document.getElementById('lblCutWholeMaxCount');
+            if (lblHint) lblHint.textContent = maxWhole;
+
+            const plannedNotice = document.getElementById('cutLotPlannedNotice');
+            if (plannedNotice) {
+                const totPlanned = (currentOpLotData && currentOpLotData.lot) ? currentOpLotData.lot.total_pieces : 0;
+                plannedNotice.innerHTML = `Ready: <strong class="text-primary">${maxWhole}</strong> / Planned: ${totPlanned} pcs`;
+            }
 
             if (lotSelect.value && cuttingOpVal) {
                 loadCuttingMatrixGrid(lotSelect.value, cuttingOpVal);
@@ -2557,24 +2662,38 @@ document.addEventListener('DOMContentLoaded', function() {
             cutElementsTbody.innerHTML = '<tr><td colspan="6" class="text-muted py-3">No anatomical elements defined for this product.</td></tr>';
             return;
         }
+        const maxWhole = getMaxWholeReadyToCut();
+        const wholeNum = parseInt(wholeCutPcs, 10);
+
         let html = '';
         elements.forEach(el => {
-            const mult = parseInt(el.quantity || el.multiplier || 1);
-            const ready = parseInt(el.operator_total || 0);
-            const alreadyCut = parseInt(el.cut_pieces || 0);
-            const defNowCut = (wholeCutPcs > 0 ? (wholeCutPcs * mult) : Math.max(0, ready - alreadyCut));
-            const rem = Math.max(0, ready - (alreadyCut + defNowCut));
+            const mult = parseInt(el.quantity || el.multiplier || 1) || 1;
+            const ready = parseInt(el.operator_total || 0) || 0;
+            const alreadyCut = parseInt(el.cut_pieces || 0) || 0;
+            const availToCut = Math.max(0, ready - alreadyCut);
+
+            let nowCut = 0;
+            if (!isNaN(wholeNum) && wholeNum > 0) {
+                nowCut = Math.min(availToCut, wholeNum * mult);
+            } else if (isNaN(wholeNum) || (wholeNum === 0 && (!cutWholePcs || !cutWholePcs.dataset.userEdited))) {
+                nowCut = Math.min(availToCut, maxWhole * mult);
+            } else {
+                nowCut = 0;
+            }
+            const rem = Math.max(0, availToCut - nowCut);
+
             html += `
-                <tr data-elid="${el.id}" data-mult="${mult}" data-ready="${ready}" data-cut="${alreadyCut}">
+                <tr data-elid="${el.id}" data-mult="${mult}" data-ready="${ready}" data-cut="${alreadyCut}" data-avail="${availToCut}">
                     <td class="text-start fw-bold text-dark">${el.element_name}</td>
                     <td><span class="badge bg-light text-muted border">×${mult}</span></td>
                     <td class="fw-bold text-primary">${ready}</td>
                     <td class="fw-bold text-secondary">${alreadyCut}</td>
                     <td>
-                        <input type="number" name="elements_cut[${el.id}]" class="form-control form-control-sm text-center fw-bold text-danger border-warning cut-el-input" value="${defNowCut}" min="0">
+                        <input type="number" name="elements_cut[${el.id}]" class="form-control form-control-sm text-center fw-bold text-danger border-warning cut-el-input" value="${nowCut}" min="0" max="${availToCut}">
+                        <div class="small text-muted" style="font-size: 10px;">Max Ready: ${availToCut}</div>
                     </td>
-                    <td class="fw-bold cut-el-rem ${rem > 0 ? 'text-warning' : 'text-success'}">
-                        ${rem > 0 ? (rem + ' remaining') : '✓ All Cut'}
+                    <td class="fw-bold cut-el-rem ${rem > 0 ? 'text-warning' : (availToCut > 0 && nowCut >= availToCut ? 'text-success' : 'text-muted')}">
+                        ${availToCut === 0 ? '✓ No Ready Stock' : (rem > 0 ? (rem + ' remaining to cut') : '✓ All Ready Cut')}
                     </td>
                 </tr>
             `;
@@ -2584,15 +2703,44 @@ document.addEventListener('DOMContentLoaded', function() {
         cutElementsTbody.querySelectorAll('.cut-el-input').forEach(inp => {
             inp.addEventListener('input', function() {
                 const tr = this.closest('tr');
-                const ready = parseInt(tr.dataset.ready) || 0;
-                const alreadyCut = parseInt(tr.dataset.cut) || 0;
-                const now = parseInt(this.value) || 0;
-                const rem = Math.max(0, ready - (alreadyCut + now));
+                const avail = parseInt(tr.dataset.avail) || 0;
+                let now = parseInt(this.value) || 0;
+                if (now < 0) {
+                    this.value = 0;
+                    now = 0;
+                }
+                if (now > avail) {
+                    alert('اس حصہ کے صرف ' + avail + ' پیس آپریٹر سے تیار موصول ہوئے ہیں۔ آپ ' + avail + ' سے زیادہ کٹنگ درج نہیں کر سکتے۔');
+                    this.value = avail;
+                    now = avail;
+                }
+                const rem = Math.max(0, avail - now);
                 const remTd = tr.querySelector('.cut-el-rem');
-                remTd.textContent = rem > 0 ? (rem + ' remaining') : '✓ All Cut';
-                remTd.className = 'fw-bold cut-el-rem ' + (rem > 0 ? 'text-warning' : 'text-success');
+                remTd.textContent = avail === 0 ? '✓ No Ready Stock' : (rem > 0 ? (rem + ' remaining to cut') : '✓ All Ready Cut');
+                remTd.className = 'fw-bold cut-el-rem ' + (rem > 0 ? 'text-warning' : (avail > 0 && now >= avail ? 'text-success' : 'text-muted'));
+
+                syncWholeSweatersFromElements();
             });
         });
+    }
+
+    function syncWholeSweatersFromElements() {
+        if (!cutElementsTbody) return;
+        let minWhole = null;
+        cutElementsTbody.querySelectorAll('tr[data-elid]').forEach(tr => {
+            const mult = parseInt(tr.dataset.mult) || 1;
+            const inp = tr.querySelector('.cut-el-input');
+            const now = parseInt(inp ? inp.value : 0) || 0;
+            const wholeThisEl = Math.floor(now / mult);
+            if (minWhole === null || wholeThisEl < minWhole) {
+                minWhole = wholeThisEl;
+            }
+        });
+        if (minWhole !== null && cutWholePcs) {
+            cutWholePcs.value = minWhole;
+            cutWholePcs.dataset.userEdited = '1';
+            updateCuttingRate(false);
+        }
     }
 
     const cutMinutesInput = document.getElementById('cut_minutes');
@@ -2642,11 +2790,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (cutWholePcs) {
         cutWholePcs.addEventListener('input', function() {
-            const whole = parseInt(this.value) || 0;
-            const rate = parseFloat(cutRateInput ? cutRateInput.value : 0) || 5.00;
-            if (lblCutLabour) {
-                lblCutLabour.textContent = 'Rs. ' + (whole * rate).toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            const maxWhole = getMaxWholeReadyToCut();
+            let whole = parseInt(this.value) || 0;
+            if (whole < 0) {
+                this.value = 0;
+                whole = 0;
             }
+            if (whole > maxWhole) {
+                alert('آپریٹر سے صرف ' + maxWhole + ' پیس تیار موصول ہوئے ہیں۔ آپ ' + maxWhole + ' سے زیادہ کٹنگ درج نہیں کر سکتے۔');
+                this.value = maxWhole;
+                whole = maxWhole;
+            }
+            this.dataset.userEdited = '1';
+            updateCuttingRate(false);
             if (currentOpLotData && currentOpLotData.elements) {
                 renderCuttingElements(currentOpLotData.elements, whole);
             }
@@ -2670,6 +2826,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const colors = data.colors || [];
         const sizes = data.sizes || [];
         const grid = data.grid || {};
+        const maxWhole = getMaxWholeReadyToCut();
 
         if (colors.length === 0 || sizes.length === 0) {
             cutMatrixThead.innerHTML = '<tr><th class="p-2 text-muted">No variants defined for this lot.</th></tr>';
@@ -2734,11 +2891,16 @@ document.addEventListener('DOMContentLoaded', function() {
             inp.addEventListener('input', recalculateCuttingMatrixTotals);
         });
 
-        // Auto fill planned pieces button
+        // Auto fill planned pieces button (bounded strictly by operator ready pieces)
         if (btnFillAllCutting) {
+            btnFillAllCutting.innerHTML = `<i class="bi bi-lightning-charge-fill text-warning me-1"></i> ⚡ 1-Click Fill Ready (${maxWhole} pcs)`;
             btnFillAllCutting.onclick = function() {
+                let remainingToDistribute = maxWhole;
                 cutMatrixTbody.querySelectorAll('.cut-cell-good').forEach(inp => {
-                    inp.value = parseInt(inp.dataset.planned) || 0;
+                    const plan = parseInt(inp.dataset.planned) || 0;
+                    const fill = Math.min(plan, remainingToDistribute);
+                    inp.value = fill;
+                    remainingToDistribute -= fill;
                 });
                 cutMatrixTbody.querySelectorAll('.cut-cell-rej, .cut-cell-rew').forEach(inp => {
                     inp.value = 0;
@@ -2760,6 +2922,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function recalculateCuttingMatrixTotals() {
         if (!cutMatrixTbody) return;
+        const maxWhole = getMaxWholeReadyToCut();
         let grandGood = 0;
         let grandRej = 0;
         let grandRew = 0;
@@ -2780,6 +2943,15 @@ document.addEventListener('DOMContentLoaded', function() {
             if (rowTotTd) rowTotTd.textContent = rowGood + ' pcs';
         });
 
+        if (maxWhole > 0 && grandGood > maxWhole) {
+            alert('کل کٹنگ تعداد (' + grandGood + ' pcs) آپریٹر کے تیار کردہ پیسز (' + maxWhole + ' pcs) سے زیادہ نہیں ہو سکتی۔');
+            if (document.activeElement && document.activeElement.classList.contains('cut-cell-good')) {
+                const excess = grandGood - maxWhole;
+                document.activeElement.value = Math.max(0, (parseInt(document.activeElement.value) || 0) - excess);
+                return recalculateCuttingMatrixTotals();
+            }
+        }
+
         // Update column totals
         if (cutMatrixTfoot) {
             cutMatrixTfoot.querySelectorAll('.cut-col-total').forEach(td => {
@@ -2797,6 +2969,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Auto-update Whole Sweaters Cut input and labour
         if (cutWholePcs) {
             cutWholePcs.value = grandGood;
+            cutWholePcs.dataset.userEdited = '1';
             const rate = parseFloat(cutRateInput ? cutRateInput.value : 0) || 5.00;
             if (lblCutLabour) {
                 lblCutLabour.textContent = 'Rs. ' + (grandGood * rate).toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -3020,6 +3193,21 @@ document.addEventListener('DOMContentLoaded', function() {
                             ? (parseInt(opDoubleNightPieces && opDoubleNightPieces.dataset.userEdited ? opDoubleNightPieces.value : 0) || Math.max(0, remainingLotPieces - dayInit))
                             : 0;
                         renderOperatorElements(data.elements, dayInit, nightInit);
+
+                        const maxWhole = getMaxWholeReadyToCut();
+                        if (cutWholePcs) {
+                            cutWholePcs.max = maxWhole;
+                            if (!cutWholePcs.dataset.userEdited || parseInt(cutWholePcs.value, 10) > maxWhole || parseInt(cutWholePcs.value, 10) <= 0) {
+                                cutWholePcs.value = maxWhole > 0 ? maxWhole : 0;
+                            }
+                        }
+                        const lblHint = document.getElementById('lblCutWholeMaxCount');
+                        if (lblHint) lblHint.textContent = maxWhole;
+                        const plannedNotice = document.getElementById('cutLotPlannedNotice');
+                        if (plannedNotice) {
+                            plannedNotice.innerHTML = `Ready: <strong class="text-primary">${maxWhole}</strong> / Planned: ${totalPieces} pcs`;
+                        }
+
                         renderCuttingElements(data.elements, parseInt(cutWholePcs ? cutWholePcs.value : 0) || 0);
                     }
 
@@ -4208,8 +4396,30 @@ document.addEventListener('DOMContentLoaded', function() {
             const whole = parseInt(cutWholePcs ? cutWholePcs.value : 0) || 0;
             if (whole <= 0) {
                 e.preventDefault();
-                alert('Please enter at least 1 cut piece before saving, or click "⚡ 1-Click Fill Planned".');
+                alert('Please enter at least 1 cut piece before saving, or click "⚡ 1-Click Fill Ready".');
                 if (cutWholePcs) cutWholePcs.focus();
+                return;
+            }
+            const maxWhole = getMaxWholeReadyToCut();
+            if (maxWhole > 0 && whole > maxWhole) {
+                e.preventDefault();
+                alert('کل کٹنگ تعداد (' + whole + ' pcs) آپریٹر کے تیار کردہ پیسز (' + maxWhole + ' pcs) سے زیادہ درج نہیں ہو سکتی۔');
+                if (cutWholePcs) cutWholePcs.focus();
+                return;
+            }
+
+            let elExceeded = false;
+            document.querySelectorAll('.cut-el-input').forEach(inp => {
+                const val = parseInt(inp.value, 10) || 0;
+                const max = parseInt(inp.max, 10);
+                if (!isNaN(max) && val > max) {
+                    elExceeded = true;
+                    inp.classList.add('is-invalid');
+                }
+            });
+            if (elExceeded) {
+                e.preventDefault();
+                alert('کچھ اعضاء کی کٹنگ تعداد آپریٹر کے تیار کردہ پیسز سے زیادہ ہے۔ برائے مہربانی درست کریں۔');
                 return;
             }
             return;

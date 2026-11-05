@@ -509,6 +509,15 @@ function get_lot_variant_stage_allowance(int $lotId, int $operationId): array {
     $prevStepsStmt->execute([$lotId, $currSeq]);
     $prevSteps = $prevStepsStmt->fetchAll();
 
+    // Check total output of immediate preceding step (e.g. Operator Entry before Cutting)
+    $prevOpTotalGood = null;
+    if (!empty($prevSteps)) {
+        $immPrevOpId = (int)$prevSteps[0]['operation_id'];
+        $totStmt = $db->prepare("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = ? AND operation_id = ?");
+        $totStmt->execute([$lotId, $immPrevOpId]);
+        $prevOpTotalGood = (int)$totStmt->fetchColumn();
+    }
+
     $prevColorOpId = null;
     $prevColorOpName = null;
 
@@ -630,6 +639,7 @@ function get_lot_variant_stage_allowance(int $lotId, int $operationId): array {
         'has_prev_color_stage' => ($prevColorOpId !== null),
         'prev_operation_id' => $prevColorOpId,
         'prev_operation_name' => $prevColorOpName,
+        'prev_stage_total_good' => $prevOpTotalGood,
         'variants' => $variantAllowances,
         'colors' => $colorAllowances
     ];

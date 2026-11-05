@@ -89,13 +89,31 @@ if ($action === 'get_lot_operations_and_variants') {
     $elemStmt->execute([$assignedWorkerId, $lotId]);
     $lotElements = $elemStmt->fetchAll();
 
+    // Calculate maximum complete whole units ready from operator for cutting
+    $maxWholeReadyToCut = null;
+    foreach ($lotElements as $el) {
+        $m = (int)($el['quantity'] ?: $el['multiplier'] ?: 1);
+        if ($m <= 0) $m = 1;
+        $avail = max(0, (int)$el['operator_total'] - (int)$el['cut_pieces']);
+        $w = (int)floor($avail / $m);
+        if ($maxWholeReadyToCut === null || $w < $maxWholeReadyToCut) {
+            $maxWholeReadyToCut = $w;
+        }
+    }
+    if ($maxWholeReadyToCut === null) {
+        $opGoodStmt = $db->prepare("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries pe JOIN operations o ON pe.operation_id = o.id WHERE pe.lot_id = ? AND (o.name LIKE '%Operator%' OR o.name LIKE '%Knitt%')");
+        $opGoodStmt->execute([$lotId]);
+        $maxWholeReadyToCut = (int)$opGoodStmt->fetchColumn();
+    }
+
     json_response([
         'status' => 'success',
         'lot' => $lot,
         'operations' => $operations,
         'variants' => $variants,
         'sizes' => $lotSizes,
-        'elements' => $lotElements
+        'elements' => $lotElements,
+        'max_whole_ready_to_cut' => $maxWholeReadyToCut
     ]);
 }
 
@@ -246,11 +264,38 @@ if ($action === 'get_lot_stage_matrix') {
         $totalPending += $pending;
     }
 
+    // Maximum whole sweaters ready from operator
+    $maxWholeStmt = $db->prepare("SELECT pe.quantity, pe.multiplier,
+                                         COALESCE(SUM(loe.total_pieces), 0) AS operator_total,
+                                         COALESCE(SUM(loe.cut_pieces), 0) AS cut_pieces
+                                  FROM product_elements pe
+                                  JOIN lots l ON pe.product_id = l.product_id
+                                  LEFT JOIN lot_operator_element_entries loe ON loe.element_id = pe.id AND loe.lot_id = l.id
+                                  WHERE l.id = ?
+                                  GROUP BY pe.id, pe.quantity, pe.multiplier");
+    $maxWholeStmt->execute([$lotId]);
+    $mElements = $maxWholeStmt->fetchAll();
+    $maxWholeReadyToCut = null;
+    foreach ($mElements as $mel) {
+        $m = (int)($mel['quantity'] ?: $mel['multiplier'] ?: 1);
+        if ($m <= 0) $m = 1;
+        $avail = max(0, (int)$mel['operator_total'] - (int)$mel['cut_pieces']);
+        $w = (int)floor($avail / $m);
+        if ($maxWholeReadyToCut === null || $w < $maxWholeReadyToCut) {
+            $maxWholeReadyToCut = $w;
+        }
+    }
+    if ($maxWholeReadyToCut === null) {
+        $maxWholeReadyToCut = $allowanceData['prev_stage_total_good'] ?? 0;
+    }
+
     json_response([
         'status' => 'success',
         'lot' => $lot,
         'has_prev_color_stage' => $allowanceData['has_prev_color_stage'],
         'prev_operation_name' => $allowanceData['prev_operation_name'],
+        'prev_stage_total_good' => $allowanceData['prev_stage_total_good'] ?? null,
+        'max_whole_ready_to_cut' => $maxWholeReadyToCut,
         'total_prev_rejected' => $totalPrevRejected,
         'colors' => array_values($colors),
         'sizes' => array_values($sizes),
