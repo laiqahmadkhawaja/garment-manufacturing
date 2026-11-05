@@ -58,24 +58,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $daySizes = $_POST['day_sizes'] ?? [];
         $nightSizes = $_POST['night_sizes'] ?? [];
 
-        if ($lotId <= 0 || $dayWorkerId <= 0) {
-            $error = 'Please select Lot and Day Operator.';
-        } elseif ($shiftType === 'Double Shift' && $nightWorkerId <= 0) {
-            $error = 'Please select Night Operator for Double Shift.';
+        if ($lotId <= 0) {
+            $error = 'Please select a production lot.';
         } else {
-            // Verify lot
-            $lQuery = $db->prepare("SELECT lot_number, status, total_pieces, single_size_id FROM lots WHERE id = ?");
+            // Verify lot & enforce shift type
+            $lQuery = $db->prepare("SELECT lot_number, status, total_pieces, single_size_id, shift_type FROM lots WHERE id = ?");
             $lQuery->execute([$lotId]);
             $lotRow = $lQuery->fetch();
 
             if (!$lotRow) {
                 $error = 'Selected lot not found.';
             } else {
-                $lotNum = $lotRow['lot_number'];
-                if (!$singleSizeId) $singleSizeId = $lotRow['single_size_id'];
-                if (!$singleSizeId) {
-                    $singleSizeId = (int)$db->query("SELECT id FROM sizes ORDER BY sort_order ASC LIMIT 1")->fetchColumn();
+                if (!empty($lotRow['shift_type'])) {
+                    $shiftType = $lotRow['shift_type'];
                 }
+
+                // If Single Shift, strictly enforce no night operator data
+                if ($shiftType === 'Single Shift') {
+                    $nightWorkerId = null;
+                    $nightPieces = 0;
+                    $nightRate = 0.00;
+                    $nightSizes = [];
+                }
+
+                if ($dayWorkerId <= 0) {
+                    $error = 'Please select Day Operator.';
+                } elseif ($shiftType === 'Double Shift' && $nightWorkerId <= 0) {
+                    $error = 'Please select Night Operator for Double Shift lot.';
+                } else {
+                    $lotNum = $lotRow['lot_number'];
+                    if (!$singleSizeId) $singleSizeId = $lotRow['single_size_id'];
+                    if (!$singleSizeId) {
+                        $singleSizeId = (int)$db->query("SELECT id FROM sizes ORDER BY sort_order ASC LIMIT 1")->fetchColumn();
+                    }
 
                 // If operation not passed, resolve first operation
                 if ($operationId <= 0) {
@@ -201,7 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $elId = (int)$elId;
                             $req = (int)($vals['required'] ?? $lotRow['total_pieces']);
                             $p1 = max(0, (int)($vals['op1_pieces'] ?? 0));
-                            $p2 = max(0, (int)($vals['op2_pieces'] ?? 0));
+                            $p2 = ($shiftType === 'Double Shift') ? max(0, (int)($vals['op2_pieces'] ?? 0)) : 0;
                             // Enforce rule: element amounts cannot exceed planned amount
                             if ($p1 + $p2 > $req) {
                                 $excess = ($p1 + $p2) - $req;
@@ -227,7 +242,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $peList = $db->prepare("SELECT id, multiplier, quantity FROM product_elements WHERE product_id = (SELECT product_id FROM lots WHERE id = ?)");
                         $peList->execute([$lotId]);
                         foreach ($peList->fetchAll() as $pel) {
-                            $m = (int)($pel['multiplier'] ?: $pel['quantity'] ?: 1);
+                            $m = (int)($pel['quantity'] ?: $pel['multiplier'] ?: 1);
                             $elId = (int)$pel['id'];
                             $req = $m * (int)$lotRow['total_pieces'];
                             $p1 = $m * $dayTotalPcs;
@@ -261,6 +276,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+}
 
     // =========================================================================
     // 1.5 CUTTING PRODUCTION ENTRY MODE (WHOLE SWEATERS OR INDIVIDUAL ELEMENTS)
@@ -320,7 +336,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $peMultStmt = $db->prepare("SELECT multiplier, quantity FROM product_elements WHERE id = ?");
                             $peMultStmt->execute([$elId]);
                             $multRow = $peMultStmt->fetch();
-                            $mult = $multRow ? (int)($multRow['multiplier'] ?: $multRow['quantity']) : 1;
+                            $mult = $multRow ? (int)($multRow['quantity'] ?: $multRow['multiplier'] ?: 1) : 1;
                             $req = $mult * (int)$lotRow['total_pieces'];
 
                             $insEl = $db->prepare("INSERT INTO lot_operator_element_entries 
@@ -1470,8 +1486,8 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                     <tr>
                                                         <th class="text-start">Element (حصہ)</th>
                                                         <th>Target</th>
-                                                        <th>☀️ Day Pieces</th>
-                                                        <th>🌙 Night Pieces</th>
+                                                        <th id="thOpElDay">☀️ Pieces Produced (تیار شدہ پیسز)</th>
+                                                        <th id="thOpElNight" class="d-none">🌙 Night Pieces</th>
                                                         <th>Total</th>
                                                         <th>Balance</th>
                                                     </tr>
@@ -2121,38 +2137,72 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderOperatorElements(elements, dayPcs, nightPcs) {
         if (!opElementsTbody) return;
+        const isDouble = (currentOpLotData && currentOpLotData.lot && currentOpLotData.lot.shift_type === 'Double Shift');
+        const thOpElDay = document.getElementById('thOpElDay');
+        const thOpElNight = document.getElementById('thOpElNight');
+
+        if (thOpElNight) {
+            if (isDouble) {
+                thOpElNight.classList.remove('d-none');
+                if (thOpElDay) thOpElDay.innerHTML = '<i class="bi bi-sun-fill text-warning me-1"></i> ☀️ 1. Day Pieces';
+            } else {
+                thOpElNight.classList.add('d-none');
+                if (thOpElDay) thOpElDay.innerHTML = '<i class="bi bi-person-badge me-1"></i> ☀️ Pieces Produced (تیار شدہ پیسز)';
+            }
+        }
+
         if (!elements || elements.length === 0) {
-            opElementsTbody.innerHTML = '<tr><td colspan="6" class="text-muted py-3">No anatomical elements defined for this product.</td></tr>';
+            const colSpan = isDouble ? 6 : 5;
+            opElementsTbody.innerHTML = `<tr><td colspan="${colSpan}" class="text-muted py-3">No anatomical elements defined for this product.</td></tr>`;
             return;
         }
         let html = '';
         elements.forEach(el => {
-            const mult = parseInt(el.multiplier || el.quantity || 1);
+            const mult = parseInt(el.quantity || el.multiplier || 1);
             const req = parseInt(el.required_pieces) || 0;
             let defDay = (dayPcs > 0 ? Math.min(req, dayPcs * mult) : parseInt(el.operator1_pieces || 0));
-            let defNight = (nightPcs > 0 ? Math.min(Math.max(0, req - defDay), nightPcs * mult) : parseInt(el.operator2_pieces || 0));
+            let defNight = isDouble ? (nightPcs > 0 ? Math.min(Math.max(0, req - defDay), nightPcs * mult) : parseInt(el.operator2_pieces || 0)) : 0;
             if (defDay + defNight > req) {
                 defNight = Math.max(0, req - defDay);
             }
             const total = defDay + defNight;
             const bal = Math.max(0, req - total);
-            html += `
-                <tr data-elid="${el.id}" data-mult="${mult}" data-req="${req}">
-                    <td class="text-start fw-bold text-dark">${el.element_name} <span class="badge bg-light text-muted border">×${mult}</span></td>
-                    <td class="fw-bold text-muted">${req}</td>
-                    <td style="width: 120px;">
-                        <input type="number" name="elements[${el.id}][op1_pieces]" class="form-control form-control-sm text-center fw-bold op-el-day" value="${defDay}" min="0" max="${req}" title="Max planned: ${req}">
-                    </td>
-                    <td style="width: 120px;">
-                        <input type="number" name="elements[${el.id}][op2_pieces]" class="form-control form-control-sm text-center fw-bold op-el-night" value="${defNight}" min="0" max="${req}" title="Max planned: ${req}">
-                    </td>
-                    <td class="fw-bold text-primary op-el-total">${total}</td>
-                    <td class="fw-bold op-el-bal ${bal > 0 ? 'text-warning' : 'text-success'}">
-                        ${bal > 0 ? (bal + ' pending') : '✓ Done'}
-                    </td>
-                    <input type="hidden" name="elements[${el.id}][required]" value="${req}">
-                </tr>
-            `;
+
+            if (isDouble) {
+                html += `
+                    <tr data-elid="${el.id}" data-mult="${mult}" data-req="${req}">
+                        <td class="text-start fw-bold text-dark">${el.element_name} <span class="badge bg-light text-muted border">×${mult}</span></td>
+                        <td class="fw-bold text-muted">${req}</td>
+                        <td style="width: 120px;">
+                            <input type="number" name="elements[${el.id}][op1_pieces]" class="form-control form-control-sm text-center fw-bold op-el-day" value="${defDay}" min="0" max="${req}" title="Max planned: ${req}">
+                        </td>
+                        <td style="width: 120px;">
+                            <input type="number" name="elements[${el.id}][op2_pieces]" class="form-control form-control-sm text-center fw-bold op-el-night" value="${defNight}" min="0" max="${req}" title="Max planned: ${req}">
+                        </td>
+                        <td class="fw-bold text-primary op-el-total">${total}</td>
+                        <td class="fw-bold op-el-bal ${bal > 0 ? 'text-warning' : 'text-success'}">
+                            ${bal > 0 ? (bal + ' pending') : '✓ Done'}
+                        </td>
+                        <input type="hidden" name="elements[${el.id}][required]" value="${req}">
+                    </tr>
+                `;
+            } else {
+                html += `
+                    <tr data-elid="${el.id}" data-mult="${mult}" data-req="${req}">
+                        <td class="text-start fw-bold text-dark">${el.element_name} <span class="badge bg-light text-muted border">×${mult}</span></td>
+                        <td class="fw-bold text-muted">${req}</td>
+                        <td style="width: 150px;">
+                            <input type="number" name="elements[${el.id}][op1_pieces]" class="form-control form-control-sm text-center fw-bold op-el-day" value="${defDay}" min="0" max="${req}" title="Max planned: ${req}">
+                            <input type="hidden" name="elements[${el.id}][op2_pieces]" class="op-el-night" value="0">
+                        </td>
+                        <td class="fw-bold text-primary op-el-total">${total}</td>
+                        <td class="fw-bold op-el-bal ${bal > 0 ? 'text-warning' : 'text-success'}">
+                            ${bal > 0 ? (bal + ' pending') : '✓ Done'}
+                        </td>
+                        <input type="hidden" name="elements[${el.id}][required]" value="${req}">
+                    </tr>
+                `;
+            }
         });
         opElementsTbody.innerHTML = html;
 
@@ -2245,7 +2295,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         let html = '';
         elements.forEach(el => {
-            const mult = parseInt(el.multiplier || el.quantity || 1);
+            const mult = parseInt(el.quantity || el.multiplier || 1);
             const ready = parseInt(el.operator_total || 0);
             const alreadyCut = parseInt(el.cut_pieces || 0);
             const defNowCut = (wholeCutPcs > 0 ? (wholeCutPcs * mult) : Math.max(0, ready - alreadyCut));
@@ -2624,8 +2674,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (opLotInfoCard) opLotInfoCard.classList.remove('d-none');
 
                     if (data.elements) {
-                        const dayInit = parseInt(opDoubleDayPieces ? opDoubleDayPieces.value : 0) || 0;
-                        const nightInit = parseInt(opDoubleNightPieces ? opDoubleNightPieces.value : 0) || 0;
+                        const dayInit = isDouble
+                            ? (parseInt(opDoubleDayPieces ? opDoubleDayPieces.value : 0) || 0)
+                            : (parseInt(opSinglePieces ? opSinglePieces.value : 0) || totalPieces);
+                        const nightInit = isDouble
+                            ? (parseInt(opDoubleNightPieces ? opDoubleNightPieces.value : 0) || 0)
+                            : 0;
                         renderOperatorElements(data.elements, dayInit, nightInit);
                         renderCuttingElements(data.elements, parseInt(cutWholePcs ? cutWholePcs.value : 0) || 0);
                     }
@@ -3404,8 +3458,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (!isDouble) {
             // SINGLE SHIFT
-            if (singleShiftCard) singleShiftCard.classList.remove('d-none');
-            if (doubleShiftCard) doubleShiftCard.classList.add('d-none');
+            if (singleShiftCard) {
+                singleShiftCard.classList.remove('d-none');
+                singleShiftCard.querySelectorAll('input, select').forEach(el => el.disabled = false);
+            }
+            if (doubleShiftCard) {
+                doubleShiftCard.classList.add('d-none');
+                doubleShiftCard.querySelectorAll('input, select').forEach(el => el.disabled = true);
+            }
 
             if (lot.operator_id && opSingleWorker && !opSingleWorker.value) {
                 opSingleWorker.value = lot.operator_id;
@@ -3429,8 +3489,14 @@ document.addEventListener('DOMContentLoaded', function() {
             syncElementsFromOperatorPieces();
         } else {
             // DOUBLE SHIFT
-            if (singleShiftCard) singleShiftCard.classList.add('d-none');
-            if (doubleShiftCard) doubleShiftCard.classList.remove('d-none');
+            if (singleShiftCard) {
+                singleShiftCard.classList.add('d-none');
+                singleShiftCard.querySelectorAll('input, select').forEach(el => el.disabled = true);
+            }
+            if (doubleShiftCard) {
+                doubleShiftCard.classList.remove('d-none');
+                doubleShiftCard.querySelectorAll('input, select').forEach(el => el.disabled = false);
+            }
 
             if (lot.operator_id && opDoubleDayWorker && !opDoubleDayWorker.value) opDoubleDayWorker.value = lot.operator_id;
             if (lot.night_operator_id && opDoubleNightWorker && !opDoubleNightWorker.value) opDoubleNightWorker.value = lot.night_operator_id;
@@ -3593,6 +3659,18 @@ document.addEventListener('DOMContentLoaded', function() {
     function buildOpMultiSizeTable(isDouble) {
         if (!opMultiSizeTbody) return;
         opMultiSizeTbody.innerHTML = '';
+        const thDay = document.getElementById('thDaySizeQty');
+        const thNight = document.getElementById('thNightSizeQty');
+        if (thNight) {
+            if (isDouble) {
+                thNight.classList.remove('d-none');
+                if (thDay) thDay.innerHTML = '<i class="bi bi-sun-fill text-warning me-1"></i> ☀️ Day Operator Pieces';
+            } else {
+                thNight.classList.add('d-none');
+                if (thDay) thDay.innerHTML = '<i class="bi bi-person-badge me-1"></i> ☀️ Pieces Produced (تیار شدہ پیسز)';
+            }
+        }
+
         const sizes = currentOpLotData.sizes || [];
         sizes.forEach(sz => {
             const planned = parseInt(sz.planned_qty, 10) || 0;
@@ -3600,24 +3678,35 @@ document.addEventListener('DOMContentLoaded', function() {
             const rem = isDouble ? (planned - half) : 0;
 
             const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td class="fw-bold">${sz.name} (${sz.code})</td>
-                <td class="fw-semibold text-muted">${planned} pcs</td>
-                <td>
-                    <input type="number" name="day_sizes[${sz.id}]" class="form-control form-control-sm text-center fw-bold op-msize-day" data-planned="${planned}" value="${half}" min="0">
-                </td>
-                ${isDouble ? `
-                <td>
-                    <input type="number" name="night_sizes[${sz.id}]" class="form-control form-control-sm text-center fw-bold op-msize-night" data-planned="${planned}" value="${rem}" min="0">
-                </td>` : `<td>-</td>`}
-                <td class="fw-bold text-primary op-msize-total">${planned}</td>
-            `;
+            if (isDouble) {
+                tr.innerHTML = `
+                    <td class="fw-bold">${sz.name} (${sz.code})</td>
+                    <td class="fw-semibold text-muted">${planned} pcs</td>
+                    <td>
+                        <input type="number" name="day_sizes[${sz.id}]" class="form-control form-control-sm text-center fw-bold op-msize-day" data-planned="${planned}" value="${half}" min="0">
+                    </td>
+                    <td>
+                        <input type="number" name="night_sizes[${sz.id}]" class="form-control form-control-sm text-center fw-bold op-msize-night" data-planned="${planned}" value="${rem}" min="0">
+                    </td>
+                    <td class="fw-bold text-primary op-msize-total">${planned}</td>
+                `;
+            } else {
+                tr.innerHTML = `
+                    <td class="fw-bold">${sz.name} (${sz.code})</td>
+                    <td class="fw-semibold text-muted">${planned} pcs</td>
+                    <td>
+                        <input type="number" name="day_sizes[${sz.id}]" class="form-control form-control-sm text-center fw-bold op-msize-day" data-planned="${planned}" value="${half}" min="0">
+                        <input type="hidden" name="night_sizes[${sz.id}]" class="op-msize-night" value="0">
+                    </td>
+                    <td class="fw-bold text-primary op-msize-total">${planned}</td>
+                `;
+            }
             opMultiSizeTbody.appendChild(tr);
 
             const dayInp = tr.querySelector('.op-msize-day');
             const nightInp = tr.querySelector('.op-msize-night');
 
-            if (dayInp && nightInp) {
+            if (dayInp && isDouble && nightInp) {
                 dayInp.addEventListener('input', function() {
                     const p = parseInt(this.dataset.planned, 10) || 0;
                     const d = parseInt(this.value, 10) || 0;
@@ -3629,6 +3718,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     const n = parseInt(this.value, 10) || 0;
                     dayInp.value = Math.max(0, p - n);
                     tr.querySelector('.op-msize-total').textContent = n + parseInt(dayInp.value, 10);
+                });
+            } else if (dayInp && !isDouble) {
+                dayInp.addEventListener('input', function() {
+                    const d = parseInt(this.value, 10) || 0;
+                    tr.querySelector('.op-msize-total').textContent = d;
                 });
             }
         });
