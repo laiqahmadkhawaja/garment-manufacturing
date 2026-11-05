@@ -2043,6 +2043,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     break;
                 }
             }
+
+            if (lotSelect && lotSelect.value) {
+                if (opPlaceholder) opPlaceholder.classList.add('d-none');
+                if (opActiveCards) opActiveCards.classList.remove('d-none');
+                if (opLotInfoCard) opLotInfoCard.classList.remove('d-none');
+                updateOperatorRatesAndQuantities();
+            } else {
+                if (opPlaceholder) opPlaceholder.classList.remove('d-none');
+                if (opActiveCards) opActiveCards.classList.add('d-none');
+                if (opLotInfoCard) opLotInfoCard.classList.add('d-none');
+            }
         } else if (mode === 'cutting') {
             if (btnModeCutting) btnModeCutting.className = 'btn btn-warning fw-bold text-dark';
             operatorSection.classList.add('d-none');
@@ -2564,6 +2575,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load operations and variants for selected lot
     function loadLotData(lotId, callback) {
         if (!lotId) {
+            currentOpLotData = null;
+            if (opPlaceholder) opPlaceholder.classList.remove('d-none');
+            if (opActiveCards) opActiveCards.classList.add('d-none');
+            if (opLotInfoCard) opLotInfoCard.classList.add('d-none');
             opSelect.innerHTML = '<option value="">-- Select Lot First --</option>';
             workerSelect.innerHTML = '<option value="">-- Select Operation First --</option>';
             if (workerBadge) workerBadge.classList.add('d-none');
@@ -2582,12 +2597,39 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (data.status === 'success') {
                     currentOpLotData = data;
+                    const lot = data.lot || {};
+                    const totalPieces = parseInt(lot.total_pieces, 10) || 0;
+                    const isDouble = (lot.shift_type === 'Double Shift');
+                    const isMultiSize = (lot.size_mode === 'Multi Size');
+
+                    // Populate Top Lot Info Banner
+                    if (opLotTitle) opLotTitle.textContent = `LOT #${lot.lot_number || '---'}`;
+                    if (opLotPiecesBadge) opLotPiecesBadge.textContent = `${totalPieces} pcs planned`;
+                    if (opLotShiftBadge) {
+                        opLotShiftBadge.textContent = isDouble ? '🌙 Double Shift' : '☀️ Single Shift';
+                        opLotShiftBadge.className = isDouble ? 'badge bg-primary ms-1' : 'badge bg-warning-subtle text-warning-emphasis ms-1 border';
+                    }
+                    if (opLotSizeBadge) {
+                        opLotSizeBadge.textContent = isMultiSize ? 'Multi-Size Batch' : `Single Size (${lot.single_size_name || 'Standard'})`;
+                    }
+
+                    // Hidden fields for operator initial submission
+                    if (document.getElementById('op_shift_type')) document.getElementById('op_shift_type').value = lot.shift_type || 'Single Shift';
+                    if (document.getElementById('op_size_mode')) document.getElementById('op_size_mode').value = lot.size_mode || 'Single Size';
+                    if (document.getElementById('op_single_size_id')) document.getElementById('op_single_size_id').value = lot.single_size_id || '';
+
+                    // Unhide active cards and info card
+                    if (opPlaceholder) opPlaceholder.classList.add('d-none');
+                    if (opActiveCards) opActiveCards.classList.remove('d-none');
+                    if (opLotInfoCard) opLotInfoCard.classList.remove('d-none');
+
                     if (data.elements) {
                         const dayInit = parseInt(opDoubleDayPieces ? opDoubleDayPieces.value : 0) || 0;
                         const nightInit = parseInt(opDoubleNightPieces ? opDoubleNightPieces.value : 0) || 0;
                         renderOperatorElements(data.elements, dayInit, nightInit);
                         renderCuttingElements(data.elements, parseInt(cutWholePcs ? cutWholePcs.value : 0) || 0);
                     }
+
                     // Populate operations
                     opSelect.innerHTML = '<option value="">-- Choose Operation --</option>';
                     data.operations.forEach(op => {
@@ -2595,6 +2637,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         opt.value = op.operation_id;
                         opt.dataset.rate = op.default_rate;
                         opt.dataset.minutes = op.estimated_minutes || 0;
+                        opt.dataset.mins = op.estimated_minutes || 0;
                         opt.dataset.goodDone = op.good_done || 0;
                         const goodDone = parseInt(op.good_done) || 0;
                         const lotTotal = parseInt(data.lot.total_pieces) || 0;
@@ -2619,21 +2662,34 @@ document.addEventListener('DOMContentLoaded', function() {
                         varSelect.appendChild(opt);
                     });
 
-                    // Auto-select operation if preselected in URL
-                    if (preselectedOpId && data.operations.some(op => op.operation_id == preselectedOpId)) {
-                        opSelect.value = preselectedOpId;
+                    // Resolve which operation to select
+                    let targetOpId = preselectedOpId;
+                    const curMode = modeInput ? modeInput.value : '';
+                    const isOpMode = (preselectedMode === 'operator_initial' || curMode === 'operator_initial' || (!preselectedOpId && !preselectedMode));
+
+                    if (!targetOpId && isOpMode) {
+                        const opObj = data.operations.find(o => {
+                            const n = (o.op_name || '').toLowerCase();
+                            return n.includes('operat') || n.includes('knitt');
+                        });
+                        if (opObj) targetOpId = opObj.operation_id;
+                        else if (data.operations.length > 0) targetOpId = data.operations[0].operation_id;
+                    }
+
+                    if (targetOpId && data.operations.some(op => op.operation_id == targetOpId)) {
+                        opSelect.value = targetOpId;
                         const selectedOpt = opSelect.options[opSelect.selectedIndex];
                         if (selectedOpt) {
-                            if (minInput && selectedOpt.dataset.minutes) {
-                                minInput.value = parseFloat(selectedOpt.dataset.minutes).toFixed(1);
+                            if (minInput && (selectedOpt.dataset.minutes || selectedOpt.dataset.mins)) {
+                                minInput.value = parseFloat(selectedOpt.dataset.minutes || selectedOpt.dataset.mins).toFixed(1);
                             }
                             if (selectedOpt.dataset.rate) {
                                 rateInput.value = selectedOpt.dataset.rate;
                             }
                             updateRateCalculation(false);
                         }
-                        loadWorkersForOperation(preselectedOpId);
-                        loadMatrixGrid(lotId, preselectedOpId);
+                        loadWorkersForOperation(targetOpId);
+                        loadMatrixGrid(lotId, targetOpId);
                         checkBalance();
 
                         if (preselectedMode) {
@@ -2650,7 +2706,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     } else if (preselectedMode) {
                         switchMode(preselectedMode);
+                    } else if (isOpMode) {
+                        switchMode('operator_initial');
                     }
+
+                    // Sync operator quantities and rates
+                    updateOperatorRatesAndQuantities();
 
                     if (callback) callback();
                 }
@@ -2751,17 +2812,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         const selectedOpt = this.options[this.selectedIndex];
         if (selectedOpt) {
-            if (minInput && selectedOpt.dataset.minutes) {
-                minInput.value = parseFloat(selectedOpt.dataset.minutes).toFixed(1);
+            if (minInput && (selectedOpt.dataset.minutes || selectedOpt.dataset.mins)) {
+                minInput.value = parseFloat(selectedOpt.dataset.minutes || selectedOpt.dataset.mins).toFixed(1);
             }
             if (selectedOpt.dataset.rate) {
                 rateInput.value = selectedOpt.dataset.rate;
             }
             updateRateCalculation(false);
         }
-        loadWorkersForOperation(this.value);
-        loadMatrixGrid(lotSelect.value, this.value);
-        checkBalance();
+        if (modeInput.value === 'operator_initial') {
+            updateOperatorRatesAndQuantities();
+        } else {
+            loadWorkersForOperation(this.value);
+            loadMatrixGrid(lotSelect.value, this.value);
+            checkBalance();
+        }
     });
 
     varSelect.addEventListener('change', function() {
@@ -3313,73 +3378,24 @@ document.addEventListener('DOMContentLoaded', function() {
     // =========================================================================
     // OPERATOR INITIAL PRODUCTION ENTRY JAVASCRIPT LOGIC
     // =========================================================================
-    if (opLotSelect) {
-        opLotSelect.addEventListener('change', function() {
-            const lotId = this.value;
-            if (!lotId) {
-                opPlaceholder.classList.remove('d-none');
-                opActiveCards.classList.add('d-none');
-                opLotInfoCard.classList.add('d-none');
-                return;
-            }
-
-            fetch(`<?= BASE_URL ?>modules/production/ajax.php?action=get_lot_operations_and_variants&lot_id=${lotId}`)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.status === 'success' && data.lot) {
-                        currentOpLotData = data;
-                        const lot = data.lot;
-                        const totalPieces = parseInt(lot.total_pieces, 10) || 0;
-                        const isDouble = (lot.shift_type === 'Double Shift');
-                        const isMultiSize = (lot.size_mode === 'Multi Size');
-
-                        opPlaceholder.classList.add('d-none');
-                        opActiveCards.classList.remove('d-none');
-                        opLotInfoCard.classList.remove('d-none');
-
-                        opLotTitle.textContent = `LOT #${lot.lot_number}`;
-                        opLotPiecesBadge.textContent = `${totalPieces} pcs planned`;
-                        opLotShiftBadge.textContent = isDouble ? '🌙 Double Shift' : '☀️ Single Shift';
-                        opLotShiftBadge.className = isDouble ? 'badge bg-primary ms-1' : 'badge bg-warning-subtle text-warning-emphasis ms-1 border';
-                        opLotSizeBadge.textContent = isMultiSize ? 'Multi-Size Batch' : `Single Size (${lot.single_size_name || 'Standard'})`;
-
-                        document.getElementById('op_shift_type').value = lot.shift_type || 'Single Shift';
-                        document.getElementById('op_size_mode').value = lot.size_mode || 'Single Size';
-                        document.getElementById('op_single_size_id').value = lot.single_size_id || '';
-
-                        // Populate initial operations (default to first operation)
-                        opOperationSelect.innerHTML = '';
-                        const ops = data.operations || [];
-                        ops.forEach((op, idx) => {
-                            const opt = document.createElement('option');
-                            opt.value = op.operation_id;
-                            opt.dataset.mins = op.estimated_minutes || 0;
-                            opt.dataset.rate = op.default_rate || 0;
-                            opt.textContent = `${op.op_name} (${op.op_code})`;
-                            if (idx === 0) opt.selected = true;
-                            opOperationSelect.appendChild(opt);
-                        });
-
-                        updateOperatorRatesAndQuantities();
-                    }
-                });
-        });
-    }
-
     if (opOperationSelect) {
         opOperationSelect.addEventListener('change', updateOperatorRatesAndQuantities);
     }
 
     function updateOperatorRatesAndQuantities() {
-        if (!currentOpLotData) return;
+        if (!currentOpLotData || !currentOpLotData.lot) return;
         const lot = currentOpLotData.lot;
         const totalPieces = parseInt(lot.total_pieces, 10) || 0;
         const isDouble = (lot.shift_type === 'Double Shift');
         const isMultiSize = (lot.size_mode === 'Multi Size');
 
-        const selectedOpOpt = opOperationSelect.selectedOptions[0];
-        const opMins = selectedOpOpt ? parseFloat(selectedOpOpt.dataset.mins) || 2.0 : 2.0;
-        const opDefRate = selectedOpOpt ? parseFloat(selectedOpOpt.dataset.rate) || 5.0 : 5.0;
+        if (opPlaceholder) opPlaceholder.classList.add('d-none');
+        if (opActiveCards) opActiveCards.classList.remove('d-none');
+        if (opLotInfoCard) opLotInfoCard.classList.remove('d-none');
+
+        const selectedOpOpt = opOperationSelect ? opOperationSelect.selectedOptions[0] : null;
+        const opMins = selectedOpOpt ? (parseFloat(selectedOpOpt.dataset.minutes || selectedOpOpt.dataset.mins) || 0) : 0;
+        const opDefRate = selectedOpOpt ? (parseFloat(selectedOpOpt.dataset.rate) || 5.0) : 5.0;
         if (opStageBadge && selectedOpOpt) {
             opStageBadge.textContent = selectedOpOpt.textContent;
         }
@@ -3388,22 +3404,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (!isDouble) {
             // SINGLE SHIFT
-            singleShiftCard.classList.remove('d-none');
-            doubleShiftCard.classList.add('d-none');
+            if (singleShiftCard) singleShiftCard.classList.remove('d-none');
+            if (doubleShiftCard) doubleShiftCard.classList.add('d-none');
 
-            if (lot.operator_id && opSingleWorker) {
+            if (lot.operator_id && opSingleWorker && !opSingleWorker.value) {
                 opSingleWorker.value = lot.operator_id;
             }
             const workerOpt = opSingleWorker ? opSingleWorker.selectedOptions[0] : null;
-            const workerMinRate = workerOpt ? parseFloat(workerOpt.dataset.minrate) || 2.50 : 2.50;
+            const workerMinRate = workerOpt ? (parseFloat(workerOpt.dataset.minrate) || 2.50) : 2.50;
             const pieceRate = opMins > 0 ? (opMins * workerMinRate) : opDefRate;
 
-            document.getElementById('op_day_minutes_hidden').value = opMins;
-            document.getElementById('op_day_min_rate_hidden').value = workerMinRate;
-            document.getElementById('op_day_rate_hidden').value = pieceRate.toFixed(2);
+            if (document.getElementById('op_day_minutes_hidden')) document.getElementById('op_day_minutes_hidden').value = opMins;
+            if (document.getElementById('op_day_min_rate_hidden')) document.getElementById('op_day_min_rate_hidden').value = workerMinRate;
+            if (document.getElementById('op_day_rate_hidden')) document.getElementById('op_day_rate_hidden').value = pieceRate.toFixed(2);
 
             if (opSingleRateBadge) {
-                opSingleRateBadge.textContent = `Rate: Rs. ${pieceRate.toFixed(2)}/pc (${opMins}m × Rs. ${workerMinRate}/m)`;
+                opSingleRateBadge.textContent = opMins > 0 ? `Rate: Rs. ${pieceRate.toFixed(2)}/pc (${opMins}m × Rs. ${workerMinRate}/m)` : `Rate: Rs. ${pieceRate.toFixed(2)}/pc (Fixed Rate)`;
             }
 
             if (opSinglePieces && (!opSinglePieces.value || parseInt(opSinglePieces.value, 10) === 0)) {
@@ -3411,33 +3427,36 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             recalcOperatorTotals();
             syncElementsFromOperatorPieces();
-            syncElementsFromOperatorPieces();
         } else {
             // DOUBLE SHIFT
-            singleShiftCard.classList.add('d-none');
-            doubleShiftCard.classList.remove('d-none');
+            if (singleShiftCard) singleShiftCard.classList.add('d-none');
+            if (doubleShiftCard) doubleShiftCard.classList.remove('d-none');
 
-            if (lot.operator_id && opDoubleDayWorker) opDoubleDayWorker.value = lot.operator_id;
-            if (lot.night_operator_id && opDoubleNightWorker) opDoubleNightWorker.value = lot.night_operator_id;
+            if (lot.operator_id && opDoubleDayWorker && !opDoubleDayWorker.value) opDoubleDayWorker.value = lot.operator_id;
+            if (lot.night_operator_id && opDoubleNightWorker && !opDoubleNightWorker.value) opDoubleNightWorker.value = lot.night_operator_id;
 
             const dayWorkerOpt = opDoubleDayWorker ? opDoubleDayWorker.selectedOptions[0] : null;
-            const dayMinRate = dayWorkerOpt ? parseFloat(dayWorkerOpt.dataset.minrate) || 2.50 : 2.50;
+            const dayMinRate = dayWorkerOpt ? (parseFloat(dayWorkerOpt.dataset.minrate) || 2.50) : 2.50;
             const dayPieceRate = opMins > 0 ? (opMins * dayMinRate) : opDefRate;
 
             const nightWorkerOpt = opDoubleNightWorker ? opDoubleNightWorker.selectedOptions[0] : null;
-            const nightMinRate = nightWorkerOpt ? parseFloat(nightWorkerOpt.dataset.minrate) || 2.50 : 2.50;
+            const nightMinRate = nightWorkerOpt ? (parseFloat(nightWorkerOpt.dataset.minrate) || 2.50) : 2.50;
             const nightPieceRate = opMins > 0 ? (opMins * nightMinRate) : opDefRate;
 
-            document.getElementById('op_day_minutes_hidden').value = opMins;
-            document.getElementById('op_day_min_rate_hidden').value = dayMinRate;
-            document.getElementById('op_day_rate_hidden').value = dayPieceRate.toFixed(2);
+            if (document.getElementById('op_day_minutes_hidden')) document.getElementById('op_day_minutes_hidden').value = opMins;
+            if (document.getElementById('op_day_min_rate_hidden')) document.getElementById('op_day_min_rate_hidden').value = dayMinRate;
+            if (document.getElementById('op_day_rate_hidden')) document.getElementById('op_day_rate_hidden').value = dayPieceRate.toFixed(2);
 
-            document.getElementById('op_night_minutes_hidden').value = opMins;
-            document.getElementById('op_night_min_rate_hidden').value = nightMinRate;
-            document.getElementById('op_night_rate_hidden').value = nightPieceRate.toFixed(2);
+            if (document.getElementById('op_night_minutes_hidden')) document.getElementById('op_night_minutes_hidden').value = opMins;
+            if (document.getElementById('op_night_min_rate_hidden')) document.getElementById('op_night_min_rate_hidden').value = nightMinRate;
+            if (document.getElementById('op_night_rate_hidden')) document.getElementById('op_night_rate_hidden').value = nightPieceRate.toFixed(2);
 
-            if (opDoubleDayRateBadge) opDoubleDayRateBadge.textContent = `Rs. ${dayPieceRate.toFixed(2)}/pc (${opMins}m @ ${dayMinRate}/m)`;
-            if (opDoubleNightRateBadge) opDoubleNightRateBadge.textContent = `Rs. ${nightPieceRate.toFixed(2)}/pc (${opMins}m @ ${nightMinRate}/m)`;
+            if (opDoubleDayRateBadge) {
+                opDoubleDayRateBadge.textContent = opMins > 0 ? `Rs. ${dayPieceRate.toFixed(2)}/pc (${opMins}m @ ${dayMinRate}/m)` : `Rs. ${dayPieceRate.toFixed(2)}/pc (Fixed Rate)`;
+            }
+            if (opDoubleNightRateBadge) {
+                opDoubleNightRateBadge.textContent = opMins > 0 ? `Rs. ${nightPieceRate.toFixed(2)}/pc (${opMins}m @ ${nightMinRate}/m)` : `Rs. ${nightPieceRate.toFixed(2)}/pc (Fixed Rate)`;
+            }
 
             // Auto-balance default (e.g. 50/50 or day's current)
             if (opDoubleDayPieces && opDoubleNightPieces && !opDoubleDayPieces.value && !opDoubleNightPieces.value) {
@@ -3446,7 +3465,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 opDoubleNightPieces.value = totalPieces - dayHalf;
             }
             recalcOperatorTotals();
-            syncElementsFromOperatorPieces();
             syncElementsFromOperatorPieces();
         }
 
