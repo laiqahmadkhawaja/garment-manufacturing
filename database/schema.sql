@@ -526,6 +526,7 @@ CREATE TABLE `materials` (
     `code` VARCHAR(40) NOT NULL UNIQUE,
     `name` VARCHAR(120) NOT NULL,
     `category` VARCHAR(60) NOT NULL,
+    `color_id` INT NULL,
     `unit_id` INT NOT NULL,
     `min_stock` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     `opening_stock` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
@@ -534,6 +535,7 @@ CREATE TABLE `materials` (
     `supplier_id` INT NULL,
     `storage_location` VARCHAR(100) NULL,
     `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+    FOREIGN KEY (`color_id`) REFERENCES `colors`(`id`) ON DELETE SET NULL,
     FOREIGN KEY (`unit_id`) REFERENCES `units`(`id`),
     FOREIGN KEY (`supplier_id`) REFERENCES `suppliers`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -558,11 +560,13 @@ CREATE TABLE `material_purchase_items` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `purchase_id` INT NOT NULL,
     `material_id` INT NOT NULL,
+    `color_id` INT NULL,
     `quantity` DECIMAL(12,2) NOT NULL,
     `unit_price` DECIMAL(12,2) NOT NULL,
     `total_price` DECIMAL(14,2) NOT NULL,
     FOREIGN KEY (`purchase_id`) REFERENCES `material_purchases`(`id`) ON DELETE CASCADE,
-    FOREIGN KEY (`material_id`) REFERENCES `materials`(`id`)
+    FOREIGN KEY (`material_id`) REFERENCES `materials`(`id`),
+    FOREIGN KEY (`color_id`) REFERENCES `colors`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 DROP TABLE IF EXISTS `material_issues`;

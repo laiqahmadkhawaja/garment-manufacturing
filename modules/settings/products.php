@@ -126,12 +126,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // 3. CATEGORIES, COLORS & SIZES
     // =========================================================================
     if ($action === 'create_color') {
+        check_csrf();
         $name = trim($_POST['name'] ?? '');
-        $hex = trim($_POST['hex_code'] ?? '#cccccc');
-        if (!empty($name)) {
-            $stmt = $db->prepare("INSERT INTO colors (name, hex_code) VALUES (?, ?) ON DUPLICATE KEY UPDATE hex_code = VALUES(hex_code)");
-            $stmt->execute([$name, $hex]);
-            redirect('modules/settings/products.php#variants', "Color '$name' saved!");
+        $code = trim($_POST['color_code'] ?? '');
+        $hex = trim($_POST['hex_code'] ?? '#2563eb');
+        $yarnStock = (float)($_POST['yarn_stock_kg'] ?? 0.00);
+
+        if (empty($name)) {
+            set_flash('danger', 'Color name is required.');
+        } else {
+            try {
+                if (empty($code)) {
+                    $baseCode = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $name));
+                    $code = !empty($baseCode) ? substr($baseCode, 0, 10) : 'COL';
+                }
+
+                $chk = $db->prepare("SELECT id, name, yarn_stock_kg FROM colors WHERE LOWER(TRIM(name)) = LOWER(?) OR (color_code = ? AND color_code != '') LIMIT 1");
+                $chk->execute([$name, $code]);
+                $existing = $chk->fetch();
+
+                if ($existing) {
+                    $upStmt = $db->prepare("UPDATE colors SET color_code = ?, hex_code = ?, yarn_stock_kg = yarn_stock_kg + ? WHERE id = ?");
+                    $upStmt->execute([$code, $hex, $yarnStock, $existing['id']]);
+                    redirect('modules/settings/products.php#variants', "Color '{$existing['name']}' updated! Yarn stock incremented by {$yarnStock} KG.");
+                } else {
+                    $stmt = $db->prepare("INSERT INTO colors (color_code, name, hex_code, yarn_stock_kg) VALUES (?, ?, ?, ?)");
+                    $stmt->execute([$code, $name, $hex, $yarnStock]);
+                    $colorId = (int)$db->lastInsertId();
+                    log_audit('CREATE_COLOR', 'colors', $colorId, null, ['name' => $name, 'code' => $code, 'yarn_stock' => $yarnStock]);
+                    redirect('modules/settings/products.php#variants', "Color '$name' (Code: $code) registered successfully with {$yarnStock} KG yarn stock!");
+                }
+            } catch (PDOException $e) {
+                set_flash('danger', 'Error saving color: ' . $e->getMessage());
+            }
+        }
+    }
+
+    if ($action === 'update_color') {
+        check_csrf();
+        $colorId = (int)($_POST['color_id'] ?? 0);
+        $name = trim($_POST['name'] ?? '');
+        $code = trim($_POST['color_code'] ?? '');
+        $hex = trim($_POST['hex_code'] ?? '#2563eb');
+        $yarnStock = (float)($_POST['yarn_stock_kg'] ?? 0.00);
+
+        if ($colorId > 0 && !empty($name)) {
+            try {
+                $stmt = $db->prepare("UPDATE colors SET name = ?, color_code = ?, hex_code = ?, yarn_stock_kg = ? WHERE id = ?");
+                $stmt->execute([$name, $code, $hex, $yarnStock, $colorId]);
+                log_audit('UPDATE_COLOR', 'colors', $colorId, null, ['name' => $name, 'code' => $code, 'yarn_stock' => $yarnStock]);
+                redirect('modules/settings/products.php#variants', "Color '$name' updated successfully!");
+            } catch (PDOException $e) {
+                set_flash('danger', 'Error updating color: ' . $e->getMessage());
+            }
+        }
+    }
+
+    if ($action === 'delete_color') {
+        check_csrf();
+        $colorId = (int)($_POST['color_id'] ?? 0);
+        if ($colorId > 0) {
+            $inLot = (int)$db->query("SELECT COUNT(*) FROM lot_variants WHERE color_id = $colorId")->fetchColumn();
+            $inPurchases = (int)$db->query("SELECT COUNT(*) FROM material_purchase_items WHERE color_id = $colorId")->fetchColumn();
+            if ($inLot > 0 || $inPurchases > 0) {
+                set_flash('danger', "Cannot delete this color because it has active lots ($inLot) or purchase records ($inPurchases).");
+            } else {
+                $db->prepare("DELETE FROM colors WHERE id = ?")->execute([$colorId]);
+                redirect('modules/settings/products.php#variants', 'Color deleted successfully.');
+            }
         }
     }
 
@@ -227,7 +289,10 @@ foreach ($recipeItems as $ri) {
 
 $categories = $db->query("SELECT c.*, (SELECT COUNT(*) FROM products WHERE category_id = c.id) AS product_count FROM product_categories c ORDER BY c.name ASC")->fetchAll();
 $templates = $db->query("SELECT * FROM workflow_templates WHERE is_active = 1 ORDER BY name ASC")->fetchAll();
-$colors = $db->query("SELECT * FROM colors ORDER BY name ASC")->fetchAll();
+$colors = $db->query("SELECT c.*, 
+    (SELECT COUNT(*) FROM lot_variants WHERE color_id = c.id) AS lot_usage,
+    (SELECT COUNT(*) FROM material_purchase_items WHERE color_id = c.id) AS purchase_usage 
+    FROM colors c ORDER BY c.yarn_stock_kg DESC, c.name ASC")->fetchAll();
 $sizes = $db->query("SELECT * FROM sizes ORDER BY sort_order ASC")->fetchAll();
 
 require_once __DIR__ . '/../../includes/header.php';
@@ -731,45 +796,122 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             <div class="tab-pane fade" id="variantsTab">
                 <div class="row g-4">
                     <!-- Colors Column -->
-                    <div class="col-12 col-md-6">
+                    <div class="col-12 col-lg-7">
                         <div class="card-modern mb-3">
-                            <div class="card-modern-header">
-                                <h6 class="fw-bold mb-0 text-dark">Add Color</h6>
+                            <div class="card-modern-header d-flex justify-content-between align-items-center">
+                                <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-palette text-primary me-2"></i>Add Factory Color / Yarn Shade</h6>
+                                <span class="badge bg-primary-subtle text-primary"><?= count($colors) ?> Colors Configured</span>
                             </div>
                             <div class="card-modern-body">
                                 <form method="POST" action="">
                                     <input type="hidden" name="action" value="create_color">
                                     <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
-                                    <div class="input-group">
-                                        <input type="text" name="name" class="form-control" placeholder="Color Name (e.g. Navy Blue)" required>
-                                        <input type="color" name="hex_code" class="form-control form-control-color" value="#2563eb" title="Choose color">
-                                        <button type="submit" class="btn btn-primary fw-semibold">Add Color</button>
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-12 col-sm-3">
+                                            <label class="form-label small fw-semibold">Color Code *</label>
+                                            <input type="text" name="color_code" class="form-control form-control-sm text-uppercase" placeholder="e.g. 1136" required>
+                                        </div>
+                                        <div class="col-12 col-sm-4">
+                                            <label class="form-label small fw-semibold">Color Name *</label>
+                                            <input type="text" name="name" class="form-control form-control-sm" placeholder="e.g. Black" required>
+                                        </div>
+                                        <div class="col-6 col-sm-2">
+                                            <label class="form-label small fw-semibold">Shade</label>
+                                            <input type="color" name="hex_code" class="form-control form-control-sm form-control-color w-100" value="#1a1a1a" title="Choose color">
+                                        </div>
+                                        <div class="col-6 col-sm-3">
+                                            <label class="form-label small fw-semibold">Opening Yarn (KG)</label>
+                                            <input type="number" name="yarn_stock_kg" class="form-control form-control-sm text-end" step="0.01" min="0" value="0.00">
+                                        </div>
+                                        <div class="col-12 d-flex justify-content-end pt-2">
+                                            <button type="submit" class="btn btn-primary btn-sm fw-semibold px-4 shadow-sm">
+                                                <i class="bi bi-plus-circle me-1"></i> Save Color & Yarn Stock
+                                            </button>
+                                        </div>
                                     </div>
                                 </form>
                             </div>
                         </div>
 
                         <div class="card-modern">
+                            <div class="card-modern-header d-flex justify-content-between align-items-center">
+                                <h6 class="fw-bold mb-0 text-dark">Configured Colors & Live Yarn Balances</h6>
+                                <a href="<?= BASE_URL ?>modules/raw_materials/purchases.php" class="btn btn-xs btn-outline-primary py-1 px-2">
+                                    <i class="bi bi-cart-plus me-1"></i> Inward Yarn Purchases
+                                </a>
+                            </div>
                             <div class="card-modern-body p-0">
                                 <div class="table-responsive">
-                                    <table class="table table-modern mb-0">
+                                    <table class="table table-modern align-middle mb-0">
                                         <thead>
                                             <tr>
-                                                <th>Preview</th>
+                                                <th style="width: 45px;">Shade</th>
+                                                <th>Code</th>
                                                 <th>Color Name</th>
-                                                <th>Hex Code</th>
+                                                <th class="text-end">Yarn Stock</th>
+                                                <th class="text-end" style="width: 130px;">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <?php foreach ($colors as $c): ?>
-                                                <tr>
-                                                    <td>
-                                                        <span class="d-inline-block rounded-circle border" style="width: 20px; height: 20px; background-color: <?= clean($c['hex_code']) ?>;"></span>
-                                                    </td>
-                                                    <td class="fw-semibold text-dark"><?= clean($c['name']) ?></td>
-                                                    <td class="text-muted font-monospace small"><?= clean($c['hex_code']) ?></td>
-                                                </tr>
-                                            <?php endforeach; ?>
+                                            <?php if (empty($colors)): ?>
+                                                <tr><td colspan="5" class="text-center py-4 text-muted">No colors configured yet. Add your first color above!</td></tr>
+                                            <?php else: ?>
+                                                <?php foreach ($colors as $c): 
+                                                    $stk = (float)($c['yarn_stock_kg'] ?? 0);
+                                                    $hex = $c['hex_code'] ?: '#cccccc';
+                                                ?>
+                                                    <tr>
+                                                        <td>
+                                                            <span class="d-inline-block rounded-circle border shadow-xs" style="width: 24px; height: 24px; background-color: <?= clean($hex) ?>;"></span>
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge bg-light text-dark border font-monospace fw-bold"><?= clean($c['color_code'] ?: '-') ?></span>
+                                                        </td>
+                                                        <td class="fw-semibold text-dark">
+                                                            <?= clean($c['name']) ?>
+                                                            <?php if (!empty($c['lot_usage'])): ?>
+                                                                <span class="badge bg-secondary-subtle text-secondary small ms-1" title="Used in lots"><?= $c['lot_usage'] ?> lots</span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td class="text-end">
+                                                            <?php if ($stk > 20): ?>
+                                                                <span class="badge bg-success-subtle text-success fs-6 fw-bold"><?= number_format($stk, 2) ?> KG</span>
+                                                            <?php elseif ($stk > 0): ?>
+                                                                <span class="badge bg-warning-subtle text-warning-emphasis fs-6 fw-bold"><?= number_format($stk, 2) ?> KG</span>
+                                                            <?php else: ?>
+                                                                <span class="badge bg-danger-subtle text-danger fw-semibold">0.00 KG (Empty)</span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td class="text-end">
+                                                            <div class="btn-group btn-group-sm">
+                                                                <a href="<?= BASE_URL ?>modules/raw_materials/purchases.php?color_id=<?= $c['id'] ?>" 
+                                                                   class="btn btn-outline-success py-1 px-2" title="Purchase Yarn for this Color">
+                                                                    <i class="bi bi-cart-plus"></i> Buy
+                                                                </a>
+                                                                <button type="button" class="btn btn-outline-secondary py-1 px-2 btn-edit-color"
+                                                                        data-id="<?= $c['id'] ?>"
+                                                                        data-code="<?= clean($c['color_code'] ?? '') ?>"
+                                                                        data-name="<?= clean($c['name']) ?>"
+                                                                        data-hex="<?= clean($hex) ?>"
+                                                                        data-yarn="<?= $stk ?>"
+                                                                        title="Edit Color">
+                                                                    <i class="bi bi-pencil"></i>
+                                                                </button>
+                                                                <?php if ((int)($c['lot_usage'] ?? 0) === 0 && (int)($c['purchase_usage'] ?? 0) === 0): ?>
+                                                                    <form method="POST" action="" class="d-inline" onsubmit="return confirm('Delete color \'<?= clean($c['name']) ?>\'?');">
+                                                                        <input type="hidden" name="action" value="delete_color">
+                                                                        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+                                                                        <input type="hidden" name="color_id" value="<?= $c['id'] ?>">
+                                                                        <button type="submit" class="btn btn-outline-danger py-1 px-2" title="Delete Color">
+                                                                            <i class="bi bi-trash"></i>
+                                                                        </button>
+                                                                    </form>
+                                                                <?php endif; ?>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
                                         </tbody>
                                     </table>
                                 </div>
@@ -778,7 +920,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     </div>
 
                     <!-- Sizes Column -->
-                    <div class="col-12 col-md-6">
+                    <div class="col-12 col-lg-5">
                         <div class="card-modern mb-3">
                             <div class="card-modern-header">
                                 <h6 class="fw-bold mb-0 text-dark">Add Size</h6>
@@ -857,6 +999,50 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary fw-semibold">Save Category</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Edit Color Modal -->
+<div class="modal fade" id="editColorModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" action="">
+                <input type="hidden" name="action" value="update_color">
+                <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+                <input type="hidden" name="color_id" id="edit_color_id">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-pencil-square text-primary me-2"></i>Edit Color & Live Stock</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label small fw-semibold">Color Code *</label>
+                            <input type="text" name="color_code" id="edit_color_code" class="form-control text-uppercase" required>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label small fw-semibold">Color Name *</label>
+                            <input type="text" name="name" id="edit_color_name" class="form-control" required>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label small fw-semibold">Color Shade Hex</label>
+                            <div class="input-group">
+                                <input type="color" name="hex_code" id="edit_color_hex" class="form-control form-control-color" value="#1a1a1a">
+                                <input type="text" id="edit_color_hex_txt" class="form-control font-monospace" readonly>
+                            </div>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label small fw-semibold">Available Yarn Stock (KG)</label>
+                            <input type="number" name="yarn_stock_kg" id="edit_color_yarn" class="form-control text-end fw-bold" step="0.01" min="0" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary fw-semibold">Update Color</button>
                 </div>
             </form>
         </div>
@@ -1186,6 +1372,26 @@ document.addEventListener('DOMContentLoaded', function() {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         });
     });
+
+    // Color edit modal handler
+    const editColorModalEl = document.getElementById('editColorModal');
+    if (editColorModalEl) {
+        const editColorModal = new bootstrap.Modal(editColorModalEl);
+        document.querySelectorAll('.btn-edit-color').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.getElementById('edit_color_id').value = this.dataset.id;
+                document.getElementById('edit_color_code').value = this.dataset.code;
+                document.getElementById('edit_color_name').value = this.dataset.name;
+                document.getElementById('edit_color_hex').value = this.dataset.hex;
+                document.getElementById('edit_color_hex_txt').value = this.dataset.hex;
+                document.getElementById('edit_color_yarn').value = this.dataset.yarn;
+                editColorModal.show();
+            });
+        });
+        document.getElementById('edit_color_hex').addEventListener('input', function() {
+            document.getElementById('edit_color_hex_txt').value = this.value;
+        });
+    }
 });
 </script>
 

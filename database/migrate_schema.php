@@ -197,4 +197,19 @@ $db->exec("UPDATE product_categories SET code = CONCAT('CAT-', id) WHERE code IS
 $db->exec("ALTER TABLE product_categories MODIFY COLUMN code VARCHAR(50) NULL DEFAULT NULL");
 echo "[✓] Product categories code made nullable and backfilled\n";
 
+// 12. Link Colors to Material Purchases & Materials (Yarn Color Integration)
+$mpiCols = $db->query("SHOW COLUMNS FROM material_purchase_items")->fetchAll(PDO::FETCH_COLUMN);
+if (!in_array('color_id', $mpiCols)) {
+    $db->exec("ALTER TABLE material_purchase_items ADD COLUMN color_id INT NULL AFTER material_id");
+    $db->exec("ALTER TABLE material_purchase_items ADD CONSTRAINT fk_mpi_color FOREIGN KEY (color_id) REFERENCES colors(id) ON DELETE SET NULL");
+    echo "[✓] Added color_id to material_purchase_items\n";
+}
+
+$matCols = $db->query("SHOW COLUMNS FROM materials")->fetchAll(PDO::FETCH_COLUMN);
+if (!in_array('color_id', $matCols)) {
+    $db->exec("ALTER TABLE materials ADD COLUMN color_id INT NULL AFTER category");
+    $db->exec("ALTER TABLE materials ADD CONSTRAINT fk_mat_color FOREIGN KEY (color_id) REFERENCES colors(id) ON DELETE SET NULL");
+    echo "[✓] Added color_id to materials\n";
+}
+
 echo "[SUCCESS] Schema migration complete.\n";
