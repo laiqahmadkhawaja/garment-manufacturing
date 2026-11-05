@@ -192,4 +192,9 @@ $db->exec("UPDATE departments SET code = CONCAT('DEP-', id) WHERE code IS NULL O
 $db->exec("ALTER TABLE departments MODIFY COLUMN code VARCHAR(50) NULL DEFAULT NULL");
 echo "[✓] Departments code made nullable and backfilled\n";
 
+// 11. Product categories code nullability & existing code backfill
+$db->exec("UPDATE product_categories SET code = CONCAT('CAT-', id) WHERE code IS NULL OR code = ''");
+$db->exec("ALTER TABLE product_categories MODIFY COLUMN code VARCHAR(50) NULL DEFAULT NULL");
+echo "[✓] Product categories code made nullable and backfilled\n";
+
 echo "[SUCCESS] Schema migration complete.\n";

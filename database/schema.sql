@@ -111,7 +111,7 @@ CREATE TABLE `sizes` (
 DROP TABLE IF EXISTS `product_categories`;
 CREATE TABLE `product_categories` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
-    `code` VARCHAR(30) NOT NULL UNIQUE,
+    `code` VARCHAR(50) NULL UNIQUE,
     `name` VARCHAR(100) NOT NULL,
     `description` TEXT NULL,
     `is_active` TINYINT(1) NOT NULL DEFAULT 1

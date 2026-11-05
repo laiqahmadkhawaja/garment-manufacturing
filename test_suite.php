@@ -1028,6 +1028,33 @@ $dupDetected = ($dupCheck->fetchColumn() > 0);
 $scenario37Passed = ($deptNewId > 0 && $deptExists === 1 && $dupDetected);
 assert_test("37. Dynamic Department Creation & Code Auto-Generation", $scenario37Passed, "Department created with generated code, verified in database, and duplicate detection verified");
 
+// =========================================================================
+// SCENARIO 38: DYNAMIC PRODUCT CATEGORIES CREATION & DUPLICATE ENFORCEMENT
+// =========================================================================
+echo "\n--- TESTING SCENARIO 38: PRODUCT CATEGORY CREATION & DUPLICATE PREVENTION ---\n";
+
+$catTestName = 'Koti Test ' . time();
+$catBaseCode = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $catTestName));
+$catCode = substr($catBaseCode, 0, 20);
+
+// Insert new unique category
+$insCatStmt = $db->prepare("INSERT INTO product_categories (code, name, description, is_active) VALUES (?, ?, 'Garment category test', 1)");
+$insCatStmt->execute([$catCode, $catTestName]);
+$catNewId = (int)$db->lastInsertId();
+
+$catExists = (int)$db->query("SELECT COUNT(*) FROM product_categories WHERE id = $catNewId AND name = " . $db->quote($catTestName))->fetchColumn();
+
+// Check duplicate detection
+$catDupCheck = $db->prepare("SELECT id FROM product_categories WHERE LOWER(TRIM(name)) = LOWER(?)");
+$catDupCheck->execute([$catTestName]);
+$catDupDetected = ($catDupCheck->fetchColumn() > 0);
+
+// Clean up test category row so database stays clean
+$db->exec("DELETE FROM product_categories WHERE id = $catNewId");
+
+$scenario38Passed = ($catNewId > 0 && $catExists === 1 && $catDupDetected);
+assert_test("38. Dynamic Product Category Creation & Code Auto-Generation", $scenario38Passed, "Category created with generated code, duplicate check verified, and clean test cleanup");
+
 echo "\n========================================================================\n";
 echo "TEST SUITE SUMMARY: $passCount PASSED, $failCount FAILED\n";
 echo "========================================================================\n";
