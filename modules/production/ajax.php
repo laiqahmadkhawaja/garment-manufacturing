@@ -71,15 +71,16 @@ if ($action === 'get_lot_operations_and_variants') {
 
     // Garment elements with operator & cutting progress for this lot
     $elemStmt = $db->prepare("SELECT pe.id, pe.element_name, pe.quantity, pe.multiplier, COALESCE(pe.default_sam_minutes, 0.00) AS default_sam_minutes,
-                                     COALESCE(loe.required_pieces, (pe.quantity * l.total_pieces)) AS required_pieces,
-                                     COALESCE(loe.operator1_pieces, 0) AS operator1_pieces,
-                                     COALESCE(loe.operator2_pieces, 0) AS operator2_pieces,
-                                     COALESCE(loe.total_pieces, 0) AS operator_total,
-                                     COALESCE(loe.cut_pieces, 0) AS cut_pieces
+                                     COALESCE(MAX(loe.required_pieces), (pe.quantity * l.total_pieces)) AS required_pieces,
+                                     COALESCE(SUM(loe.operator1_pieces), 0) AS operator1_pieces,
+                                     COALESCE(SUM(loe.operator2_pieces), 0) AS operator2_pieces,
+                                     COALESCE(SUM(loe.total_pieces), 0) AS operator_total,
+                                     COALESCE(SUM(loe.cut_pieces), 0) AS cut_pieces
                               FROM product_elements pe
                               JOIN lots l ON pe.product_id = l.product_id
                               LEFT JOIN lot_operator_element_entries loe ON loe.element_id = pe.id AND loe.lot_id = l.id
                               WHERE l.id = ?
+                              GROUP BY pe.id, pe.element_name, pe.quantity, pe.multiplier, pe.default_sam_minutes, pe.sort_order, l.total_pieces
                               ORDER BY pe.sort_order ASC, pe.id ASC");
     $elemStmt->execute([$lotId]);
     $lotElements = $elemStmt->fetchAll();

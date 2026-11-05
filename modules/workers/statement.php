@@ -27,8 +27,8 @@ $wSql = "SELECT pe.*, l.lot_number, p.name AS product_name, o.name AS op_name, c
          JOIN lots l ON pe.lot_id = l.id 
          JOIN products p ON l.product_id = p.id 
          JOIN operations o ON pe.operation_id = o.id 
-         JOIN colors c ON pe.color_id = c.id 
-         JOIN sizes s ON pe.size_id = s.id 
+         LEFT JOIN colors c ON pe.color_id = c.id 
+         LEFT JOIN sizes s ON pe.size_id = s.id 
          WHERE pe.worker_id = ?";
 $wParams = [$workerId];
 if (!empty($dateFrom)) { $wSql .= " AND pe.entry_date >= ?"; $wParams[] = $dateFrom; }
@@ -165,7 +165,7 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
                             <td class="fw-bold">LOT #<?= clean($w['lot_number']) ?></td>
                             <td><?= clean($w['product_name']) ?></td>
                             <td class="fw-semibold"><?= clean($w['op_name']) ?></td>
-                            <td><?= clean($w['color_name']) ?> (<?= clean($w['size_name']) ?>)</td>
+                            <td><?= !empty($w['color_name']) ? clean($w['color_name']) . ' (' . clean($w['size_name']) . ')' : '<span class="text-muted small">Batch / All</span>' ?></td>
                             <td class="fw-bold text-success"><?= number_format($w['good_qty']) ?></td>
                             <td>Rs. <?= number_format($w['rate'], 2) ?></td>
                             <td class="text-end fw-bold">Rs. <?= number_format($w['labour_amount'], 2) ?></td>

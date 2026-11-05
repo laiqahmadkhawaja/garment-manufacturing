@@ -24,8 +24,8 @@ $sql = "SELECT pe.*, l.lot_number, p.name AS product_name, o.name AS op_name, w.
         JOIN products p ON l.product_id = p.id 
         JOIN operations o ON pe.operation_id = o.id 
         JOIN workers w ON pe.worker_id = w.id 
-        JOIN colors c ON pe.color_id = c.id 
-        JOIN sizes s ON pe.size_id = s.id 
+        LEFT JOIN colors c ON pe.color_id = c.id 
+        LEFT JOIN sizes s ON pe.size_id = s.id 
         LEFT JOIN users u ON pe.created_by = u.id 
         WHERE 1=1";
 
@@ -151,7 +151,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             </a>
                                             <div class="text-muted small"><?= clean($e['worker_code']) ?></div>
                                         </td>
-                                        <td><?= clean($e['color_name']) ?> / <span class="badge bg-light text-dark border"><?= clean($e['size_name']) ?></span></td>
+                                        <td>
+                                            <?php if (!empty($e['color_name'])): ?>
+                                                <?= clean($e['color_name']) ?> / <span class="badge bg-light text-dark border"><?= clean($e['size_name']) ?></span>
+                                            <?php else: ?>
+                                                <span class="badge bg-light text-secondary border">Batch / All</span>
+                                            <?php endif; ?>
+                                        </td>
                                         <td class="text-center fw-bold text-success fs-6"><?= number_format($e['good_qty']) ?></td>
                                         <td class="text-center <?= $e['rejected_qty'] > 0 ? 'text-danger fw-bold' : 'text-muted' ?>"><?= number_format($e['rejected_qty']) ?></td>
                                         <td class="text-center <?= $e['rework_qty'] > 0 ? 'text-warning fw-bold' : 'text-muted' ?>"><?= number_format($e['rework_qty']) ?></td>

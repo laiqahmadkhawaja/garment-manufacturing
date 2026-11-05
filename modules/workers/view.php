@@ -68,8 +68,8 @@ $weStmt = $db->prepare("SELECT pe.*, l.lot_number, p.name AS product_name, o.nam
                         JOIN lots l ON pe.lot_id = l.id 
                         JOIN products p ON l.product_id = p.id 
                         JOIN operations o ON pe.operation_id = o.id 
-                        JOIN colors c ON pe.color_id = c.id 
-                        JOIN sizes s ON pe.size_id = s.id 
+                        LEFT JOIN colors c ON pe.color_id = c.id 
+                        LEFT JOIN sizes s ON pe.size_id = s.id 
                         WHERE pe.worker_id = ? 
                         ORDER BY pe.id DESC");
 $weStmt->execute([$workerId]);
@@ -324,7 +324,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 </td>
                                                 <td><?= clean($wh['product_name']) ?></td>
                                                 <td class="fw-semibold text-dark"><?= clean($wh['op_name']) ?></td>
-                                                <td><?= clean($wh['color_name']) ?> (<?= clean($wh['size_name']) ?>)</td>
+                                                <td><?= !empty($wh['color_name']) ? clean($wh['color_name']) . ' (' . clean($wh['size_name']) . ')' : '<span class="text-muted small">Batch / All</span>' ?></td>
                                                 <td class="text-center fw-bold text-success"><?= number_format($wh['good_qty']) ?></td>
                                                 <td class="text-center text-danger"><?= number_format($wh['rejected_qty']) ?></td>
                                                 <td class="text-end">Rs. <?= number_format($wh['rate'], 2) ?></td>

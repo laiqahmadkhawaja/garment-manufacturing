@@ -184,9 +184,14 @@ function generate_doc_number(string $prefix, string $table, string $column): str
     $last = $stmt->fetchColumn();
 
     if ($last) {
-        // extract numeric part
-        preg_match('/\d+$/', $last, $matches);
-        $next = isset($matches[0]) ? (int)$matches[0] + 1 : 101;
+        // extract numeric part directly following the prefix or anywhere in string
+        if (preg_match('/' . preg_quote($prefix, '/') . '(\d+)/', $last, $matches)) {
+            $next = (int)$matches[1] + 1;
+        } elseif (preg_match('/(\d+)/', $last, $matches)) {
+            $next = (int)$matches[1] + 1;
+        } else {
+            $next = 101;
+        }
     } else {
         $next = 101;
     }

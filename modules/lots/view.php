@@ -146,8 +146,8 @@ $weStmt = $db->prepare("SELECT pe.*, w.name AS worker_name, w.code AS worker_cod
                         FROM production_entries pe 
                         JOIN workers w ON pe.worker_id = w.id 
                         JOIN operations o ON pe.operation_id = o.id 
-                        JOIN colors c ON pe.color_id = c.id 
-                        JOIN sizes s ON pe.size_id = s.id 
+                        LEFT JOIN colors c ON pe.color_id = c.id 
+                        LEFT JOIN sizes s ON pe.size_id = s.id 
                         WHERE pe.lot_id = ? 
                         ORDER BY pe.id DESC");
 $weStmt->execute([$lotId]);
@@ -184,8 +184,8 @@ $netMaterialCost = max(0, $totalMaterialIssuedCost - $totalMaterialReturnedCost)
 // 5. Packing Entries
 $pkStmt = $db->prepare("SELECT pe.*, c.name AS color_name, s.name AS size_name, w.name AS worker_name, wh.name AS warehouse_name 
                         FROM packing_entries pe 
-                        JOIN colors c ON pe.color_id = c.id 
-                        JOIN sizes s ON pe.size_id = s.id 
+                        LEFT JOIN colors c ON pe.color_id = c.id 
+                        LEFT JOIN sizes s ON pe.size_id = s.id 
                         LEFT JOIN workers w ON pe.packing_worker_id = w.id 
                         JOIN warehouses wh ON pe.warehouse_id = wh.id 
                         WHERE pe.lot_id = ? 
@@ -742,7 +742,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 </td>
                                                 <td class="fw-semibold text-dark"><?= clean($we['op_name']) ?></td>
                                                 <td>
-                                                    <?= clean($we['color_name']) ?> / <span class="badge bg-light text-dark border"><?= clean($we['size_name']) ?></span>
+                                                    <?php if (!empty($we['color_name'])): ?>
+                                                        <?= clean($we['color_name']) ?> / <span class="badge bg-light text-dark border"><?= clean($we['size_name']) ?></span>
+                                                    <?php else: ?>
+                                                        <span class="badge bg-light text-secondary border">Batch / All</span>
+                                                    <?php endif; ?>
                                                 </td>
                                                 <td class="text-center fw-bold text-success"><?= number_format($we['good_qty']) ?></td>
                                                 <td class="text-center text-danger"><?= number_format($we['rejected_qty']) ?></td>
