@@ -663,7 +663,7 @@ CREATE TABLE `packing_entries` (
     `package_type` VARCHAR(50) NULL DEFAULT 'Box',
     `package_no` VARCHAR(60) NULL,
     `remarks` TEXT NULL,
-    `warehouse_id` INT NOT NULL DEFAULT 1,
+    `warehouse_id` INT NULL DEFAULT 1,
     `created_by` INT NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (`lot_id`) REFERENCES `lots`(`id`) ON DELETE CASCADE,
@@ -672,7 +672,7 @@ CREATE TABLE `packing_entries` (
     FOREIGN KEY (`color_id`) REFERENCES `colors`(`id`),
     FOREIGN KEY (`size_id`) REFERENCES `sizes`(`id`),
     FOREIGN KEY (`packing_worker_id`) REFERENCES `workers`(`id`) ON DELETE SET NULL,
-    FOREIGN KEY (`warehouse_id`) REFERENCES `warehouses`(`id`),
+    FOREIGN KEY (`warehouse_id`) REFERENCES `warehouses`(`id`) ON DELETE SET NULL,
     FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -684,7 +684,7 @@ CREATE TABLE `finished_goods_stock` (
     `color_id` INT NOT NULL,
     `size_id` INT NOT NULL,
     `lot_id` INT NOT NULL,
-    `warehouse_id` INT NOT NULL,
+    `warehouse_id` INT NULL,
     `current_stock` INT NOT NULL DEFAULT 0,
     `dispatched_stock` INT NOT NULL DEFAULT 0,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -694,7 +694,7 @@ CREATE TABLE `finished_goods_stock` (
     FOREIGN KEY (`color_id`) REFERENCES `colors`(`id`),
     FOREIGN KEY (`size_id`) REFERENCES `sizes`(`id`),
     FOREIGN KEY (`lot_id`) REFERENCES `lots`(`id`) ON DELETE CASCADE,
-    FOREIGN KEY (`warehouse_id`) REFERENCES `warehouses`(`id`)
+    FOREIGN KEY (`warehouse_id`) REFERENCES `warehouses`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- --------------------------------------------------------
@@ -722,7 +722,7 @@ CREATE TABLE `dispatches` (
     `dispatch_number` VARCHAR(50) NOT NULL UNIQUE,
     `dispatch_date` DATE NOT NULL,
     `customer_id` INT NOT NULL,
-    `warehouse_id` INT NOT NULL,
+    `warehouse_id` INT NULL,
     `challan_no` VARCHAR(60) NULL,
     `vehicle_details` VARCHAR(120) NULL,
     `total_pieces` INT NOT NULL DEFAULT 0,
@@ -731,7 +731,7 @@ CREATE TABLE `dispatches` (
     `created_by` INT NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`),
-    FOREIGN KEY (`warehouse_id`) REFERENCES `warehouses`(`id`),
+    FOREIGN KEY (`warehouse_id`) REFERENCES `warehouses`(`id`) ON DELETE SET NULL,
     FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -823,7 +823,7 @@ CREATE TABLE `inventory_transactions` (
     `color_id` INT NULL,
     `size_id` INT NULL,
     `lot_id` INT NULL,
-    `warehouse_id` INT NOT NULL,
+    `warehouse_id` INT NULL,
     `transaction_type` ENUM('Purchase', 'Material Issue', 'Material Return', 'Packing', 'Dispatch', 'Dispatch Return', 'Adjustment') NOT NULL,
     `quantity_in` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     `quantity_out` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
@@ -839,7 +839,7 @@ CREATE TABLE `inventory_transactions` (
     FOREIGN KEY (`color_id`) REFERENCES `colors`(`id`) ON DELETE SET NULL,
     FOREIGN KEY (`size_id`) REFERENCES `sizes`(`id`) ON DELETE SET NULL,
     FOREIGN KEY (`lot_id`) REFERENCES `lots`(`id`) ON DELETE SET NULL,
-    FOREIGN KEY (`warehouse_id`) REFERENCES `warehouses`(`id`),
+    FOREIGN KEY (`warehouse_id`) REFERENCES `warehouses`(`id`) ON DELETE SET NULL,
     FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -855,7 +855,7 @@ CREATE TABLE `stock_adjustments` (
     `color_id` INT NULL,
     `size_id` INT NULL,
     `lot_id` INT NULL,
-    `warehouse_id` INT NOT NULL,
+    `warehouse_id` INT NULL,
     `adjustment_type` ENUM('Add', 'Deduct') NOT NULL,
     `quantity` DECIMAL(12,2) NOT NULL,
     `reason` TEXT NOT NULL,
@@ -867,7 +867,7 @@ CREATE TABLE `stock_adjustments` (
     FOREIGN KEY (`color_id`) REFERENCES `colors`(`id`) ON DELETE SET NULL,
     FOREIGN KEY (`size_id`) REFERENCES `sizes`(`id`) ON DELETE SET NULL,
     FOREIGN KEY (`lot_id`) REFERENCES `lots`(`id`) ON DELETE SET NULL,
-    FOREIGN KEY (`warehouse_id`) REFERENCES `warehouses`(`id`),
+    FOREIGN KEY (`warehouse_id`) REFERENCES `warehouses`(`id`) ON DELETE SET NULL,
     FOREIGN KEY (`approved_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

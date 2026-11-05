@@ -108,10 +108,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     $txRemarks .= " | Yarn Color: [{$cRow['color_code']}] {$cRow['name']}";
                 }
             }
+            $whId = get_default_warehouse_id('raw');
             $tx = $db->prepare("INSERT INTO inventory_transactions 
                 (transaction_date, item_type, material_id, color_id, warehouse_id, transaction_type, quantity_in, unit_cost, reference_type, reference_id, remarks, created_by) 
-                VALUES (?, 'Material', ?, ?, 2, 'Purchase', ?, ?, 'PURCHASE', ?, ?, ?)");
-            $tx->execute([$purchaseDate, $materialId, $colorId, $quantity, $unitPrice, $purchaseId, $txRemarks, $_SESSION['user_id'] ?? null]);
+                VALUES (?, 'Material', ?, ?, ?, 'Purchase', ?, ?, 'PURCHASE', ?, ?, ?)");
+            $tx->execute([$purchaseDate, $materialId, $colorId, $whId, $quantity, $unitPrice, $purchaseId, $txRemarks, $_SESSION['user_id'] ?? null]);
 
             log_audit('PURCHASE_MATERIAL', 'material_purchases', $purchaseId, null, [
                 'amount' => $totalAmount, 

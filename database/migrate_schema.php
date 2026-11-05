@@ -212,4 +212,15 @@ if (!in_array('color_id', $matCols)) {
     echo "[✓] Added color_id to materials\n";
 }
 
+// 13. Warehouse Foreign Key Nullability Safety
+$whNullableTables = ['inventory_transactions', 'finished_goods_stock', 'packing_entries', 'dispatches', 'stock_adjustments'];
+foreach ($whNullableTables as $tbl) {
+    try {
+        $db->exec("ALTER TABLE `$tbl` MODIFY COLUMN warehouse_id INT NULL DEFAULT NULL");
+    } catch (Exception $e) {
+        // Ignore if already nullable
+    }
+}
+echo "[✓] Made warehouse_id nullable across inventory and transaction tables\n";
+
 echo "[SUCCESS] Schema migration complete.\n";

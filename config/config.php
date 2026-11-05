@@ -207,6 +207,33 @@ function get_setting(string $key, string $default = ''): string {
 }
 
 /**
+ * Helper to get default warehouse ID for raw materials or finished goods.
+ * Dynamically resolves active warehouse or returns null if no warehouses exist.
+ */
+function get_default_warehouse_id(string $type = 'raw'): ?int {
+    $db = get_db();
+    try {
+        if ($type === 'raw') {
+            $stmt = $db->query("SELECT id FROM warehouses WHERE (code = 'WH-RAW' OR name LIKE '%Raw%') AND is_active = 1 ORDER BY id ASC LIMIT 1");
+            $id = $stmt ? $stmt->fetchColumn() : null;
+            if ($id) return (int)$id;
+        } else {
+            $stmt = $db->query("SELECT id FROM warehouses WHERE (code IN ('WH-MAIN', 'WH-FIN') OR name LIKE '%Finished%' OR name LIKE '%Main%') AND is_active = 1 ORDER BY id ASC LIMIT 1");
+            $id = $stmt ? $stmt->fetchColumn() : null;
+            if ($id) return (int)$id;
+        }
+
+        // Fallback: any active warehouse
+        $stmt = $db->query("SELECT id FROM warehouses WHERE is_active = 1 ORDER BY id ASC LIMIT 1");
+        $id = $stmt ? $stmt->fetchColumn() : null;
+        if ($id) return (int)$id;
+    } catch (Exception $e) {
+        // Fallback to null
+    }
+    return null;
+}
+
+/**
  * Auto-issue raw materials to a production lot based on product BOM / Recipe
  * Automatically deducts available warehouse stock, creates material issue records,
  * and detects stock shortages with exact deficiency numbers.
@@ -337,14 +364,15 @@ function auto_issue_lot_materials(int $lotId): array {
             
             $itemStmt = $db->prepare("INSERT INTO material_issue_items (issue_id, material_id, quantity, unit_price, total_cost) VALUES (?, ?, ?, ?, ?)");
             $upMat = $db->prepare("UPDATE materials SET current_stock = current_stock - ? WHERE id = ?");
+            $whId = get_default_warehouse_id('raw');
             $txStmt = $db->prepare("INSERT INTO inventory_transactions 
                 (transaction_date, item_type, material_id, lot_id, warehouse_id, transaction_type, quantity_out, unit_cost, reference_type, reference_id, remarks, created_by) 
-                VALUES (?, 'Material', ?, ?, 2, 'Material Issue', ?, ?, 'MATERIAL_ISSUE', ?, ?, ?)");
+                VALUES (?, 'Material', ?, ?, ?, 'Material Issue', ?, ?, 'MATERIAL_ISSUE', ?, ?, ?)");
             
             foreach ($itemsToIssue as $iss) {
                 $itemStmt->execute([$issueId, $iss['material_id'], $iss['quantity'], $iss['unit_price'], $iss['total_cost']]);
                 $upMat->execute([$iss['quantity'], $iss['material_id']]);
-                $txStmt->execute([$issueDate, $iss['material_id'], $lotId, $iss['quantity'], $iss['unit_price'], $issueId, "Auto recipe allocation for Lot #{$lot['lot_number']}", $_SESSION['user_id'] ?? null]);
+                $txStmt->execute([$issueDate, $iss['material_id'], $lotId, $whId, $iss['quantity'], $iss['unit_price'], $issueId, "Auto recipe allocation for Lot #{$lot['lot_number']}", $_SESSION['user_id'] ?? null]);
             }
             
             log_audit('AUTO_ISSUE_MATERIAL', 'material_issues', $issueId, null, [

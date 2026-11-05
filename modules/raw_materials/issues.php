@@ -60,10 +60,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $up->execute([$quantity, $materialId]);
 
             // 4. Record Inventory Transaction
+            $whId = get_default_warehouse_id('raw');
             $tx = $db->prepare("INSERT INTO inventory_transactions 
                 (transaction_date, item_type, material_id, lot_id, warehouse_id, transaction_type, quantity_out, unit_cost, reference_type, reference_id, remarks, created_by) 
-                VALUES (?, 'Material', ?, ?, 2, 'Material Issue', ?, ?, 'MATERIAL_ISSUE', ?, ?, ?)");
-            $tx->execute([$issueDate, $materialId, $lotId, $quantity, $unitCost, $issueId, "Issued to Lot #$lotId", $_SESSION['user_id'] ?? null]);
+                VALUES (?, 'Material', ?, ?, ?, 'Material Issue', ?, ?, 'MATERIAL_ISSUE', ?, ?, ?)");
+            $tx->execute([$issueDate, $materialId, $lotId, $whId, $quantity, $unitCost, $issueId, "Issued to Lot #$lotId", $_SESSION['user_id'] ?? null]);
 
             log_audit('ISSUE_MATERIAL', 'material_issues', $issueId, null, [
                 'lot_id' => $lotId,

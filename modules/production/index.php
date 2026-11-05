@@ -721,21 +721,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $packingId = (int)$db->lastInsertId();
 
                             // Update Finished Goods Stock
-                            $stkCheck = $db->prepare("SELECT id FROM finished_goods_stock WHERE lot_id = ? AND color_id = ? AND size_id = ? AND warehouse_id = 1 LIMIT 1");
-                            $stkCheck->execute([$lotId, $entry['color_id'], $entry['size_id']]);
+                            $finWhId = get_default_warehouse_id('finished');
+                            $stkCheck = $db->prepare("SELECT id FROM finished_goods_stock WHERE lot_id = ? AND color_id = ? AND size_id = ? AND (warehouse_id = ? OR (warehouse_id IS NULL AND ? IS NULL)) LIMIT 1");
+                            $stkCheck->execute([$lotId, $entry['color_id'], $entry['size_id'], $finWhId, $finWhId]);
                             $existingStkId = $stkCheck->fetchColumn();
                             if ($existingStkId) {
                                 $db->prepare("UPDATE finished_goods_stock SET current_stock = current_stock + ?, updated_at = NOW() WHERE id = ?")
                                    ->execute([$entry['good_qty'], $existingStkId]);
                             } else {
                                 $db->prepare("INSERT INTO finished_goods_stock (product_id, design_id, color_id, size_id, lot_id, warehouse_id, current_stock, dispatched_stock, updated_at) 
-                                              VALUES (?, ?, ?, ?, ?, 1, ?, 0, NOW())")
+                                              VALUES (?, ?, ?, ?, ?, ?, ?, 0, NOW())")
                                    ->execute([
                                        $lotRow['product_id'] ?? null,
                                        $lotRow['design_id'] ?? null,
                                        $entry['color_id'],
                                        $entry['size_id'],
                                        $lotId,
+                                       $finWhId,
                                        $entry['good_qty']
                                    ]);
                             }
@@ -743,7 +745,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             // Record Finished Goods Inward Inventory Movement
                             $db->prepare("INSERT INTO inventory_transactions 
                                 (transaction_date, item_type, product_id, design_id, color_id, size_id, lot_id, warehouse_id, transaction_type, quantity_in, quantity_out, unit_cost, reference_type, reference_id, remarks, created_by) 
-                                VALUES (?, 'Finished Goods', ?, ?, ?, ?, ?, 1, 'Packing', ?, 0.00, 0.00, 'WORKFLOW_PACKING', ?, ?, ?)")
+                                VALUES (?, 'Finished Goods', ?, ?, ?, ?, ?, ?, 'Packing', ?, 0.00, 0.00, 'WORKFLOW_PACKING', ?, ?, ?)")
                                ->execute([
                                    $entryDate,
                                    $lotRow['product_id'] ?? null,
@@ -751,9 +753,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                    $entry['color_id'],
                                    $entry['size_id'],
                                    $lotId,
+                                   $finWhId,
                                    $entry['good_qty'],
                                    $packingId,
-                                   "Workflow packing completed into finished goods inventory",
+                                   "Auto-packed via Production Entry (Workflow Step Completed)",
                                    $_SESSION['user_id'] ?? null
                                ]);
                         }
@@ -1002,21 +1005,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $packingId = (int)$db->lastInsertId();
 
                     // Update Finished Goods Stock
-                    $stkCheck = $db->prepare("SELECT id FROM finished_goods_stock WHERE lot_id = ? AND color_id = ? AND size_id = ? AND warehouse_id = 1 LIMIT 1");
-                    $stkCheck->execute([$lotId, $colorId, $sizeId]);
+                    $finWhId = get_default_warehouse_id('finished');
+                    $stkCheck = $db->prepare("SELECT id FROM finished_goods_stock WHERE lot_id = ? AND color_id = ? AND size_id = ? AND (warehouse_id = ? OR (warehouse_id IS NULL AND ? IS NULL)) LIMIT 1");
+                    $stkCheck->execute([$lotId, $colorId, $sizeId, $finWhId, $finWhId]);
                     $existingStkId = $stkCheck->fetchColumn();
                     if ($existingStkId) {
                         $db->prepare("UPDATE finished_goods_stock SET current_stock = current_stock + ?, updated_at = NOW() WHERE id = ?")
                            ->execute([$goodQty, $existingStkId]);
                     } else {
                         $db->prepare("INSERT INTO finished_goods_stock (product_id, design_id, color_id, size_id, lot_id, warehouse_id, current_stock, dispatched_stock, updated_at) 
-                                      VALUES (?, ?, ?, ?, ?, 1, ?, 0, NOW())")
+                                      VALUES (?, ?, ?, ?, ?, ?, ?, 0, NOW())")
                            ->execute([
                                $lotRow['product_id'] ?? null,
                                $lotRow['design_id'] ?? null,
                                $colorId,
                                $sizeId,
                                $lotId,
+                               $finWhId,
                                $goodQty
                            ]);
                     }
@@ -1024,7 +1029,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Record Inventory Movement
                     $db->prepare("INSERT INTO inventory_transactions 
                         (transaction_date, item_type, product_id, design_id, color_id, size_id, lot_id, warehouse_id, transaction_type, quantity_in, quantity_out, unit_cost, reference_type, reference_id, remarks, created_by) 
-                        VALUES (?, 'Finished Goods', ?, ?, ?, ?, ?, 1, 'Packing', ?, 0.00, 0.00, 'WORKFLOW_PACKING', ?, ?, ?)")
+                        VALUES (?, 'Finished Goods', ?, ?, ?, ?, ?, ?, 'Packing', ?, 0.00, 0.00, 'WORKFLOW_PACKING', ?, ?, ?)")
                        ->execute([
                            $entryDate,
                            $lotRow['product_id'] ?? null,
@@ -1032,6 +1037,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                            $colorId,
                            $sizeId,
                            $lotId,
+                           $finWhId,
                            $goodQty,
                            $packingId,
                            "Workflow packing completed into finished goods inventory",

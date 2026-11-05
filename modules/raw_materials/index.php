@@ -54,10 +54,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
             // Record initial opening stock in inventory transactions
             if ($openingStock > 0) {
+                $whId = get_default_warehouse_id('raw');
                 $tx = $db->prepare("INSERT INTO inventory_transactions 
                     (transaction_date, item_type, material_id, color_id, warehouse_id, transaction_type, quantity_in, unit_cost, reference_type, remarks, created_by) 
-                    VALUES (CURRENT_DATE(), 'Material', ?, ?, 2, 'Purchase', ?, ?, 'OPENING_STOCK', 'Initial opening stock', ?)");
-                $tx->execute([$matId, $colorId, $openingStock, $costPrice, $_SESSION['user_id'] ?? null]);
+                    VALUES (CURRENT_DATE(), 'Material', ?, ?, ?, 'Purchase', ?, ?, 'OPENING_STOCK', 'Initial opening stock', ?)");
+                $tx->execute([$matId, $colorId, $whId, $openingStock, $costPrice, $_SESSION['user_id'] ?? null]);
             }
 
             log_audit('CREATE_MATERIAL', 'materials', $matId, null, ['code' => $code, 'name' => $name, 'color_id' => $colorId]);
