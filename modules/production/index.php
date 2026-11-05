@@ -1606,7 +1606,6 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <button type="button" class="btn btn-outline-secondary" id="btnSet100Night">🌙 100% Night</button>
                                             </div>
                                         </div>
-                                    </div>
 
                                     <!-- MULTI-SIZE BREAKDOWN (If Lot has multiple sizes) -->
                                     <div id="opMultiSizeSection" class="border rounded-3 p-3 bg-white mb-3 d-none">

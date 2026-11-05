@@ -11,3 +11,4 @@ backups/*.sql
 Thumbs.db
 .vscode/
 .idea/
+scratch/
