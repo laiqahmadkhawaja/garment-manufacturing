@@ -331,7 +331,7 @@ if ($action === 'get_operation_workers') {
     $estMins = (float)($operation['estimated_minutes'] ?? 0.00);
 
     // Workers mapped via worker_operations OR via department
-    $stmt = $db->prepare("SELECT w.id, w.name, w.code, w.worker_type, w.rate_per_minute, dep.name AS department_name,
+    $stmt = $db->prepare("SELECT w.id, w.name, w.code, w.worker_type, w.rate_basis, w.rate_per_minute, dep.name AS department_name,
                           COALESCE(
                               (SELECT op_r.rate FROM operation_rates op_r WHERE op_r.operation_id = ? AND op_r.worker_id = w.id ORDER BY op_r.id DESC LIMIT 1),
                               CASE 
@@ -355,7 +355,7 @@ if ($action === 'get_operation_workers') {
 
     // Fallback: If no workers match the operation or department, return all active workers
     if (empty($relatedWorkers)) {
-        $allStmt = $db->prepare("SELECT w.id, w.name, w.code, w.worker_type, w.rate_per_minute, dep.name AS department_name,
+        $allStmt = $db->prepare("SELECT w.id, w.name, w.code, w.worker_type, w.rate_basis, w.rate_per_minute, dep.name AS department_name,
                                  CASE 
                                      WHEN ? > 0 AND w.rate_per_minute > 0 THEN ROUND(? * w.rate_per_minute, 2)
                                      ELSE ?

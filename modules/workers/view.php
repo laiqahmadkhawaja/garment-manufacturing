@@ -135,6 +135,15 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 small fw-semibold">
                                     <i class="bi bi-stopwatch me-1"></i>Rate: Rs. <?= number_format($worker['rate_per_minute'] ?? 2.50, 2) ?>/min
                                 </span>
+                                <?php if (($worker['rate_basis'] ?? 'whole_sweater') === 'element_wise'): ?>
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 small fw-semibold" title="Rate & Production Basis">
+                                        <i class="bi bi-puzzle me-1"></i>اعضاء وار (Elements)
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-1 small fw-semibold" title="Rate & Production Basis">
+                                        <i class="bi bi-layers me-1"></i>مکمل سویٹر (Whole)
+                                    </span>
+                                <?php endif; ?>
                             </div>
                             <div class="text-muted small mt-1 d-flex flex-wrap align-items-center gap-2">
                                 <span><?= clean($worker['worker_type']) ?> · <?= clean($worker['department_name'] ?? 'General') ?></span>

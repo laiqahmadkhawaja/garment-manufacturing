@@ -3295,21 +3295,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         opt.value = w.id;
                         opt.dataset.rate = w.effective_rate || '';
                         opt.dataset.minRate = w.rate_per_minute || 2.50;
+                        opt.dataset.rateBasis = w.rate_basis || 'whole_sweater';
                         const minRateTxt = parseFloat(w.rate_per_minute || 2.50).toFixed(2);
-                        opt.textContent = w.name + ' (' + w.code + ') — Rs. ' + minRateTxt + '/min';
+                        const basisBadge = w.rate_basis === 'element_wise' ? ' [اعضاء وار]' : ' [سویٹر]';
+                        opt.textContent = w.name + ' (' + w.code + ')' + basisBadge + ' — Rs. ' + minRateTxt + '/min';
                         workerSelect.appendChild(opt);
                     });
 
                     // Auto-select if exactly 1 matching artisan
                     if (count === 1) {
                         workerSelect.value = data.workers[0].id;
-                        if (minRateInput && data.workers[0].rate_per_minute) {
-                            minRateInput.value = parseFloat(data.workers[0].rate_per_minute).toFixed(2);
-                        }
-                        if (data.workers[0].effective_rate && parseFloat(data.workers[0].effective_rate) > 0) {
-                            rateInput.value = parseFloat(data.workers[0].effective_rate).toFixed(2);
-                        }
-                        updateRateCalculation(false);
+                        workerSelect.dispatchEvent(new Event('change'));
                     }
                 }
             })
@@ -3321,7 +3317,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
     workerSelect.addEventListener('change', function() {
         const opt = this.options[this.selectedIndex];
-        if (opt) {
+        if (opt && opt.value) {
+            const basis = opt.dataset.rateBasis || 'whole_sweater';
+            if (workerBadge) {
+                if (basis === 'element_wise') {
+                    workerBadge.innerHTML = '<i class="bi bi-puzzle me-1"></i>اعضاء وار (Elements)';
+                    workerBadge.className = 'badge bg-primary-subtle text-primary border small';
+                } else {
+                    workerBadge.innerHTML = '<i class="bi bi-layers me-1"></i>مکمل سویٹر (Whole)';
+                    workerBadge.className = 'badge bg-success-subtle text-success border small';
+                }
+                workerBadge.classList.remove('d-none');
+            }
             if (minRateInput && opt.dataset.minRate) {
                 minRateInput.value = parseFloat(opt.dataset.minRate).toFixed(2);
             }
@@ -3523,11 +3530,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="d-flex align-items-center gap-2">
                     <i class="bi bi-check-circle-fill text-success fs-3"></i>
                     <div>
-                        <div class="fw-bold text-dark">Stage 100% Completed</div>
-                        <div class="small text-muted">All ${totals.planned} pieces assigned to this lot have been produced. Further production entries are restricted to enforce lot limits.</div>
+                        <div class="fw-bold text-dark">Stage 100% Completed (مرحلہ مکمل ہو چکا ہے)</div>
+                        <div class="small text-muted">All ${totals.allowable} available pieces for this stage have been produced. Further production entries are restricted.</div>
                     </div>
                 </div>
-                <span class="badge bg-success fs-6 px-3 py-2">${totals.good_done} / ${totals.planned} Pcs</span>
+                <span class="badge bg-success fs-6 px-3 py-2">${totals.good_done} / ${totals.allowable} Pcs</span>
             `;
             stageNoticeEl.classList.remove('d-none');
             const fillBtn = document.getElementById('btnFillAllPending');
@@ -3537,6 +3544,52 @@ document.addEventListener('DOMContentLoaded', function() {
                 subBtn.disabled = true;
                 subBtn.classList.remove('btn-primary');
                 subBtn.classList.add('btn-secondary');
+            }
+        } else if (data.prev_operation_name && totals.allowable === 0) {
+            stageNoticeEl.className = 'alert alert-warning d-flex flex-wrap align-items-center justify-content-between p-3 mb-3 border border-warning rounded-3 shadow-sm';
+            stageNoticeEl.innerHTML = `
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-hourglass-split text-warning fs-3"></i>
+                    <div>
+                        <div class="fw-bold text-dark">Waiting for Preceding Stage (${data.prev_operation_name})</div>
+                        <div class="small text-muted">پچھلے مرحلے (<strong>${data.prev_operation_name}</strong>) سے ابھی کوئی پیس تیار ہو کر موصول نہیں ہوا۔ پہلے پچھلا مرحلہ مکمل کریں۔</div>
+                    </div>
+                </div>
+                <span class="badge bg-secondary fs-6 px-3 py-2">0 Available</span>
+            `;
+            stageNoticeEl.classList.remove('d-none');
+            const fillBtn = document.getElementById('btnFillAllPending');
+            const subBtn = document.getElementById('btnSubmitBatch');
+            if (fillBtn) fillBtn.disabled = true;
+            if (subBtn) {
+                subBtn.disabled = true;
+                subBtn.classList.remove('btn-primary');
+                subBtn.classList.add('btn-secondary');
+            }
+        } else if (data.prev_operation_name && totals.allowable < totals.planned) {
+            stageNoticeEl.className = 'alert alert-info d-flex flex-wrap align-items-center justify-content-between p-3 mb-3 border border-info rounded-3 shadow-sm';
+            stageNoticeEl.innerHTML = `
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-arrow-right-circle text-info fs-3"></i>
+                    <div>
+                        <div class="fw-bold text-dark">Preceding Stage Output Enforced: ${data.prev_operation_name} (${totals.allowable} Pcs Available)</div>
+                        <div class="small text-muted">
+                            سابقہ مرحلہ (<strong>${data.prev_operation_name}</strong>) سے ${totals.allowable} پیس موصول ہوئے۔ اس مرحلے میں زیادہ سے زیادہ <strong>${totals.allowable}</strong> پیسز کی انٹری کی جا سکتی ہے (${totals.pending} پیسز باقی ہیں)۔
+                        </div>
+                    </div>
+                </div>
+                <span class="badge bg-primary fs-6 px-3 py-2">${totals.good_done} / ${totals.allowable} Done</span>
+            `;
+            stageNoticeEl.classList.remove('d-none');
+            const fillBtn = document.getElementById('btnFillAllPending');
+            const subBtn = document.getElementById('btnSubmitBatch');
+            if (fillBtn) fillBtn.disabled = (totals.pending <= 0);
+            if (subBtn) {
+                subBtn.disabled = (totals.pending <= 0);
+                if (totals.pending > 0) {
+                    subBtn.classList.add('btn-primary');
+                    subBtn.classList.remove('btn-secondary');
+                }
             }
         } else if (data.has_prev_color_stage && data.total_prev_rejected > 0) {
             stageNoticeEl.className = 'alert alert-warning d-flex flex-wrap align-items-center justify-content-between p-3 mb-3 border border-warning rounded-3 shadow-sm';

@@ -587,9 +587,21 @@ function get_lot_variant_stage_allowance(int $lotId, int $operationId): array {
             // Preceding color stage exists: allowable is good pieces passed from prev stage
             $prevGood = (int)($prevGoodMap[$k]['good_done'] ?? 0);
             $prevRej = (int)($prevGoodMap[$k]['rejected_done'] ?? 0);
-            $allowable = $prevGood; // strictly bounded by what passed preceding stage
+            $allowable = min($planned, $prevGood);
+            if ($prevOpTotalGood !== null) {
+                $allowable = min($allowable, (int)$prevOpTotalGood);
+            }
+        } elseif (!empty($prevSteps)) {
+            // Preceding stage exists in workflow (e.g. Cutting before Tailoring, Tailoring before Safety)
+            // Allowable is strictly bounded by what was completed in immediate preceding stage
+            $prevGood = min($planned, (int)$prevOpTotalGood);
+            $prevRej = 0;
+            $allowable = $prevGood;
+            if (empty($prevColorOpName) && !empty($prevSteps[0]['op_name'])) {
+                $prevColorOpName = $prevSteps[0]['op_name'];
+            }
         } else {
-            // First color stage: bounded by lot_variants planned quantity
+            // First stage in lot workflow: bounded by planned quantity
             $prevGood = $planned;
             $prevRej = 0;
             $allowable = $planned;

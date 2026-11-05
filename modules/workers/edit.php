@@ -40,6 +40,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $address = trim($_POST['address'] ?? '');
     $cnic = trim($_POST['cnic'] ?? '');
     $workerType = trim($_POST['worker_type'] ?? 'Piece Rate');
+    $rateBasis = trim($_POST['rate_basis'] ?? 'whole_sweater');
+    if ($rateBasis !== 'element_wise') $rateBasis = 'whole_sweater';
     $deptId = !empty($_POST['department_id']) ? (int)$_POST['department_id'] : null;
     $ratePerMinute = (float)($_POST['rate_per_minute'] ?? 2.50);
     if ($ratePerMinute <= 0) $ratePerMinute = 2.50;
@@ -66,6 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     address = ?, 
                     cnic = ?, 
                     worker_type = ?, 
+                    rate_basis = ?,
                     department_id = ?, 
                     rate_per_minute = ?, 
                     joining_date = ?, 
@@ -79,6 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $address,
                     $cnic,
                     $workerType,
+                    $rateBasis,
                     $deptId,
                     $ratePerMinute,
                     $joiningDate,
@@ -182,14 +186,23 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <div class="row g-3 mb-3">
                         <div class="col-12 col-md-4">
                             <label class="form-label fw-semibold small text-muted">Department</label>
-                            <select name="department_id" class="form-select form-select-sm">
+                            <select name="department_id" id="wrk_dept" class="form-select form-select-sm">
                                 <option value="">-- General Factory --</option>
                                 <?php 
                                 $selDept = $_POST['department_id'] ?? $worker['department_id'];
                                 foreach ($departments as $d): ?>
-                                    <option value="<?= $d['id'] ?>" <?= (int)$selDept === (int)$d['id'] ? 'selected' : '' ?>><?= clean($d['name']) ?></option>
+                                    <option value="<?= $d['id'] ?>" data-name="<?= strtolower($d['name']) ?>" <?= (int)$selDept === (int)$d['id'] ? 'selected' : '' ?>><?= clean($d['name']) ?></option>
                                 <?php endforeach; ?>
                             </select>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-bold small text-dark">Rate & Work Basis (کام و ریٹ کی بنیاد) *</label>
+                            <?php $selBasis = $_POST['rate_basis'] ?? ($worker['rate_basis'] ?? 'whole_sweater'); ?>
+                            <select name="rate_basis" id="wrk_rate_basis" class="form-select form-select-sm fw-semibold border-primary">
+                                <option value="whole_sweater" <?= $selBasis === 'whole_sweater' ? 'selected' : '' ?>>👕 Whole Sweaters (مکمل سویٹر وائز - ٹیلرنگ، بٹن، کاج، پریس)</option>
+                                <option value="element_wise" <?= $selBasis === 'element_wise' ? 'selected' : '' ?>>🧩 Garment Elements (اعضاء وار بریک ڈاؤن - آپریٹر، کٹنگ)</option>
+                            </select>
+                            <div class="form-text small" style="font-size: 11px;">پروڈکشن انٹری میں ورک فلو اور ریٹ کا تعین اس بنیاد پر ہوگا۔</div>
                         </div>
                         <div class="col-12 col-md-4">
                             <label class="form-label fw-semibold small text-muted">Rate Per Minute (ریٹ فی منٹ) *</label>
@@ -200,22 +213,22 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             </div>
                             <div class="form-text small text-muted" style="font-size: 11px;">Standard SAM calculation: Rate = SAM (min) × Minute Rate</div>
                         </div>
-                        <div class="col-12 col-md-4">
-                            <label class="form-label fw-semibold small text-muted">Joining Date</label>
-                            <input type="date" name="joining_date" class="form-control form-control-sm" value="<?= clean($_POST['joining_date'] ?? $worker['joining_date']) ?>">
-                        </div>
                     </div>
 
                     <div class="row g-3 mb-3">
-                        <div class="col-12 col-md-4">
+                        <div class="col-12 col-md-3">
+                            <label class="form-label fw-semibold small text-muted">Joining Date</label>
+                            <input type="date" name="joining_date" class="form-control form-control-sm" value="<?= clean($_POST['joining_date'] ?? $worker['joining_date']) ?>">
+                        </div>
+                        <div class="col-12 col-md-3">
                             <label class="form-label fw-semibold small text-muted">Phone Number</label>
                             <input type="text" name="phone" class="form-control form-control-sm" value="<?= clean($_POST['phone'] ?? $worker['phone']) ?>" placeholder="e.g. 0300-1234567">
                         </div>
-                        <div class="col-12 col-md-4">
+                        <div class="col-12 col-md-3">
                             <label class="form-label fw-semibold small text-muted">CNIC (National ID)</label>
                             <input type="text" name="cnic" class="form-control form-control-sm" value="<?= clean($_POST['cnic'] ?? $worker['cnic']) ?>" placeholder="35201-xxxxxxx-x">
                         </div>
-                        <div class="col-12 col-md-4">
+                        <div class="col-12 col-md-3">
                             <label class="form-label fw-semibold small text-muted">Account Status</label>
                             <div class="form-check form-switch mt-1">
                                 <input class="form-check-input" type="checkbox" name="is_active" id="is_active" value="1" <?= ($worker['is_active'] ? 'checked' : '') ?>>

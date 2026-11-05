@@ -24,6 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $address = trim($_POST['address'] ?? '');
     $cnic = trim($_POST['cnic'] ?? '');
     $workerType = trim($_POST['worker_type'] ?? 'Piece Rate');
+    $rateBasis = trim($_POST['rate_basis'] ?? 'whole_sweater');
+    if ($rateBasis !== 'element_wise') $rateBasis = 'whole_sweater';
     $deptId = !empty($_POST['department_id']) ? (int)$_POST['department_id'] : null;
     $defaultRate = (float)($_POST['default_rate'] ?? 0.00);
     $ratePerMinute = (float)($_POST['rate_per_minute'] ?? 2.50);
@@ -44,8 +46,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->beginTransaction();
             try {
                 $stmt = $db->prepare("INSERT INTO workers 
-                    (code, name, phone, address, cnic, worker_type, department_id, default_rate, rate_per_minute, joining_date, opening_balance, notes, is_active) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)");
+                    (code, name, phone, address, cnic, worker_type, rate_basis, department_id, default_rate, rate_per_minute, joining_date, opening_balance, notes, is_active) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)");
                 $stmt->execute([
                     $code,
                     $name,
@@ -53,6 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $address,
                     $cnic,
                     $workerType,
+                    $rateBasis,
                     $deptId,
                     $defaultRate,
                     $ratePerMinute,
@@ -152,12 +155,20 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         </div>
                         <div class="col-12 col-md-4">
                             <label class="form-label">Primary Department</label>
-                            <select name="department_id" class="form-select">
+                            <select name="department_id" id="wrk_dept" class="form-select">
                                 <option value="">-- Select Department --</option>
                                 <?php foreach ($departments as $dept): ?>
-                                    <option value="<?= $dept['id'] ?>"><?= clean($dept['name']) ?></option>
+                                    <option value="<?= $dept['id'] ?>" data-name="<?= strtolower($dept['name']) ?>" <?= (isset($_POST['department_id']) && $_POST['department_id'] == $dept['id']) ? 'selected' : '' ?>><?= clean($dept['name']) ?></option>
                                 <?php endforeach; ?>
                             </select>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-bold text-dark">Rate & Work Basis (کام و ریٹ کی بنیاد) *</label>
+                            <select name="rate_basis" id="wrk_rate_basis" class="form-select fw-semibold border-primary">
+                                <option value="whole_sweater" <?= (isset($_POST['rate_basis']) && $_POST['rate_basis'] === 'whole_sweater') ? 'selected' : '' ?>>👕 Whole Sweaters (مکمل سویٹر وائز - ٹیلرنگ، بٹن، کاج، پریس)</option>
+                                <option value="element_wise" <?= (isset($_POST['rate_basis']) && $_POST['rate_basis'] === 'element_wise') ? 'selected' : '' ?>>🧩 Garment Elements (اعضاء وار بریک ڈاؤن - آپریٹر، کٹنگ)</option>
+                            </select>
+                            <div class="form-text small" style="font-size: 11px;">پروڈکشن انٹری میں ورک فلو اور ریٹ کا تعین اس بنیاد پر ہوگا۔</div>
                         </div>
                         <div class="col-12 col-md-4">
                             <label class="form-label fw-semibold">Minute Rate (روپے فی منٹ) *</label>
@@ -219,5 +230,23 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         </div>
 
     </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const deptSelect = document.getElementById('wrk_dept');
+    const rateBasisSelect = document.getElementById('wrk_rate_basis');
+    if (deptSelect && rateBasisSelect) {
+        deptSelect.addEventListener('change', function() {
+            const opt = this.options[this.selectedIndex];
+            const deptName = opt ? (opt.dataset.name || opt.textContent.toLowerCase()) : '';
+            if (deptName.includes('operat') || deptName.includes('cutt') || deptName.includes('knitt')) {
+                rateBasisSelect.value = 'element_wise';
+            } else if (deptName) {
+                rateBasisSelect.value = 'whole_sweater';
+            }
+        });
+    }
+});
+</script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>
