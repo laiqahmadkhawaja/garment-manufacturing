@@ -27,7 +27,14 @@ if ($action === 'get_product_details') {
     // Get product pattern elements
     $eStmt = $db->prepare("SELECT * FROM product_elements WHERE product_id = ? ORDER BY sort_order ASC, id ASC");
     $eStmt->execute([$productId]);
-    $product['elements'] = $eStmt->fetchAll();
+    $elements = $eStmt->fetchAll();
+    foreach ($elements as &$el) {
+        $qty = (int)($el['quantity'] ?? 1);
+        $el['pieces_per_garment'] = $qty;
+        $el['quantity'] = $qty;
+    }
+    unset($el);
+    $product['elements'] = $elements;
 
     // Get product BOM recipe
     $bStmt = $db->prepare("SELECT b.* FROM bom_headers b WHERE b.product_id = ? AND b.is_active = 1 ORDER BY b.id DESC LIMIT 1");
@@ -36,6 +43,8 @@ if ($action === 'get_product_details') {
 
     $recipeItems = [];
     if ($recipe) {
+        $recipe['name'] = !empty($recipe['description']) ? $recipe['description'] : ($product['name'] . ' Recipe');
+
         $biStmt = $db->prepare("SELECT bi.*, m.name AS material_name, m.code AS material_code, u.code AS unit_of_measure, u.code AS unit_code, m.cost_price 
                                 FROM bom_items bi 
                                 JOIN materials m ON bi.material_id = m.id 
@@ -43,6 +52,12 @@ if ($action === 'get_product_details') {
                                 WHERE bi.bom_id = ?");
         $biStmt->execute([$recipe['id']]);
         $recipeItems = $biStmt->fetchAll();
+        foreach ($recipeItems as &$it) {
+            $qty = (float)($it['quantity_per_piece'] ?? 0);
+            $it['quantity_required'] = $qty;
+            $it['quantity_per_piece'] = $qty;
+        }
+        unset($it);
     }
     $product['recipe'] = $recipe;
     $product['recipe_items'] = $recipeItems;

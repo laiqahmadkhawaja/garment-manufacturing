@@ -1263,7 +1263,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     elements.forEach(el => {
                         const b = document.createElement('span');
                         b.className = 'badge bg-white text-dark border px-2 py-1 small';
-                        b.innerHTML = `<i class="bi bi-tag text-primary me-1"></i>${el.element_name}: <strong>${el.pieces_per_garment} pcs</strong>`;
+                        const pcs = el.pieces_per_garment || el.quantity || 1;
+                        b.innerHTML = `<i class="bi bi-tag text-primary me-1"></i>${el.element_name}: <strong>${pcs} pcs</strong>`;
                         badgesContainer.appendChild(b);
                     });
 
@@ -1271,11 +1272,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     const recipe = p.recipe;
                     const items = p.recipe_items || [];
                     if (recipe && items.length > 0) {
-                        document.getElementById('lblRecipeStatus').textContent = `Recipe: ${recipe.name}`;
+                        const recipeTitle = recipe.description || recipe.name || 'Standard Production Recipe';
+                        const wastage = recipe.wastage_percent ? ` (${parseFloat(recipe.wastage_percent)}% buffer)` : '';
+                        document.getElementById('lblRecipeStatus').textContent = `Recipe: ${recipeTitle}${wastage}`;
                         let html = '<div class="d-flex flex-wrap gap-2">';
                         items.forEach(it => {
+                            const qty = parseFloat(it.quantity_per_piece !== undefined ? it.quantity_per_piece : (it.quantity_required !== undefined ? it.quantity_required : 0));
+                            const unit = it.unit_code || it.unit_of_measure || '';
                             html += `<span class="badge bg-white text-dark border px-2 py-1 small">
-                                        <i class="bi bi-box-seam text-warning me-1"></i>${it.material_name}: <strong>${it.quantity_required} ${it.unit_code}</strong>/pc
+                                        <i class="bi bi-box-seam text-warning me-1"></i>${it.material_name}: <strong>${qty} ${unit}</strong>/pc
                                      </span>`;
                         });
                         html += '</div>';
