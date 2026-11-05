@@ -80,6 +80,10 @@ $activeNav = $activeNav ?? 'dashboard';
             <i class="bi bi-box-arrow-in-left"></i>
             <span>Return from Lot</span>
         </a>
+        <a href="<?= BASE_URL ?>modules/raw_materials/supplier_ledger.php" class="nav-link <?= $activeNav === 'supplier_ledger' ? 'active' : '' ?>">
+            <i class="bi bi-journal-text text-warning"></i>
+            <span>Supplier Ledgers</span>
+        </a>
         <a href="<?= BASE_URL ?>modules/packing/index.php" class="nav-link <?= $activeNav === 'packing' ? 'active' : '' ?>">
             <i class="bi bi-box-seam-fill text-info"></i>
             <span>Finished Goods & Packing</span>

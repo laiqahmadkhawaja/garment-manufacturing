@@ -547,11 +547,37 @@ CREATE TABLE `material_purchases` (
     `purchase_date` DATE NOT NULL,
     `supplier_id` INT NOT NULL,
     `total_amount` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    `payment_status` ENUM('Paid', 'Partial', 'Credit') NOT NULL DEFAULT 'Credit',
+    `paid_amount` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    `balance_amount` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    `payment_method` VARCHAR(50) NULL,
+    `account_id` INT NULL,
+    `payment_reference` VARCHAR(100) NULL,
     `invoice_no` VARCHAR(60) NULL,
     `notes` TEXT NULL,
     `created_by` INT NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (`supplier_id`) REFERENCES `suppliers`(`id`),
+    FOREIGN KEY (`account_id`) REFERENCES `cash_bank_accounts`(`id`) ON DELETE SET NULL,
+    FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS `supplier_ledger`;
+CREATE TABLE `supplier_ledger` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `supplier_id` INT NOT NULL,
+    `transaction_date` DATE NOT NULL,
+    `transaction_type` ENUM('Purchase', 'Payment', 'Return', 'Opening Balance') NOT NULL,
+    `reference_type` VARCHAR(50) NULL,
+    `reference_id` INT NULL,
+    `debit` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    `credit` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    `running_balance` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    `description` TEXT NULL,
+    `created_by` INT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_supp_date` (`supplier_id`, `transaction_date`),
+    FOREIGN KEY (`supplier_id`) REFERENCES `suppliers`(`id`) ON DELETE CASCADE,
     FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
