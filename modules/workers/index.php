@@ -132,6 +132,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <a href="<?= BASE_URL ?>modules/workers/view.php?id=<?= $w['id'] ?>" class="btn btn-sm btn-outline-primary py-1 px-2" title="Worker Profile & Ledger">
                                                     <i class="bi bi-journal-text"></i>
                                                 </a>
+                                                <a href="<?= BASE_URL ?>modules/workers/edit.php?id=<?= $w['id'] ?>" class="btn btn-sm btn-outline-secondary py-1 px-2" title="Edit Worker Profile">
+                                                    <i class="bi bi-pencil-square"></i>
+                                                </a>
                                                 <a href="<?= BASE_URL ?>modules/payments/create.php?worker_id=<?= $w['id'] ?>" class="btn btn-sm btn-outline-success py-1 px-2" title="Record Payment">
                                                     <i class="bi bi-cash"></i>
                                                 </a>

@@ -721,17 +721,20 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <th class="text-center">Rework</th>
                                         <th class="text-end">Applied Rate</th>
                                         <th class="text-end">Labour Earned</th>
+                                        <th class="text-end">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($workerEntries)): ?>
                                         <tr>
-                                            <td colspan="9" class="text-center py-4 text-muted">
+                                            <td colspan="10" class="text-center py-4 text-muted">
                                                 No worker entries recorded yet. <a href="<?= BASE_URL ?>modules/production/index.php?lot_id=<?= $lotId ?>">Record work now</a>.
                                             </td>
                                         </tr>
                                     <?php else: ?>
-                                        <?php foreach ($workerEntries as $we): ?>
+                                        <?php 
+                                        $isLotLocked = in_array($lot['status'], ['Closed', 'Dispatched', 'Completed', 'Archived']);
+                                        foreach ($workerEntries as $we): ?>
                                             <tr>
                                                 <td><?= format_date($we['entry_date']) ?></td>
                                                 <td>
@@ -753,6 +756,17 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <td class="text-center text-warning"><?= number_format($we['rework_qty']) ?></td>
                                                 <td class="text-end">Rs. <?= number_format($we['rate'], 2) ?></td>
                                                 <td class="text-end fw-bold text-dark"><?= format_currency($we['labour_amount']) ?></td>
+                                                <td class="text-end">
+                                                    <?php if (!$isLotLocked): ?>
+                                                        <a href="<?= BASE_URL ?>modules/production/edit.php?id=<?= $we['id'] ?>" class="btn btn-sm btn-outline-primary py-0 px-2 fw-semibold" title="Edit Entry">
+                                                            <i class="bi bi-pencil-square"></i> Edit
+                                                        </a>
+                                                    <?php else: ?>
+                                                        <span class="badge bg-light text-muted border" title="Locked: Lot is Closed/Dispatched">
+                                                            <i class="bi bi-lock-fill"></i>
+                                                        </span>
+                                                    <?php endif; ?>
+                                                </td>
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php endif; ?>

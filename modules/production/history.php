@@ -17,7 +17,7 @@ $workerId = (int)($_GET['worker_id'] ?? 0);
 $dateFrom = trim($_GET['date_from'] ?? '');
 $dateTo = trim($_GET['date_to'] ?? '');
 
-$sql = "SELECT pe.*, l.lot_number, p.name AS product_name, o.name AS op_name, w.name AS worker_name, w.code AS worker_code, 
+$sql = "SELECT pe.*, l.lot_number, l.status AS lot_status, p.name AS product_name, o.name AS op_name, w.name AS worker_name, w.code AS worker_code, 
                c.name AS color_name, s.name AS size_name, u.full_name AS recorder_name 
         FROM production_entries pe 
         JOIN lots l ON pe.lot_id = l.id 
@@ -129,13 +129,16 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <th class="text-center">Rework</th>
                                 <th class="text-end">Rate</th>
                                 <th class="text-end">Labour Amount</th>
+                                <th class="text-end">Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($entries)): ?>
-                                <tr><td colspan="11" class="text-center py-4 text-muted">No production history entries found.</td></tr>
+                                <tr><td colspan="12" class="text-center py-4 text-muted">No production history entries found.</td></tr>
                             <?php else: ?>
-                                <?php foreach ($entries as $e): ?>
+                                <?php foreach ($entries as $e): 
+                                    $isClosed = in_array($e['lot_status'], ['Closed', 'Dispatched', 'Completed', 'Archived']);
+                                ?>
                                     <tr>
                                         <td class="fw-bold text-primary"><?= clean($e['entry_number']) ?></td>
                                         <td><?= format_date($e['entry_date']) ?></td>
@@ -163,6 +166,17 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <td class="text-center <?= $e['rework_qty'] > 0 ? 'text-warning fw-bold' : 'text-muted' ?>"><?= number_format($e['rework_qty']) ?></td>
                                         <td class="text-end">Rs. <?= number_format($e['rate'], 2) ?></td>
                                         <td class="text-end fw-bold text-primary fs-6"><?= format_currency($e['labour_amount']) ?></td>
+                                        <td class="text-end">
+                                            <?php if (!$isClosed): ?>
+                                                <a href="<?= BASE_URL ?>modules/production/edit.php?id=<?= $e['id'] ?>" class="btn btn-sm btn-outline-primary py-0 px-2 fw-semibold" title="Edit Entry">
+                                                    <i class="bi bi-pencil-square me-1"></i>Edit
+                                                </a>
+                                            <?php else: ?>
+                                                <span class="badge bg-light text-muted border" title="Locked: Lot is Closed/Dispatched">
+                                                    <i class="bi bi-lock-fill"></i> Locked
+                                                </span>
+                                            <?php endif; ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>

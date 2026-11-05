@@ -70,19 +70,23 @@ if ($action === 'get_lot_operations_and_variants') {
     $lotSizes = $sStmt->fetchAll();
 
     // Garment elements with operator & cutting progress for this lot
+    $assignedWorkerId = (int)($_GET['worker_id'] ?? $lot['operator_id'] ?? 0);
     $elemStmt = $db->prepare("SELECT pe.id, pe.element_name, pe.quantity, pe.multiplier, COALESCE(pe.default_sam_minutes, 0.00) AS default_sam_minutes,
                                      COALESCE(MAX(loe.required_pieces), (pe.quantity * l.total_pieces)) AS required_pieces,
                                      COALESCE(SUM(loe.operator1_pieces), 0) AS operator1_pieces,
                                      COALESCE(SUM(loe.operator2_pieces), 0) AS operator2_pieces,
                                      COALESCE(SUM(loe.total_pieces), 0) AS operator_total,
-                                     COALESCE(SUM(loe.cut_pieces), 0) AS cut_pieces
+                                     COALESCE(SUM(loe.cut_pieces), 0) AS cut_pieces,
+                                     wer.custom_sam_minutes AS worker_custom_sam,
+                                     wer.custom_piece_rate AS worker_custom_rate
                               FROM product_elements pe
                               JOIN lots l ON pe.product_id = l.product_id
                               LEFT JOIN lot_operator_element_entries loe ON loe.element_id = pe.id AND loe.lot_id = l.id
+                              LEFT JOIN worker_element_rates wer ON wer.element_id = pe.id AND wer.worker_id = ?
                               WHERE l.id = ?
-                              GROUP BY pe.id, pe.element_name, pe.quantity, pe.multiplier, pe.default_sam_minutes, pe.sort_order, l.total_pieces
+                              GROUP BY pe.id, pe.element_name, pe.quantity, pe.multiplier, pe.default_sam_minutes, pe.sort_order, l.total_pieces, wer.custom_sam_minutes, wer.custom_piece_rate
                               ORDER BY pe.sort_order ASC, pe.id ASC");
-    $elemStmt->execute([$lotId]);
+    $elemStmt->execute([$assignedWorkerId, $lotId]);
     $lotElements = $elemStmt->fetchAll();
 
     json_response([
@@ -92,6 +96,27 @@ if ($action === 'get_lot_operations_and_variants') {
         'variants' => $variants,
         'sizes' => $lotSizes,
         'elements' => $lotElements
+    ]);
+}
+
+if ($action === 'get_worker_element_rates') {
+    $workerId = (int)($_GET['worker_id'] ?? 0);
+    $wStmt = $db->prepare("SELECT id, name, code, rate_per_minute FROM workers WHERE id = ?");
+    $wStmt->execute([$workerId]);
+    $worker = $wStmt->fetch();
+
+    if (!$worker) {
+        json_response(['status' => 'error', 'message' => 'Worker not found'], 404);
+    }
+
+    $rStmt = $db->prepare("SELECT element_id, custom_sam_minutes, custom_piece_rate FROM worker_element_rates WHERE worker_id = ?");
+    $rStmt->execute([$workerId]);
+    $rates = $rStmt->fetchAll();
+
+    json_response([
+        'status' => 'success',
+        'worker' => $worker,
+        'rates' => $rates
     ]);
 }
 

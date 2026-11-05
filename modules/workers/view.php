@@ -36,10 +36,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
     }
 }
 
+// Save Custom Element Rates
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_element_rates') {
+    check_csrf();
+    $ratesData = $_POST['element_rates'] ?? [];
+    foreach ($ratesData as $elId => $r) {
+        $elId = (int)$elId;
+        $customSam = (isset($r['sam']) && $r['sam'] !== '') ? (float)$r['sam'] : null;
+        $customRate = (isset($r['rate']) && $r['rate'] !== '') ? (float)$r['rate'] : null;
+
+        $ins = $db->prepare("INSERT INTO worker_element_rates (worker_id, element_id, custom_sam_minutes, custom_piece_rate)
+                             VALUES (?, ?, ?, ?)
+                             ON DUPLICATE KEY UPDATE custom_sam_minutes = VALUES(custom_sam_minutes), custom_piece_rate = VALUES(custom_piece_rate)");
+        $ins->execute([$workerId, $elId, $customSam, $customRate]);
+    }
+    redirect("modules/workers/view.php?id=$workerId#tab-elements", "Worker custom element rates and SAM minutes saved successfully!");
+}
+
 // Worker Assigned Operations
 $opStmt = $db->prepare("SELECT o.* FROM worker_operations wo JOIN operations o ON wo.operation_id = o.id WHERE wo.worker_id = ?");
 $opStmt->execute([$workerId]);
 $assignedOps = $opStmt->fetchAll();
+
+// Product Elements and Worker Custom Rates
+$elStmt = $db->prepare("SELECT pe.*, p.name AS product_name,
+                               wer.custom_sam_minutes, wer.custom_piece_rate
+                        FROM product_elements pe
+                        JOIN products p ON pe.product_id = p.id
+                        LEFT JOIN worker_element_rates wer ON wer.element_id = pe.id AND wer.worker_id = ?
+                        ORDER BY p.id ASC, pe.sort_order ASC, pe.id ASC");
+$elStmt->execute([$workerId]);
+$workerElementRates = $elStmt->fetchAll();
 
 // Running Ledger Transactions
 $ledgStmt = $db->prepare("SELECT wl.*, l.lot_number, o.name AS op_name 
@@ -133,6 +160,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     </div>
 
                     <div class="d-flex gap-2">
+                        <a href="<?= BASE_URL ?>modules/workers/edit.php?id=<?= $worker['id'] ?>" class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 shadow-xs">
+                            <i class="bi bi-pencil-square"></i>
+                            <span>Edit Profile</span>
+                        </a>
                         <a href="<?= BASE_URL ?>modules/payments/create.php?worker_id=<?= $worker['id'] ?>" class="btn btn-success btn-sm d-inline-flex align-items-center gap-1 shadow-sm">
                             <i class="bi bi-cash"></i>
                             <span>Disburse Payment</span>
@@ -187,6 +218,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             <li class="nav-item">
                 <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-payments">
                     <i class="bi bi-cash-stack me-1"></i> Payment Vouchers (<?= count($paymentsList) ?>)
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-elements">
+                    <i class="bi bi-puzzle me-1"></i> Element Rates & SAM (<?= count($workerElementRates) ?>)
                 </button>
             </li>
             <li class="nav-item">
@@ -464,8 +500,160 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     </div>
                 </div>
             </div>
+            <!-- TAB 5: ELEMENT RATES & SAM BREAKDOWN -->
+            <div class="tab-pane fade" id="tab-elements">
+                <div class="card-modern shadow-sm border-0">
+                    <div class="card-modern-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div>
+                            <h6 class="fw-bold mb-0 text-dark">
+                                <i class="bi bi-puzzle-fill text-primary me-2"></i> Garment Element Rates & SAM Breakdown (حصوں کے مخصوص ریٹ اور اوسط وقت)
+                            </h6>
+                            <span class="text-muted small">Define custom SAM minutes or piece rates for each element when produced by <?= clean($worker['name']) ?></span>
+                        </div>
+                        <span class="badge bg-success-subtle text-success border px-2 py-1 fw-bold">Worker Benchmark: Rs. <?= number_format($worker['rate_per_minute'] ?? 2.50, 2) ?>/min</span>
+                    </div>
+                    <div class="card-modern-body p-0">
+                        <form method="POST" action="">
+                            <input type="hidden" name="action" value="save_element_rates">
+                            <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-hover align-middle text-center mb-0" style="font-size: 0.88rem;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="text-start">Garment Component / Element (حصہ)</th>
+                                            <th>Product</th>
+                                            <th>Standard SAM</th>
+                                            <th>Worker Min Rate</th>
+                                            <th>Standard Computed Rate</th>
+                                            <th style="width: 155px;">Worker Custom SAM (min)</th>
+                                            <th style="width: 165px;">Worker Custom Rate (Rs.)</th>
+                                            <th class="text-start">Effective Piece Rate</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php if (empty($workerElementRates)): ?>
+                                            <tr>
+                                                <td colspan="8" class="text-center py-4 text-muted">No product cutting elements configured in settings.</td>
+                                            </tr>
+                                        <?php else: ?>
+                                            <?php foreach ($workerElementRates as $el): 
+                                                $stdSam = (float)$el['default_sam_minutes'];
+                                                $wMinRate = (float)$worker['rate_per_minute'];
+                                                $stdRate = ($stdSam > 0 && $wMinRate > 0) ? ($stdSam * $wMinRate) : 0.00;
+                                                $cSam = $el['custom_sam_minutes'] !== null ? (float)$el['custom_sam_minutes'] : '';
+                                                $cRate = $el['custom_piece_rate'] !== null ? (float)$el['custom_piece_rate'] : '';
+                                                
+                                                if ($cRate !== '') {
+                                                    $effRate = (float)$cRate;
+                                                    $effSource = 'Custom Worker Rate';
+                                                } elseif ($cSam !== '') {
+                                                    $effRate = (float)$cSam * $wMinRate;
+                                                    $effSource = 'Custom SAM × Min Rate';
+                                                } else {
+                                                    $effRate = $stdRate;
+                                                    $effSource = 'Standard SAM × Min Rate';
+                                                }
+                                            ?>
+                                                <tr class="wer-row">
+                                                    <td class="text-start fw-bold text-dark">
+                                                        <span class="text-primary me-1">🧵</span> <?= clean($el['element_name']) ?>
+                                                        <span class="badge bg-light text-muted border">×<?= $el['quantity'] ?: $el['multiplier'] ?: 1 ?></span>
+                                                    </td>
+                                                    <td class="text-muted small"><?= clean($el['product_name']) ?></td>
+                                                    <td class="fw-semibold text-muted"><?= number_format($stdSam, 1) ?> min</td>
+                                                    <td class="text-muted small">Rs. <?= number_format($wMinRate, 2) ?>/m</td>
+                                                    <td class="text-muted fw-semibold">Rs. <?= number_format($stdRate, 2) ?></td>
+                                                    <td>
+                                                        <div class="input-group input-group-sm">
+                                                            <input type="number" name="element_rates[<?= $el['id'] ?>][sam]" class="form-control form-control-sm text-center fw-bold text-primary wer-sam" data-minrate="<?= $wMinRate ?>" value="<?= $cSam !== '' ? number_format((float)$cSam, 1) : '' ?>" step="0.1" min="0" placeholder="<?= number_format($stdSam, 1) ?>">
+                                                            <span class="input-group-text px-1 small text-muted">m</span>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div class="input-group input-group-sm">
+                                                            <span class="input-group-text px-1 small text-muted">Rs</span>
+                                                            <input type="number" name="element_rates[<?= $el['id'] ?>][rate]" class="form-control form-control-sm text-center fw-bold text-dark wer-rate" value="<?= $cRate !== '' ? number_format((float)$cRate, 2) : '' ?>" step="0.25" min="0" placeholder="<?= number_format($stdRate, 2) ?>">
+                                                        </div>
+                                                    </td>
+                                                    <td class="text-start">
+                                                        <span class="fw-bold text-success fs-6 wer-eff-rate">Rs. <?= number_format($effRate, 2) ?></span>
+                                                        <span class="badge bg-light text-secondary border ms-1 wer-eff-badge" style="font-size: 10px;"><?= $effSource ?></span>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="p-3 bg-light border-top d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                <span class="text-muted small">
+                                    <i class="bi bi-info-circle me-1"></i> ریٹ یا SAM خالی رکھنے پر ورکر کا بنیادی فی منٹ ریٹ اور سٹینڈرڈ SAM خود بخود استعمال ہوگا۔
+                                </span>
+                                <button type="submit" class="btn btn-sm btn-primary px-4 fw-bold shadow-sm">
+                                    <i class="bi bi-save me-1"></i> Save Element Rates (ریٹس محفوظ کریں)
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
         </div>
 
     </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Live recalculation in Worker Element Rates tab
+    document.querySelectorAll('.wer-row').forEach(row => {
+        const samInp = row.querySelector('.wer-sam');
+        const rateInp = row.querySelector('.wer-rate');
+        const effSpan = row.querySelector('.wer-eff-rate');
+        const effBadge = row.querySelector('.wer-eff-badge');
+        const minRate = parseFloat(samInp?.dataset.minrate) || 2.50;
+
+        function recalcRow() {
+            const customRate = rateInp && rateInp.value !== '' ? parseFloat(rateInp.value) : null;
+            const customSam = samInp && samInp.value !== '' ? parseFloat(samInp.value) : null;
+
+            if (customRate !== null) {
+                if (effSpan) effSpan.textContent = 'Rs. ' + customRate.toFixed(2);
+                if (effBadge) effBadge.textContent = 'Custom Worker Rate';
+            } else if (customSam !== null) {
+                const calcRate = customSam * minRate;
+                if (rateInp && !rateInp.dataset.userEdited) rateInp.placeholder = calcRate.toFixed(2);
+                if (effSpan) effSpan.textContent = 'Rs. ' + calcRate.toFixed(2);
+                if (effBadge) effBadge.textContent = 'Custom SAM × Min Rate';
+            }
+        }
+
+        if (samInp) {
+            samInp.addEventListener('input', function() {
+                if (rateInp && rateInp.value === '') {
+                    const s = parseFloat(this.value) || 0;
+                    rateInp.placeholder = (s * minRate).toFixed(2);
+                }
+                recalcRow();
+            });
+        }
+        if (rateInp) {
+            rateInp.addEventListener('input', function() {
+                this.dataset.userEdited = '1';
+                recalcRow();
+            });
+        }
+    });
+
+    // Auto switch to tab from hash URL if present (e.g. #tab-elements)
+    if (window.location.hash) {
+        const tabBtn = document.querySelector(`button[data-bs-target="${window.location.hash}"]`);
+        if (tabBtn) {
+            const tab = new bootstrap.Tab(tabBtn);
+            tab.show();
+        }
+    }
+});
+</script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

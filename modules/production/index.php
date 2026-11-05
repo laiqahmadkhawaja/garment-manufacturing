@@ -1457,6 +1457,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 </td>
                                                 <td class="text-end fw-bold text-dark">
                                                     <?= format_currency($re['labour_amount']) ?>
+                                                    <div>
+                                                        <a href="<?= BASE_URL ?>modules/production/edit.php?id=<?= $re['id'] ?>" class="text-primary text-decoration-none small" style="font-size: 0.72rem;" title="Edit Entry">
+                                                            <i class="bi bi-pencil-square"></i> Edit
+                                                        </a>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
@@ -1499,63 +1504,38 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         </div>
                                         <div class="row g-3 align-items-center">
                                             <div class="col-12 col-md-6">
-                                                <label class="form-label small fw-semibold text-muted mb-1">Assigned Operator</label>
-                                                <select name="day_worker_id" id="op_single_day_worker" class="form-select fw-semibold">
+                                                <label class="form-label small fw-semibold text-muted mb-1">
+                                                    <i class="bi bi-person-badge text-primary me-1"></i> Assigned Operator (مشین آپریٹر) *
+                                                </label>
+                                                <select name="day_worker_id" id="op_single_day_worker" class="form-select fw-semibold" required>
                                                     <option value="">-- Choose Operator --</option>
                                                     <?php foreach ($workers as $w): ?>
                                                         <option value="<?= $w['id'] ?>" data-minrate="<?= $w['rate_per_minute'] ?>"><?= clean($w['name']) ?> (<?= clean($w['code']) ?>)</option>
                                                     <?php endforeach; ?>
                                                 </select>
+                                                <div class="text-muted small mt-1">
+                                                    <i class="bi bi-info-circle me-1"></i> تمام پارٹس (Front, Back, Sleeves) کی انٹری، اوقات اور ریٹس نیچے تفصیلی ٹیبل میں درج کریں۔
+                                                </div>
                                             </div>
                                             <div class="col-12 col-md-6">
-                                                <label class="form-label small fw-semibold text-muted mb-1">Pieces Produced by Operator (تیار کردہ پیسز) *</label>
-                                                <div class="input-group">
-                                                    <input type="number" name="day_pieces" id="op_single_day_pieces" class="form-control form-control-lg fw-bold text-center text-primary fs-3" min="0" placeholder="0">
-                                                    <span class="input-group-text fw-bold">pcs</span>
+                                                <div class="p-3 bg-light rounded-3 border">
+                                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                                        <span class="text-muted small fw-semibold">Worker Minute Rate (ریٹ فی منٹ):</span>
+                                                        <span class="badge bg-success-subtle text-success border fw-bold px-2 py-1" id="lblSingleMinRateBadge">Rs. 2.50/m</span>
+                                                    </div>
+                                                    <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                                                        <span class="text-dark small fw-bold">Total Earned Labour (آج کی کل کمائی):</span>
+                                                        <strong class="text-success fs-4" id="lblSingleDayLabour">Rs. 0.00</strong>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <!-- Real-Time Dynamic Rate & SAM Time Controls -->
-                                        <div class="p-2 bg-white border rounded-3 mt-3 shadow-xs">
-                                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                                <span class="small fw-bold text-dark"><i class="bi bi-stopwatch text-primary me-1"></i> Rate & SAM Time Scheme (وقت اور ریٹ کی تفصیل — ریل ٹائم ایڈٹ)</span>
-                                                <span class="text-muted small" style="font-size: 11px;">Minutes × Rate/min = Piece Rate</span>
-                                            </div>
-                                            <div class="row g-2 align-items-center">
-                                                <div class="col-12 col-md-4">
-                                                    <label class="form-label small fw-semibold text-muted mb-1" style="font-size: 11px;">⏱️ Avg Time / SAM (وقت فی پیس)</label>
-                                                    <div class="input-group input-group-sm">
-                                                        <input type="number" name="day_minutes_per_piece" id="op_single_minutes" class="form-control text-center fw-bold text-primary" step="0.1" min="0" value="0.0" placeholder="SAM Mins" title="Estimated time to produce 1 finished piece">
-                                                        <span class="input-group-text px-1 small text-muted">min</span>
-                                                    </div>
-                                                    <div class="form-text text-muted" style="font-size: 10px;">فرنٹ، بیک، بازو کا اوسط وقت</div>
-                                                </div>
-                                                <div class="col-12 col-md-4">
-                                                    <label class="form-label small fw-semibold text-muted mb-1" style="font-size: 11px;">⚡ Worker Minute Rate (ریٹ فی منٹ)</label>
-                                                    <div class="input-group input-group-sm">
-                                                        <span class="input-group-text px-1 small text-muted">Rs</span>
-                                                        <input type="number" name="day_worker_min_rate" id="op_single_min_rate" class="form-control text-center fw-bold text-success" step="0.05" min="0" value="2.50" placeholder="Rs/min" title="Worker minute rate from profile">
-                                                        <span class="input-group-text px-1 small text-muted">/m</span>
-                                                    </div>
-                                                    <div class="form-text text-muted" style="font-size: 10px;">پروفائل سے آٹو، یہاں تبدیل کر سکتے ہیں</div>
-                                                </div>
-                                                <div class="col-12 col-md-4">
-                                                    <label class="form-label small fw-semibold text-muted mb-1" style="font-size: 11px;">🏷️ Piece Rate (روپے فی پیس) *</label>
-                                                    <div class="input-group input-group-sm">
-                                                        <span class="input-group-text px-1 small text-muted">Rs</span>
-                                                        <input type="number" name="day_rate" id="op_single_rate" class="form-control text-center fw-bold text-dark" step="0.25" min="0" value="0.00" title="Final Piece Rate">
-                                                        <span class="input-group-text px-1 small text-muted">/pc</span>
-                                                    </div>
-                                                    <div class="form-text text-muted" style="font-size: 10px;">براہ راست ریٹ تبدیل کریں</div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div class="mt-2 text-end small">
-                                            <span class="text-muted">Earned Labour:</span>
-                                            <strong class="text-success fs-5 ms-1" id="lblSingleDayLabour">Rs. 0.00</strong>
-                                        </div>
+                                        <!-- Hidden fallback inputs for backend calculations -->
+                                        <input type="hidden" name="day_pieces" id="op_single_day_pieces" value="0">
+                                        <input type="hidden" name="day_minutes_per_piece" id="op_single_minutes" value="0.0">
+                                        <input type="hidden" name="day_worker_min_rate" id="op_single_min_rate" value="2.50">
+                                        <input type="hidden" name="day_rate" id="op_single_rate" value="0.00">
                                     </div>
 
                                     <!-- DOUBLE SHIFT OPERATORS CARD (DAY + NIGHT AUTO-BALANCE) -->
@@ -1566,10 +1546,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <div class="card h-100 border border-warning-subtle bg-light p-3 rounded-3 shadow-sm">
                                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                                         <span class="fw-bold text-dark"><i class="bi bi-sun-fill text-warning me-1"></i> ☀️ 1. Day Shift Operator</span>
-                                                        <span class="badge bg-warning-subtle text-warning-emphasis border" id="opDoubleDayRateBadge">Rs. 0.00/pc</span>
+                                                        <span class="badge bg-warning-subtle text-warning-emphasis border" id="lblDoubleDayMinRateBadge">Rs. 2.50/m</span>
                                                     </div>
-                                                    <div class="mb-3">
-                                                        <label class="form-label small fw-semibold text-muted mb-1">Day Operator (ڈے آپریٹر)</label>
+                                                    <div class="mb-2">
+                                                        <label class="form-label small fw-semibold text-muted mb-1">Day Operator (ڈے آپریٹر) *</label>
                                                         <select name="day_worker_id" id="op_double_day_worker" class="form-select fw-semibold">
                                                             <option value="">-- Select Day Operator --</option>
                                                             <?php foreach ($workers as $w): ?>
@@ -1577,43 +1557,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                             <?php endforeach; ?>
                                                         </select>
                                                     </div>
-                                                    <div class="mb-2">
-                                                        <label class="form-label small fw-semibold text-muted mb-1">Pieces Made by Day Operator *</label>
-                                                        <div class="input-group">
-                                                            <input type="number" name="day_pieces" id="op_double_day_pieces" class="form-control form-control-lg fw-bold text-center text-warning-emphasis fs-3" min="0" placeholder="0">
-                                                            <span class="input-group-text fw-bold">pcs</span>
-                                                        </div>
-                                                    </div>
-
-                                                    <!-- Dynamic Day Rate Controls -->
-                                                    <div class="p-2 bg-white border rounded-2 mb-2 mt-2">
-                                                        <div class="row g-2">
-                                                            <div class="col-4">
-                                                                <label class="form-label small fw-semibold text-muted mb-0" style="font-size: 10px;">⏱️ SAM (منٹ)</label>
-                                                                <div class="input-group input-group-sm">
-                                                                    <input type="number" name="day_minutes_per_piece" id="op_double_day_minutes" class="form-control form-control-sm text-center fw-bold text-primary" step="0.1" min="0" value="0.0">
-                                                                    <span class="input-group-text px-1 small text-muted" style="font-size: 10px;">m</span>
-                                                                </div>
-                                                            </div>
-                                                            <div class="col-4">
-                                                                <label class="form-label small fw-semibold text-muted mb-0" style="font-size: 10px;">⚡ Rate/min</label>
-                                                                <div class="input-group input-group-sm">
-                                                                    <input type="number" name="day_worker_min_rate" id="op_double_day_min_rate" class="form-control form-control-sm text-center fw-bold text-success" step="0.05" min="0" value="2.50">
-                                                                </div>
-                                                            </div>
-                                                            <div class="col-4">
-                                                                <label class="form-label small fw-semibold text-muted mb-0" style="font-size: 10px;">🏷️ Rate/pc *</label>
-                                                                <div class="input-group input-group-sm">
-                                                                    <input type="number" name="day_rate" id="op_double_day_rate" class="form-control form-control-sm text-center fw-bold text-dark" step="0.25" min="0" value="0.00">
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
                                                     <div class="d-flex justify-content-between align-items-center mt-auto pt-2 border-top">
-                                                        <span class="text-muted small">Labour:</span>
-                                                        <strong class="text-success fs-6" id="lblDoubleDayLabour">Rs. 0.00</strong>
+                                                        <span class="text-muted small">Day Shift Labour:</span>
+                                                        <strong class="text-success fs-5" id="lblDoubleDayLabour">Rs. 0.00</strong>
                                                     </div>
+                                                    <input type="hidden" name="day_pieces" id="op_double_day_pieces" value="0">
+                                                    <input type="hidden" name="day_minutes_per_piece" id="op_double_day_minutes" value="0.0">
+                                                    <input type="hidden" name="day_worker_min_rate" id="op_double_day_min_rate" value="2.50">
+                                                    <input type="hidden" name="day_rate" id="op_double_day_rate" value="0.00">
                                                 </div>
                                             </div>
 
@@ -1622,10 +1573,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <div class="card h-100 border border-primary-subtle bg-light p-3 rounded-3 shadow-sm">
                                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                                         <span class="fw-bold text-dark"><i class="bi bi-moon-stars-fill text-primary me-1"></i> 🌙 2. Night Shift Operator</span>
-                                                        <span class="badge bg-primary-subtle text-primary border" id="opDoubleNightRateBadge">Rs. 0.00/pc</span>
+                                                        <span class="badge bg-primary-subtle text-primary border" id="lblDoubleNightMinRateBadge">Rs. 2.50/m</span>
                                                     </div>
-                                                    <div class="mb-3">
-                                                        <label class="form-label small fw-semibold text-muted mb-1">Night Operator (نائٹ آپریٹر)</label>
+                                                    <div class="mb-2">
+                                                        <label class="form-label small fw-semibold text-muted mb-1">Night Operator (نائٹ آپریٹر) *</label>
                                                         <select name="night_worker_id" id="op_double_night_worker" class="form-select fw-semibold">
                                                             <option value="">-- Select Night Operator --</option>
                                                             <?php foreach ($workers as $w): ?>
@@ -1633,49 +1584,18 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                             <?php endforeach; ?>
                                                         </select>
                                                     </div>
-                                                    <div class="mb-2">
-                                                        <div class="d-flex justify-content-between align-items-center mb-1">
-                                                            <label class="form-label small fw-semibold text-muted mb-0">Pieces Made by Night Operator *</label>
-                                                            <span class="badge bg-light text-primary border" style="font-size: 10px;">⚡ Auto-Remaining</span>
-                                                        </div>
-                                                        <div class="input-group">
-                                                            <input type="number" name="night_pieces" id="op_double_night_pieces" class="form-control form-control-lg fw-bold text-center text-primary fs-3" min="0" placeholder="0">
-                                                            <span class="input-group-text fw-bold">pcs</span>
-                                                        </div>
-                                                    </div>
-
-                                                    <!-- Dynamic Night Rate Controls -->
-                                                    <div class="p-2 bg-white border rounded-2 mb-2 mt-2">
-                                                        <div class="row g-2">
-                                                            <div class="col-4">
-                                                                <label class="form-label small fw-semibold text-muted mb-0" style="font-size: 10px;">⏱️ SAM (منٹ)</label>
-                                                                <div class="input-group input-group-sm">
-                                                                    <input type="number" name="night_minutes_per_piece" id="op_double_night_minutes" class="form-control form-control-sm text-center fw-bold text-primary" step="0.1" min="0" value="0.0">
-                                                                    <span class="input-group-text px-1 small text-muted" style="font-size: 10px;">m</span>
-                                                                </div>
-                                                            </div>
-                                                            <div class="col-4">
-                                                                <label class="form-label small fw-semibold text-muted mb-0" style="font-size: 10px;">⚡ Rate/min</label>
-                                                                <div class="input-group input-group-sm">
-                                                                    <input type="number" name="night_worker_min_rate" id="op_double_night_min_rate" class="form-control form-control-sm text-center fw-bold text-success" step="0.05" min="0" value="2.50">
-                                                                </div>
-                                                            </div>
-                                                            <div class="col-4">
-                                                                <label class="form-label small fw-semibold text-muted mb-0" style="font-size: 10px;">🏷️ Rate/pc *</label>
-                                                                <div class="input-group input-group-sm">
-                                                                    <input type="number" name="night_rate" id="op_double_night_rate" class="form-control form-control-sm text-center fw-bold text-dark" step="0.25" min="0" value="0.00">
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
                                                     <div class="d-flex justify-content-between align-items-center mt-auto pt-2 border-top">
-                                                        <span class="text-muted small">Labour:</span>
-                                                        <strong class="text-success fs-6" id="lblDoubleNightLabour">Rs. 0.00</strong>
+                                                        <span class="text-muted small">Night Shift Labour:</span>
+                                                        <strong class="text-success fs-5" id="lblDoubleNightLabour">Rs. 0.00</strong>
                                                     </div>
+                                                    <input type="hidden" name="night_pieces" id="op_double_night_pieces" value="0">
+                                                    <input type="hidden" name="night_minutes_per_piece" id="op_double_night_minutes" value="0.0">
+                                                    <input type="hidden" name="night_worker_min_rate" id="op_double_night_min_rate" value="2.50">
+                                                    <input type="hidden" name="night_rate" id="op_double_night_rate" value="0.00">
                                                 </div>
                                             </div>
                                         </div>
+                                    </div>
 
                                         <!-- Quick Auto-Distribution Helper Toolbar -->
                                         <div class="p-2 bg-light border rounded-3 mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -2398,8 +2318,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const req = parseInt(el.required_pieces) || 0;
             const done = parseInt(el.operator_total || el.operator1_pieces || 0);
             const pending = Math.max(0, req - done);
-            const sam = parseFloat(el.default_sam_minutes) || 0;
-            const pieceRate = sam > 0 ? (sam * workerMinRate) : opDefRate;
+            const sam = parseFloat(el.worker_custom_sam !== null && el.worker_custom_sam !== undefined && el.worker_custom_sam !== '' ? el.worker_custom_sam : el.default_sam_minutes) || 0;
+            let pieceRate = opDefRate;
+            if (el.worker_custom_rate !== null && el.worker_custom_rate !== undefined && el.worker_custom_rate !== '') {
+                pieceRate = parseFloat(el.worker_custom_rate) || 0;
+            } else if (sam > 0 && workerMinRate > 0) {
+                pieceRate = sam * workerMinRate;
+            }
 
             // Default today's pieces: if dayPcs passed, scale by multiplier capped at pending
             let defDay = pending > 0 ? (dayPcs > 0 ? Math.min(pending, dayPcs * mult) : pending) : 0;
@@ -3872,6 +3797,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 opSingleRateBadge.textContent = curM > 0 ? `Rate: Rs. ${curR.toFixed(2)}/pc (${curM}m × Rs. ${curMR.toFixed(2)}/m)` : `Rate: Rs. ${curR.toFixed(2)}/pc (Direct Rate)`;
             }
 
+            if (document.getElementById('lblSingleMinRateBadge')) {
+                document.getElementById('lblSingleMinRateBadge').textContent = `Rs. ${workerMinRate.toFixed(2)}/m`;
+            }
+
             if (opSinglePieces && (!opSinglePieces.dataset.userEdited || !opSinglePieces.value || parseInt(opSinglePieces.value, 10) > remainingLotPieces || parseInt(opSinglePieces.value, 10) === totalPieces)) {
                 opSinglePieces.value = remainingLotPieces;
             }
@@ -3898,6 +3827,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const nightWorkerOpt = opDoubleNightWorker ? opDoubleNightWorker.selectedOptions[0] : null;
             const nightMinRate = nightWorkerOpt ? (parseFloat(nightWorkerOpt.dataset.minrate) || 2.50) : 2.50;
             const nightPieceRate = finalMins > 0 ? (finalMins * nightMinRate) : opDefRate;
+
+            if (document.getElementById('lblDoubleDayMinRateBadge')) {
+                document.getElementById('lblDoubleDayMinRateBadge').textContent = `Rs. ${dayMinRate.toFixed(2)}/m`;
+            }
+            if (document.getElementById('lblDoubleNightMinRateBadge')) {
+                document.getElementById('lblDoubleNightMinRateBadge').textContent = `Rs. ${nightMinRate.toFixed(2)}/m`;
+            }
 
             if (opDoubleDayMinutes && !opDoubleDayMinutes.dataset.userEdited) opDoubleDayMinutes.value = finalMins > 0 ? finalMins.toFixed(1) : (opMins > 0 ? opMins.toFixed(1) : '0.0');
             if (opDoubleDayMinRate && !opDoubleDayMinRate.dataset.userEdited) opDoubleDayMinRate.value = dayMinRate.toFixed(2);
@@ -3939,8 +3875,38 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function syncWorkerCustomRates(workerId) {
+        if (!workerId || !currentOpLotData || !currentOpLotData.elements) return;
+        fetch(`<?= BASE_URL ?>modules/production/ajax.php?action=get_worker_element_rates&worker_id=${workerId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const worker = data.worker || {};
+                    const ratesMap = {};
+                    (data.rates || []).forEach(r => {
+                        ratesMap[r.element_id] = r;
+                    });
+                    currentOpLotData.elements.forEach(el => {
+                        if (ratesMap[el.id]) {
+                            el.worker_custom_sam = ratesMap[el.id].custom_sam_minutes;
+                            el.worker_custom_rate = ratesMap[el.id].custom_piece_rate;
+                        } else {
+                            el.worker_custom_sam = null;
+                            el.worker_custom_rate = null;
+                        }
+                    });
+                    const dayInit = parseInt(opSinglePieces ? opSinglePieces.value : 0) || 0;
+                    renderOperatorElements(currentOpLotData.elements, dayInit, 0);
+                }
+            })
+            .catch(err => console.error(err));
+    }
+
     if (opSingleWorker) {
-        opSingleWorker.addEventListener('change', updateOperatorRatesAndQuantities);
+        opSingleWorker.addEventListener('change', function() {
+            updateOperatorRatesAndQuantities();
+            syncWorkerCustomRates(this.value);
+        });
     }
     if (opDoubleDayWorker) {
         opDoubleDayWorker.addEventListener('change', updateOperatorRatesAndQuantities);
