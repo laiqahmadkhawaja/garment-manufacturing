@@ -656,3 +656,48 @@ function get_lot_variant_stage_allowance(int $lotId, int $operationId): array {
         'colors' => $colorAllowances
     ];
 }
+
+/**
+ * Determine the immediate next workflow operation for a lot after a given operation.
+ * 
+ * @param int $lotId
+ * @param int $currentOpId
+ * @return array|null Next operation info ['operation_id', 'op_name', 'op_code', 'sequence', 'default_mode'] or null if final step.
+ */
+function get_next_lot_workflow_operation(int $lotId, int $currentOpId): ?array {
+    $db = get_db();
+
+    // Query all applicable operations in chronological sequence for this lot
+    $stmt = $db->prepare("SELECT o.id AS operation_id, o.name AS op_name, o.code AS op_code,
+                                 COALESCE(lws.sequence, o.sequence) AS sequence,
+                                 COALESCE(lws.sequence, (COALESCE(p_op.sequence, 10) + (o.sequence / 100))) AS effective_seq
+                          FROM operations o
+                          LEFT JOIN lot_workflow_steps lws ON lws.operation_id = o.id AND lws.lot_id = ?
+                          LEFT JOIN operations p_op ON o.parent_id = p_op.id
+                          WHERE (lws.lot_id = ? OR o.parent_id IN (SELECT operation_id FROM lot_workflow_steps WHERE lot_id = ?))
+                            AND o.is_active = 1
+                          ORDER BY effective_seq ASC, o.id ASC");
+    $stmt->execute([$lotId, $lotId, $lotId]);
+    $ops = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $foundCurrent = false;
+    foreach ($ops as $op) {
+        if ($foundCurrent) {
+            $nameLower = strtolower($op['op_name']);
+            $code = $op['op_code'] ?? '';
+            $mode = 'matrix';
+            if (str_contains($nameLower, 'cut') || $code === 'OP-CUT') {
+                $mode = 'cutting';
+            } elseif (str_contains($nameLower, 'operator') || str_contains($nameLower, 'knitt') || $code === 'OP-OPERATOR') {
+                $mode = 'operator_initial';
+            }
+            $op['default_mode'] = $mode;
+            return $op;
+        }
+        if ((int)$op['operation_id'] === $currentOpId) {
+            $foundCurrent = true;
+        }
+    }
+    return null;
+}
+

@@ -364,7 +364,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($shiftType === 'Double Shift') {
                         $msg .= " + Night Operator ($nightTotalPcs pcs) = Total " . ($dayTotalPcs + $nightTotalPcs) . " pcs!";
                     }
-                    redirect("modules/production/index.php?lot_id=$lotId", $msg);
+
+                    // Auto-advance to next workflow step
+                    $nextOp = get_next_lot_workflow_operation($db, $lotId, $operationId);
+                    if ($nextOp) {
+                        $nextOpId = (int)$nextOp['operation_id'];
+                        $nextMode = $nextOp['default_mode'] ?? 'cutting';
+                        $msg .= " — اگلا مرحلہ لوڈ ہو گیا: {$nextOp['op_name']}";
+                        redirect("modules/production/index.php?lot_id=$lotId&operation_id=$nextOpId&mode=$nextMode", $msg);
+                    } else {
+                        redirect("modules/production/index.php?lot_id=$lotId", $msg);
+                    }
                 } catch (Exception $e) {
                     $db->rollBack();
                     $error = 'Error saving operator entry: ' . $e->getMessage();
@@ -613,7 +623,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                        ->execute([$lotId, $operationId]);
 
                     $db->commit();
-                    redirect("modules/lots/jobcard.php?id=$lotId", "Cutting entry saved successfully! $wholePieces pieces cut (Labour: " . format_currency($labourAmount) . ").");
+                    $cutSuccessMsg = "Cutting entry saved successfully! $wholePieces pieces cut (Labour: " . format_currency($labourAmount) . ").";
+
+                    // Auto-advance to next workflow step
+                    $nextOp = get_next_lot_workflow_operation($db, $lotId, $operationId);
+                    if ($nextOp) {
+                        $nextOpId = (int)$nextOp['operation_id'];
+                        $nextMode = $nextOp['default_mode'] ?? 'matrix';
+                        $cutSuccessMsg .= " — اگلا مرحلہ لوڈ ہو گیا: {$nextOp['op_name']}";
+                        redirect("modules/production/index.php?lot_id=$lotId&operation_id=$nextOpId&mode=$nextMode", $cutSuccessMsg);
+                    } else {
+                        redirect("modules/production/index.php?lot_id=$lotId", $cutSuccessMsg);
+                    }
                 } catch (Exception $e) {
                     $db->rollBack();
                     $error = 'Error saving cutting entry: ' . $e->getMessage();
@@ -1021,7 +1042,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($totalRejected > 0) $feedbackMsg .= " (+$totalRejected rejected)";
                     if ($totalRework > 0) $feedbackMsg .= " (+$totalRework rework)";
                     $feedbackMsg .= " across $varCount variants. " . format_currency($totalLabour) . " credited to $workerName.";
-                    redirect("modules/production/index.php?lot_id=$lotId", $feedbackMsg);
+                    // Auto-advance to next workflow step
+                    $nextOp = get_next_lot_workflow_operation($db, $lotId, $operationId);
+                    if ($nextOp) {
+                        $nextOpId = (int)$nextOp['operation_id'];
+                        $nextMode = $nextOp['default_mode'] ?? 'matrix';
+                        $feedbackMsg .= " — اگلا مرحلہ لوڈ ہو گیا: {$nextOp['op_name']}";
+                        redirect("modules/production/index.php?lot_id=$lotId&operation_id=$nextOpId&mode=$nextMode", $feedbackMsg);
+                    } else {
+                        $feedbackMsg .= " — اس لاٹ کے تمام ورک فلو مراحل مکمل ہو گئے!";
+                        redirect("modules/production/index.php?lot_id=$lotId", $feedbackMsg);
+                    }
                 } catch (Exception $e) {
                     $db->rollBack();
                     $error = 'Error saving batch entry: ' . $e->getMessage();
@@ -1310,7 +1341,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $feedbackMsg .= " Alert: $missing piece(s) shortage currently pending in Cutting.";
                 }
 
-                redirect("modules/production/index.php?lot_id=$lotId", $feedbackMsg);
+                // Auto-advance to next workflow step
+                $nextOp = get_next_lot_workflow_operation($db, $lotId, $operationId);
+                if ($nextOp) {
+                    $nextOpId = (int)$nextOp['operation_id'];
+                    $nextMode = $nextOp['default_mode'] ?? 'single';
+                    $feedbackMsg .= " — اگلا مرحلہ لوڈ ہو گیا: {$nextOp['op_name']}";
+                    redirect("modules/production/index.php?lot_id=$lotId&operation_id=$nextOpId&mode=$nextMode", $feedbackMsg);
+                } else {
+                    $feedbackMsg .= " — اس لاٹ کے تمام ورک فلو مراحل مکمل ہو گئے!";
+                    redirect("modules/production/index.php?lot_id=$lotId", $feedbackMsg);
+                }
             } catch (Exception $e) {
                 $db->rollBack();
                 $error = 'Error saving entry: ' . $e->getMessage();
@@ -3144,16 +3185,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     // Resolve which operation to select
                     let targetOpId = preselectedOpId;
-                    const curMode = modeInput ? modeInput.value : '';
-                    const isOpMode = (preselectedMode === 'operator_initial' || curMode === 'operator_initial' || (!preselectedOpId && !preselectedMode));
 
-                    if (!targetOpId && isOpMode) {
+                    if (!targetOpId) {
+                        // If no specific operation was requested in URL:
+                        // Check if Operator is completed or if another operation is actively pending in sequence
                         const opObj = data.operations.find(o => {
                             const n = (o.op_name || '').toLowerCase();
                             return n.includes('operator') || n.includes('knitt');
                         });
-                        if (opObj) targetOpId = opObj.operation_id;
-                        else if (data.operations.length > 0) targetOpId = data.operations[0].operation_id;
+                        const opDone = opObj ? (parseInt(opObj.good_done, 10) || 0) : 0;
+                        const totalLot = parseInt(data.lot.total_pieces, 10) || 0;
+
+                        if (opObj && opDone < totalLot) {
+                            targetOpId = opObj.operation_id;
+                        } else {
+                            // Find first operation in workflow where good_done < totalLot
+                            const nextPending = data.operations.find(o => (parseInt(o.good_done, 10) || 0) < totalLot);
+                            if (nextPending) {
+                                targetOpId = nextPending.operation_id;
+                            } else if (data.operations.length > 0) {
+                                targetOpId = data.operations[0].operation_id;
+                            }
+                        }
                     }
 
                     if (targetOpId && data.operations.some(op => op.operation_id == targetOpId)) {
