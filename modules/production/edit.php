@@ -407,7 +407,6 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             </div>
         </div>
     </div>
-</div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {

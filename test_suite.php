@@ -1009,9 +1009,8 @@ assert_test("36. Unified Operator Day/Night & Cutting Element-Wise Progress", $s
 // =========================================================================
 echo "\n--- TESTING SCENARIO 37: DEPARTMENT CREATION & DUPLICATE PREVENTION ---\n";
 
-$deptTestName = 'Washing & Dyeing ' . time();
-$deptBaseCode = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $deptTestName));
-$deptCode = substr($deptBaseCode, 0, 20);
+$deptTestName = 'Washing & Dyeing ' . uniqid();
+$deptCode = 'DEP-' . substr(md5(uniqid('', true)), 0, 10);
 
 // Insert new unique department
 $insDeptStmt = $db->prepare("INSERT INTO departments (code, name, description, is_active) VALUES (?, ?, 'Garment wet processing', 1)");
@@ -1025,6 +1024,7 @@ $dupCheck = $db->prepare("SELECT id FROM departments WHERE LOWER(TRIM(name)) = L
 $dupCheck->execute([$deptTestName]);
 $dupDetected = ($dupCheck->fetchColumn() > 0);
 
+$db->exec("DELETE FROM departments WHERE id = $deptNewId");
 $scenario37Passed = ($deptNewId > 0 && $deptExists === 1 && $dupDetected);
 assert_test("37. Dynamic Department Creation & Code Auto-Generation", $scenario37Passed, "Department created with generated code, verified in database, and duplicate detection verified");
 
@@ -1033,9 +1033,8 @@ assert_test("37. Dynamic Department Creation & Code Auto-Generation", $scenario3
 // =========================================================================
 echo "\n--- TESTING SCENARIO 38: PRODUCT CATEGORY CREATION & DUPLICATE PREVENTION ---\n";
 
-$catTestName = 'Koti Test ' . time();
-$catBaseCode = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $catTestName));
-$catCode = substr($catBaseCode, 0, 20);
+$catTestName = 'Koti Test ' . uniqid();
+$catCode = 'CAT-' . substr(md5(uniqid('', true)), 0, 10);
 
 // Insert new unique category
 $insCatStmt = $db->prepare("INSERT INTO product_categories (code, name, description, is_active) VALUES (?, ?, 'Garment category test', 1)");
