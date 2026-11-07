@@ -68,7 +68,7 @@ $activeNav = $activeNav ?? 'dashboard';
             <i class="bi bi-boxes"></i>
             <span>Raw Materials Stock</span>
         </a>
-        <a href="<?= BASE_URL ?>modules/raw_materials/stock_in.php" class="nav-link <?= $activeNav === 'material_purchases' ? 'active' : '' ?>">
+        <a href="<?= BASE_URL ?>modules/raw_materials/purchases.php" class="nav-link <?= $activeNav === 'material_purchases' ? 'active' : '' ?>">
             <i class="bi bi-cart-plus-fill text-success"></i>
             <span>Stock In / Purchases</span>
         </a>
@@ -102,6 +102,25 @@ $activeNav = $activeNav ?? 'dashboard';
         <a href="<?= BASE_URL ?>modules/customers/index.php" class="nav-link <?= $activeNav === 'customers' ? 'active' : '' ?>">
             <i class="bi bi-person-badge-fill"></i>
             <span>Customer Ledgers</span>
+        </a>
+
+        <!-- Accounts & Finance -->
+        <div class="nav-section-title">Accounts & Finance</div>
+        <a href="<?= BASE_URL ?>modules/accounts/index.php" class="nav-link <?= $activeNav === 'accounts' ? 'active' : '' ?>">
+            <i class="bi bi-bank2 text-primary"></i>
+            <span>Cash & Bank Accounts</span>
+        </a>
+        <a href="<?= BASE_URL ?>modules/accounts/statement.php" class="nav-link <?= $activeNav === 'account_statement' ? 'active' : '' ?>">
+            <i class="bi bi-journal-check text-info"></i>
+            <span>Cash Book / Statements</span>
+        </a>
+        <a href="<?= BASE_URL ?>modules/accounts/expenses.php" class="nav-link <?= $activeNav === 'expenses' ? 'active' : '' ?>">
+            <i class="bi bi-receipt-cutoff text-danger"></i>
+            <span>Factory Expenses</span>
+        </a>
+        <a href="<?= BASE_URL ?>modules/accounts/overview.php" class="nav-link <?= $activeNav === 'financial_flow' ? 'active' : '' ?>">
+            <i class="bi bi-wallet2 text-success"></i>
+            <span>Financial Flow / P&L</span>
         </a>
 
         <!-- Costing & Reports -->

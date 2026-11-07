@@ -45,6 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
 
     $elemNames = $_POST['element_name'] ?? [];
     $elemQtys = $_POST['element_qty'] ?? [];
+    $elemSams = $_POST['element_sam'] ?? [];
     $elemNotes = $_POST['element_notes'] ?? [];
 
     if (empty($code) || empty($name)) {
@@ -60,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
             // 2. Synchronize Product Elements
             $db->prepare("DELETE FROM product_elements WHERE product_id = ?")->execute([$productId]);
 
-            $insElem = $db->prepare("INSERT INTO product_elements (product_id, element_name, quantity, notes, sort_order) VALUES (?, ?, ?, ?, ?)");
+            $insElem = $db->prepare("INSERT INTO product_elements (product_id, element_name, quantity, default_sam_minutes, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?)");
             $savedCount = 0;
             if (is_array($elemNames) && !empty($elemNames)) {
                 $sort = 1;
@@ -68,8 +69,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
                     $eName = trim($eName);
                     if ($eName === '') continue;
                     $q = max(1, (int)($elemQtys[$idx] ?? 1));
+                    $sam = max(0, (float)($elemSams[$idx] ?? 0.00));
                     $notes = trim($elemNotes[$idx] ?? '');
-                    $insElem->execute([$productId, $eName, $q, $notes, $sort++]);
+                    $insElem->execute([$productId, $eName, $q, $sam, $notes, $sort++]);
                     $savedCount++;
                 }
             }
@@ -236,37 +238,37 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <span class="small text-muted">Click any chip to add immediately</span>
                         </div>
                         <div class="d-flex flex-wrap gap-2" id="quickChipsContainer">
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Front" data-qty="1" data-notes="Main front body">
-                                + Front / فرنٹ (1)
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Front" data-qty="1" data-sam="1.5" data-notes="Main front body">
+                                + Front / فرنٹ (1 · 1.5m)
                             </button>
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Back" data-qty="1" data-notes="Main back body">
-                                + Back / بیک (1)
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Back" data-qty="1" data-sam="1.5" data-notes="Main back body">
+                                + Back / بیک (1 · 1.5m)
                             </button>
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Sleeves" data-qty="2" data-notes="Left & right sleeves">
-                                + Sleeves / بازو (2)
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Sleeves" data-qty="2" data-sam="2.0" data-notes="Left & right sleeves">
+                                + Sleeves / بازو (2 · 2.0m)
                             </button>
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Pockets" data-qty="2" data-notes="Side welt / patch pockets">
-                                + Pockets / پاکٹ (2)
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Pockets" data-qty="2" data-sam="0.5" data-notes="Side welt / patch pockets">
+                                + Pockets / پاکٹ (2 · 0.5m)
                             </button>
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Collar / Neck" data-qty="1" data-notes="Ribbed collar / stand neck">
-                                + Collar/Neck / گلا (1)
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Collar / Neck" data-qty="1" data-sam="1.0" data-notes="Ribbed collar / stand neck">
+                                + Collar/Neck / گلا (1 · 1.0m)
                             </button>
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Hood" data-qty="1" data-notes="Detachable hood">
-                                + Hood / ہڈ (1)
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Hood" data-qty="1" data-sam="1.5" data-notes="Detachable hood">
+                                + Hood / ہڈ (1 · 1.5m)
                             </button>
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Cuffs" data-qty="2" data-notes="Wrist ribbed cuffs">
-                                + Cuffs / کف (2)
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Cuffs" data-qty="2" data-sam="1.0" data-notes="Wrist ribbed cuffs">
+                                + Cuffs / کف (2 · 1.0m)
                             </button>
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Bottom Hem" data-qty="1" data-notes="Elasticated rib / border">
-                                + Bottom Hem / دامن پٹی (1)
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Bottom Hem" data-qty="1" data-sam="1.0" data-notes="Elasticated rib / border">
+                                + Bottom Hem / دامن پٹی (1 · 1.0m)
                             </button>
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Inner Lining" data-qty="1" data-notes="Silk or polyester lining">
-                                + Inner Lining / استر (1)
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Inner Lining" data-qty="1" data-sam="2.0" data-notes="Silk or polyester lining">
+                                + Inner Lining / استر (1 · 2.0m)
                             </button>
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Zipper Placket" data-qty="1" data-notes="Center zip fly placket">
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Zipper Placket" data-qty="1" data-sam="0.5" data-notes="Center zip fly placket">
                                 + Placket / زپ پٹی (1)
                             </button>
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Belt" data-qty="1" data-notes="Waist belt with buckle">
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Belt" data-qty="1" data-sam="0.5" data-notes="Waist belt with buckle">
                                 + Belt / بیلٹ (1)
                             </button>
                         </div>
@@ -279,7 +281,8 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <tr>
                                     <th style="width: 50px;" class="text-center">#</th>
                                     <th style="min-width: 220px;">Element / Component Name *</th>
-                                    <th style="width: 160px;" class="text-center">Qty Per Garment *</th>
+                                    <th style="width: 150px;" class="text-center">Qty Per Garment *</th>
+                                    <th style="width: 130px;" class="text-center">⏱️ Est. SAM (منٹ)</th>
                                     <th>Cutting & Pattern Specifications / Notes</th>
                                     <th style="width: 70px;" class="text-center">Action</th>
                                 </tr>
@@ -297,6 +300,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                     <button type="button" class="btn btn-outline-secondary btn-qty-minus"><i class="bi bi-dash"></i></button>
                                                     <input type="number" name="element_qty[]" class="form-control text-center fw-bold el-qty-input" value="<?= (int)$el['quantity'] ?>" min="1" max="50" required>
                                                     <button type="button" class="btn btn-outline-secondary btn-qty-plus"><i class="bi bi-plus"></i></button>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="input-group input-group-sm">
+                                                    <input type="number" step="0.1" min="0" name="element_sam[]" class="form-control text-center fw-bold text-primary el-sam-input" value="<?= (float)($el['default_sam_minutes'] ?? 0.0) ?>" placeholder="0.0">
+                                                    <span class="input-group-text px-1 small text-muted">m</span>
                                                 </div>
                                             </td>
                                             <td>
@@ -339,6 +348,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <div class="vr"></div>
                             <div class="text-muted small">
                                 Total Pieces Per Garment: <strong id="lblTotalPieces" class="text-primary fs-6">0 pcs</strong>
+                            </div>
+                            <div class="vr"></div>
+                            <div class="text-muted small">
+                                Total SAM: <strong id="lblTotalSam" class="text-success fw-bold">0.0 mins</strong>
                             </div>
                         </div>
                     </div>
@@ -390,6 +403,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const noNotice = document.getElementById('noElementsNotice');
     const lblElements = document.getElementById('lblTotalElements');
     const lblPieces = document.getElementById('lblTotalPieces');
+    const lblSam = document.getElementById('lblTotalSam');
     const btnAddRow = document.getElementById('btnAddRow');
     const btnEmptyAdd = document.getElementById('btnEmptyAdd');
     const btnClearAll = document.getElementById('btnClearAllElements');
@@ -399,7 +413,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnVest = document.getElementById('btnPresetVest');
     const btnSweater = document.getElementById('btnPresetSweater');
 
-    function createRow(name = '', qty = 1, notes = '') {
+    function createRow(name = '', qty = 1, notes = '', sam = 0.0) {
         const tr = document.createElement('tr');
         tr.className = 'element-row';
         tr.innerHTML = `
@@ -412,6 +426,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     <button type="button" class="btn btn-outline-secondary btn-qty-minus"><i class="bi bi-dash"></i></button>
                     <input type="number" name="element_qty[]" class="form-control text-center fw-bold el-qty-input" value="${qty}" min="1" max="50" required>
                     <button type="button" class="btn btn-outline-secondary btn-qty-plus"><i class="bi bi-plus"></i></button>
+                </div>
+            </td>
+            <td>
+                <div class="input-group input-group-sm">
+                    <input type="number" step="0.1" min="0" name="element_sam[]" class="form-control text-center fw-bold text-primary el-sam-input" value="${sam}" placeholder="0.0">
+                    <span class="input-group-text px-1 small text-muted">m</span>
                 </div>
             </td>
             <td>
@@ -432,6 +452,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const minusBtn = tr.querySelector('.btn-qty-minus');
         const plusBtn = tr.querySelector('.btn-qty-plus');
         const qtyInput = tr.querySelector('.el-qty-input');
+        const samInput = tr.querySelector('.el-sam-input');
         const removeBtn = tr.querySelector('.btn-remove-row');
 
         minusBtn.addEventListener('click', function() {
@@ -449,6 +470,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         qtyInput.addEventListener('input', recalcTotals);
+        if (samInput) samInput.addEventListener('input', recalcTotals);
 
         removeBtn.addEventListener('click', function() {
             tr.remove();
@@ -459,21 +481,27 @@ document.addEventListener('DOMContentLoaded', function() {
     function recalcTotals() {
         const rows = tbody.querySelectorAll('.element-row');
         let totalQty = 0;
+        let totalSam = 0;
         let count = rows.length;
 
         rows.forEach((r, idx) => {
             r.querySelector('.row-index').textContent = idx + 1;
             const q = parseInt(r.querySelector('.el-qty-input').value) || 0;
+            const s = parseFloat(r.querySelector('.el-sam-input') ? r.querySelector('.el-sam-input').value : 0) || 0;
             totalQty += q;
+            totalSam += (q * s);
         });
 
-        lblElements.textContent = count;
-        lblPieces.textContent = totalQty + ' pcs';
+        if (lblElements) lblElements.textContent = count;
+        if (lblPieces) lblPieces.textContent = totalQty + ' pcs';
+        if (lblSam) lblSam.textContent = totalSam.toFixed(1) + ' mins';
 
-        if (count === 0) {
-            noNotice.classList.remove('d-none');
-        } else {
-            noNotice.classList.add('d-none');
+        if (noNotice) {
+            if (count === 0) {
+                noNotice.classList.remove('d-none');
+            } else {
+                noNotice.classList.add('d-none');
+            }
         }
     }
 
@@ -496,14 +524,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Add row button
     btnAddRow.addEventListener('click', function() {
-        createRow('', 1, '');
+        createRow('', 1, '', 0.0);
         const inputs = tbody.querySelectorAll('.el-name-input');
         if (inputs.length) inputs[inputs.length - 1].focus();
     });
 
     if (btnEmptyAdd) {
         btnEmptyAdd.addEventListener('click', function() {
-            createRow('Front', 1, '');
+            createRow('Front', 1, '', 1.5);
         });
     }
 
@@ -512,8 +540,9 @@ document.addEventListener('DOMContentLoaded', function() {
         chip.addEventListener('click', function() {
             const name = this.getAttribute('data-name');
             const qty = parseInt(this.getAttribute('data-qty')) || 1;
+            const sam = parseFloat(this.getAttribute('data-sam')) || 0.0;
             const notes = this.getAttribute('data-notes') || '';
-            createRow(name, qty, notes);
+            createRow(name, qty, notes, sam);
         });
     });
 
@@ -529,32 +558,32 @@ document.addEventListener('DOMContentLoaded', function() {
     btnJacket.addEventListener('click', function() {
         if (tbody.children.length > 0 && !confirm('Replace current components with Jacket preset?')) return;
         tbody.innerHTML = '';
-        createRow('Front Panels', 2, 'Left & right overlap panels with zipper');
-        createRow('Back', 1, 'Full back body');
-        createRow('Sleeves', 2, 'Left and right sleeves');
-        createRow('Pockets', 2, 'Front side welt pockets');
-        createRow('Collar', 1, 'Stand / lapel collar');
-        createRow('Inner Lining', 1, 'Silk polyester inner body');
+        createRow('Front Panels', 2, 'Left & right overlap panels with zipper', 1.5);
+        createRow('Back', 1, 'Full back body', 1.5);
+        createRow('Sleeves', 2, 'Left and right sleeves', 2.0);
+        createRow('Pockets', 2, 'Front side welt pockets', 0.5);
+        createRow('Collar', 1, 'Stand / lapel collar', 1.0);
+        createRow('Inner Lining', 1, 'Silk polyester inner body', 2.0);
     });
 
     btnVest.addEventListener('click', function() {
         if (tbody.children.length > 0 && !confirm('Replace current components with Sleeveless Vest preset?')) return;
         tbody.innerHTML = '';
-        createRow('Front Panels', 2, 'Left & right front vest panels');
-        createRow('Back', 1, 'Back panel with buckle adjuster');
-        createRow('Pockets', 2, 'Waist welt pockets');
-        createRow('V-Neck Collar', 1, 'V-neck border');
-        createRow('Inner Lining', 1, 'Breathable lining');
+        createRow('Front Panels', 2, 'Left & right front vest panels', 1.5);
+        createRow('Back', 1, 'Back panel with buckle adjuster', 1.5);
+        createRow('Pockets', 2, 'Waist welt pockets', 0.5);
+        createRow('V-Neck Collar', 1, 'V-neck border', 1.0);
+        createRow('Inner Lining', 1, 'Breathable lining', 1.5);
     });
 
     btnSweater.addEventListener('click', function() {
         if (tbody.children.length > 0 && !confirm('Replace current components with Sweater preset?')) return;
         tbody.innerHTML = '';
-        createRow('Front', 1, 'Main knit front pattern');
-        createRow('Back', 1, 'Main knit back');
-        createRow('Sleeves', 2, 'Left and right knit sleeves');
-        createRow('Neck Rib', 1, 'Neck trim collar');
-        createRow('Bottom Hem Rib', 1, 'Elastic waist ribbing');
+        createRow('Front', 1, 'Main knit front pattern', 1.5);
+        createRow('Back', 1, 'Main knit back', 1.5);
+        createRow('Sleeves', 2, 'Left and right knit sleeves', 2.0);
+        createRow('Neck Rib', 1, 'Neck trim collar', 1.0);
+        createRow('Bottom Hem Rib', 1, 'Elastic waist ribbing', 1.0);
     });
 });
 </script>

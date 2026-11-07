@@ -26,6 +26,7 @@ $elementsSetup = [
 ];
 
 // Clean or insert elements for Koti
+$db->exec("SET FOREIGN_KEY_CHECKS = 0");
 $db->prepare("DELETE FROM product_elements WHERE product_id = ?")->execute([$prodId]);
 $insEl = $db->prepare("INSERT INTO product_elements (product_id, element_name, quantity, multiplier, sort_order, tracks_at_operator) 
                        VALUES (?, ?, ?, ?, ?, 1)");
@@ -34,6 +35,7 @@ foreach ($elementsSetup as $es) {
     $insEl->execute([$prodId, $es['name'], $es['ratio'], $es['ratio'], $es['order']]);
     $elementIds[$es['name']] = (int)$db->lastInsertId();
 }
+$db->exec("SET FOREIGN_KEY_CHECKS = 1");
 echo "[OK] Product Elements configured: Front(1), Back(1), Sleeves(2), Pocket(2), Gala(1)\n";
 
 // Ensure Raw Materials: Yarn, Buttons

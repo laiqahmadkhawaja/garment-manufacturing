@@ -7,7 +7,7 @@ require_once __DIR__ . '/../../config/auth.php';
 
 require_login();
 
-$workerId = (int)($_GET['id'] ?? 0);
+$workerId = (int)($_GET['id'] ?? $_GET['worker_id'] ?? 0);
 $db = get_db();
 
 // Worker details

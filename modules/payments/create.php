@@ -94,8 +94,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // 3. Deduct from Cash/Bank Account balance if account chosen
             if ($accountId) {
-                $accUp = $db->prepare("UPDATE cash_bank_accounts SET current_balance = current_balance - ? WHERE id = ?");
-                $accUp->execute([$amount, $accountId]);
+                record_account_transaction(
+                    $accountId,
+                    $paymentDate,
+                    'Labour Payment',
+                    $amount,
+                    'outflow',
+                    "Worker payment to {$worker['name']} ({$worker['code']}) - Voucher $payNum",
+                    'WORKER_PAYMENT',
+                    $paymentId,
+                    $payNum,
+                    null,
+                    $_SESSION['user_id'] ?? null
+                );
             }
 
             log_audit('DISBURSE_PAYMENT', 'worker_payments', $paymentId, null, [

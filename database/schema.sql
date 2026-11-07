@@ -296,6 +296,7 @@ CREATE TABLE `lots` (
     `single_size_id` INT NULL,
     `has_anatomy_variants` TINYINT(1) DEFAULT 0,
     `anatomy_breakdown` LONGTEXT NULL,
+    `measurements_json` JSON NULL,
     `status` ENUM('Draft', 'In Production', 'Production Completed', 'Partially Packed', 'Ready Stock', 'Partially Dispatched', 'Dispatched', 'Closed') NOT NULL DEFAULT 'Draft',
     `created_by` INT NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -456,6 +457,29 @@ CREATE TABLE `cash_bank_accounts` (
     `bank_name` VARCHAR(100) NULL,
     `current_balance` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
     `is_active` TINYINT(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS `account_transactions`;
+CREATE TABLE `account_transactions` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `account_id` INT NOT NULL,
+    `transaction_date` DATE NOT NULL,
+    `transaction_type` ENUM('Deposit', 'Withdrawal', 'Transfer In', 'Transfer Out', 'Customer Payment', 'Supplier Payment', 'Labour Payment', 'Expense', 'Opening Balance', 'Adjustment') NOT NULL,
+    `amount` DECIMAL(14,2) NOT NULL,
+    `debit` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    `credit` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    `running_balance` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    `related_account_id` INT NULL,
+    `reference_type` VARCHAR(50) NULL,
+    `reference_id` INT NULL,
+    `reference_no` VARCHAR(100) NULL,
+    `description` TEXT NULL,
+    `created_by` INT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_acc_date` (`account_id`, `transaction_date`),
+    FOREIGN KEY (`account_id`) REFERENCES `cash_bank_accounts`(`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`related_account_id`) REFERENCES `cash_bank_accounts`(`id`) ON DELETE SET NULL,
+    FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 DROP TABLE IF EXISTS `worker_ledger`;
@@ -753,6 +777,12 @@ CREATE TABLE `dispatches` (
     `vehicle_details` VARCHAR(120) NULL,
     `total_pieces` INT NOT NULL DEFAULT 0,
     `total_value` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    `payment_status` ENUM('Credit', 'Partial', 'Paid') NOT NULL DEFAULT 'Credit',
+    `paid_amount` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    `balance_amount` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    `payment_method` VARCHAR(50) NULL DEFAULT 'Cash',
+    `account_id` INT NULL DEFAULT NULL,
+    `payment_reference` VARCHAR(100) NULL DEFAULT NULL,
     `notes` TEXT NULL,
     `created_by` INT NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

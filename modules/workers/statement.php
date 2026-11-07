@@ -7,15 +7,32 @@ require_once __DIR__ . '/../../config/auth.php';
 
 require_login();
 
-$workerId = (int)($_GET['id'] ?? 0);
+$workerId = (int)($_GET['worker_id'] ?? $_GET['id'] ?? 0);
 $db = get_db();
+
+// Fetch active workers for quick switching
+$allWorkers = $db->query("SELECT w.id, w.name, w.code, dep.name AS department_name 
+                          FROM workers w 
+                          LEFT JOIN departments dep ON w.department_id = dep.id 
+                          WHERE w.is_active = 1 
+                          ORDER BY w.name ASC")->fetchAll();
+
+if ($workerId <= 0 && !empty($allWorkers)) {
+    $workerId = (int)$allWorkers[0]['id'];
+}
 
 $stmt = $db->prepare("SELECT w.*, dep.name AS department_name FROM workers w LEFT JOIN departments dep ON w.department_id = dep.id WHERE w.id = ?");
 $stmt->execute([$workerId]);
 $worker = $stmt->fetch();
 
+if (!$worker && !empty($allWorkers)) {
+    $workerId = (int)$allWorkers[0]['id'];
+    $stmt->execute([$workerId]);
+    $worker = $stmt->fetch();
+}
+
 if (!$worker) {
-    die("Worker not found.");
+    die("<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><title>Worker Not Found</title><link rel='stylesheet' href='" . BASE_URL . "assets/css/bootstrap.min.css'></head><body class='p-5'><div class='container' style='max-width: 600px;'><div class='card shadow-sm border-0'><div class='card-body p-4 text-center'><div class='display-6 text-warning mb-3'><i class='bi bi-exclamation-triangle'></i></div><h4 class='fw-bold'>Worker Record Not Found</h4><p class='text-muted'>The requested worker could not be found or has been deactivated.</p><a href='" . BASE_URL . "modules/workers/index.php' class='btn btn-primary fw-bold px-4'>Back to Worker Directory</a></div></div></div></body></html>");
 }
 
 $dateFrom = trim($_GET['date_from'] ?? '');
@@ -96,14 +113,43 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
     </style>
 </head>
 <body class="p-4">
-    <div class="no-print d-flex justify-content-between align-items-center mb-4 p-3 bg-light border rounded">
+    <div class="no-print d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4 p-3 bg-light border rounded">
         <div>
             <h5 class="mb-0 fw-bold">Worker Labour & Payment Statement</h5>
             <small class="text-muted">Printable formal ledger account for artisan settlement</small>
         </div>
-        <div class="d-flex gap-2">
-            <button type="button" onclick="window.print()" class="btn btn-primary fw-bold"><i class="bi bi-printer me-1"></i> Print Statement</button>
-            <button type="button" onclick="closePrintView('<?= BASE_URL ?>modules/workers/view.php?id=<?= $worker['id'] ?? '' ?>')" class="btn btn-outline-secondary">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <form method="GET" action="" class="d-flex align-items-center gap-2 me-2">
+                <div class="input-group input-group-sm" style="min-width: 220px;">
+                    <span class="input-group-text bg-white"><i class="bi bi-person-badge"></i></span>
+                    <select name="worker_id" class="form-select form-select-sm fw-semibold" onchange="this.form.submit()">
+                        <?php foreach ($allWorkers as $wOpt): ?>
+                            <option value="<?= $wOpt['id'] ?>" <?= $wOpt['id'] == $workerId ? 'selected' : '' ?>>
+                                <?= clean($wOpt['name']) ?> (<?= clean($wOpt['code']) ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white small">From</span>
+                    <input type="date" name="date_from" value="<?= clean($dateFrom) ?>" class="form-control form-control-sm" onchange="this.form.submit()">
+                    <span class="input-group-text bg-white small">To</span>
+                    <input type="date" name="date_to" value="<?= clean($dateTo) ?>" class="form-control form-control-sm" onchange="this.form.submit()">
+                </div>
+                <?php if (!empty($dateFrom) || !empty($dateTo)): ?>
+                    <a href="statement.php?worker_id=<?= $workerId ?>" class="btn btn-sm btn-outline-secondary" title="Clear Date Filter">
+                        <i class="bi bi-x-circle"></i>
+                    </a>
+                <?php endif; ?>
+            </form>
+            <button type="button" onclick="window.print()" class="btn btn-primary fw-bold text-nowrap"><i class="bi bi-printer me-1"></i> Print</button>
+            <a href="<?= BASE_URL ?>modules/workers/view.php?id=<?= $worker['id'] ?? '' ?>" class="btn btn-outline-primary text-nowrap">
+                <i class="bi bi-person me-1"></i> Profile
+            </a>
+            <a href="<?= BASE_URL ?>modules/reports/index.php?type=worker_performance" class="btn btn-outline-secondary text-nowrap">
+                <i class="bi bi-graph-up me-1"></i> Reports
+            </a>
+            <button type="button" onclick="closePrintView('<?= BASE_URL ?>modules/workers/view.php?id=<?= $worker['id'] ?? '' ?>')" class="btn btn-outline-secondary text-nowrap">
                 <i class="bi bi-x-circle me-1"></i> Close
             </button>
         </div>
@@ -118,7 +164,10 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
             </div>
             <div class="text-end">
                 <div class="badge bg-dark text-white fs-6 px-3 py-2">WORKER STATEMENT</div>
-                <div class="small fw-semibold mt-1">Date: <?= date('d M Y') ?></div>
+                <div class="small fw-semibold mt-1">Generated: <?= date('d M Y') ?></div>
+                <?php if (!empty($dateFrom) || !empty($dateTo)): ?>
+                    <div class="small text-muted mt-1">Period: <?= $dateFrom ? format_date($dateFrom) : 'Start' ?> to <?= $dateTo ? format_date($dateTo) : 'Today' ?></div>
+                <?php endif; ?>
             </div>
         </div>
 

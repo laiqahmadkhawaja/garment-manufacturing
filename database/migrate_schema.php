@@ -63,6 +63,10 @@ if (!in_array('anatomy_breakdown', $lCols)) {
     $db->exec("ALTER TABLE lots ADD COLUMN anatomy_breakdown LONGTEXT NULL AFTER has_anatomy_variants");
     echo "[✓] Added anatomy_breakdown to lots\n";
 }
+if (!in_array('measurements_json', $lCols)) {
+    $db->exec("ALTER TABLE lots ADD COLUMN measurements_json JSON NULL AFTER anatomy_breakdown");
+    echo "[✓] Added measurements_json to lots\n";
+}
 
 // 3. Lot Variants
 $vCols = $db->query("SHOW COLUMNS FROM lot_variants")->fetchAll(PDO::FETCH_COLUMN);
@@ -222,5 +226,82 @@ foreach ($whNullableTables as $tbl) {
     }
 }
 echo "[✓] Made warehouse_id nullable across inventory and transaction tables\n";
+
+// 14. Customer Dispatch Payment & Settlement Fields
+$dispCols = $db->query("SHOW COLUMNS FROM dispatches")->fetchAll(PDO::FETCH_COLUMN);
+if (!in_array('payment_status', $dispCols)) {
+    $db->exec("ALTER TABLE dispatches ADD COLUMN payment_status ENUM('Credit', 'Partial', 'Paid') NOT NULL DEFAULT 'Credit' AFTER total_value");
+    echo "[✓] Added payment_status to dispatches\n";
+}
+if (!in_array('paid_amount', $dispCols)) {
+    $db->exec("ALTER TABLE dispatches ADD COLUMN paid_amount DECIMAL(14,2) NOT NULL DEFAULT 0.00 AFTER payment_status");
+    echo "[✓] Added paid_amount to dispatches\n";
+}
+if (!in_array('balance_amount', $dispCols)) {
+    $db->exec("ALTER TABLE dispatches ADD COLUMN balance_amount DECIMAL(14,2) NOT NULL DEFAULT 0.00 AFTER paid_amount");
+    echo "[✓] Added balance_amount to dispatches\n";
+}
+if (!in_array('payment_method', $dispCols)) {
+    $db->exec("ALTER TABLE dispatches ADD COLUMN payment_method VARCHAR(50) NULL DEFAULT 'Cash' AFTER balance_amount");
+    echo "[✓] Added payment_method to dispatches\n";
+}
+if (!in_array('account_id', $dispCols)) {
+    $db->exec("ALTER TABLE dispatches ADD COLUMN account_id INT NULL DEFAULT NULL AFTER payment_method");
+    $db->exec("ALTER TABLE dispatches ADD CONSTRAINT fk_dispatch_account FOREIGN KEY (account_id) REFERENCES cash_bank_accounts(id) ON DELETE SET NULL");
+    echo "[✓] Added account_id to dispatches\n";
+}
+if (!in_array('payment_reference', $dispCols)) {
+    $db->exec("ALTER TABLE dispatches ADD COLUMN payment_reference VARCHAR(100) NULL DEFAULT NULL AFTER account_id");
+    echo "[✓] Added payment_reference to dispatches\n";
+}
+
+// 15. Ensure default Cash & Bank accounts exist
+$accCount = (int)$db->query("SELECT COUNT(*) FROM cash_bank_accounts")->fetchColumn();
+if ($accCount === 0) {
+    $db->exec("INSERT INTO cash_bank_accounts (id, account_name, account_number, bank_name, current_balance, is_active) VALUES
+        (1, 'Factory Cash Register', 'CASH-MAIN', 'In-House Cash Drawer', 150000.00, 1),
+        (2, 'Meezan Bank Current A/C', '0101010293848', 'Meezan Bank Ltd', 450000.00, 1),
+        (3, 'Habib Bank Ltd Factory A/C', '1234567890098', 'Habib Bank Limited', 280000.00, 1)");
+    echo "[✓] Seeded default cash & bank accounts\n";
+}
+
+// 16. Unified Account Transactions Table
+$db->exec("CREATE TABLE IF NOT EXISTS `account_transactions` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `account_id` INT NOT NULL,
+    `transaction_date` DATE NOT NULL,
+    `transaction_type` ENUM('Deposit', 'Withdrawal', 'Transfer In', 'Transfer Out', 'Customer Payment', 'Supplier Payment', 'Labour Payment', 'Expense', 'Opening Balance', 'Adjustment') NOT NULL,
+    `amount` DECIMAL(14,2) NOT NULL,
+    `debit` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    `credit` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    `running_balance` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+    `related_account_id` INT NULL,
+    `reference_type` VARCHAR(50) NULL,
+    `reference_id` INT NULL,
+    `reference_no` VARCHAR(100) NULL,
+    `description` TEXT NULL,
+    `created_by` INT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_acc_date` (`account_id`, `transaction_date`),
+    FOREIGN KEY (`account_id`) REFERENCES `cash_bank_accounts`(`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`related_account_id`) REFERENCES `cash_bank_accounts`(`id`) ON DELETE SET NULL,
+    FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+echo "[✓] Verified account_transactions table\n";
+
+// Seed opening balance records if account_transactions is empty
+$txCount = (int)$db->query("SELECT COUNT(*) FROM account_transactions")->fetchColumn();
+if ($txCount === 0) {
+    $existingAccs = $db->query("SELECT * FROM cash_bank_accounts")->fetchAll();
+    $insTx = $db->prepare("INSERT INTO account_transactions 
+        (account_id, transaction_date, transaction_type, amount, debit, credit, running_balance, description) 
+        VALUES (?, CURRENT_DATE(), 'Opening Balance', ?, 0.00, ?, ?, 'Initial opening balance')");
+    foreach ($existingAccs as $acc) {
+        if ((float)$acc['current_balance'] > 0) {
+            $insTx->execute([$acc['id'], $acc['current_balance'], $acc['current_balance'], $acc['current_balance']]);
+        }
+    }
+    echo "[✓] Seeded opening balance transactions\n";
+}
 
 echo "[SUCCESS] Schema migration complete.\n";

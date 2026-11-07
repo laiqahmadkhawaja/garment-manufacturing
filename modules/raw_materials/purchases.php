@@ -151,8 +151,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
                 // Deduct from Cash / Bank account if account selected
                 if ($accountId > 0) {
-                    $db->prepare("UPDATE cash_bank_accounts SET current_balance = current_balance - ? WHERE id = ?")
-                       ->execute([$paidAmount, $accountId]);
+                    record_account_transaction(
+                        $accountId,
+                        $purchaseDate,
+                        'Supplier Payment',
+                        $paidAmount,
+                        'outflow',
+                        "Purchase payment for #$purNum" . ($paymentRef ? " [Ref: $paymentRef]" : ""),
+                        'PURCHASE_PAYMENT',
+                        $purchaseId,
+                        $purNum,
+                        null,
+                        $_SESSION['user_id'] ?? null
+                    );
                 }
             }
 

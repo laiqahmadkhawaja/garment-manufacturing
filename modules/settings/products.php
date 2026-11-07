@@ -289,6 +289,17 @@ foreach ($recipeItems as $ri) {
     $recipeItemsMap[$ri['bom_id']][] = $ri;
 }
 
+$recipesByProduct = [];
+foreach ($recipes as $r) {
+    $recipesByProduct[(int)$r['product_id']] = [
+        'id' => (int)$r['id'],
+        'product_id' => (int)$r['product_id'],
+        'description' => $r['description'] ?: 'Standard Production Recipe',
+        'wastage_percent' => (float)$r['wastage_percent'],
+        'items' => $recipeItemsMap[$r['id']] ?? []
+    ];
+}
+
 $categories = $db->query("SELECT c.*, (SELECT COUNT(*) FROM products WHERE category_id = c.id) AS product_count FROM product_categories c ORDER BY c.name ASC")->fetchAll();
 $templates = $db->query("SELECT * FROM workflow_templates WHERE is_active = 1 ORDER BY name ASC")->fetchAll();
 $colors = $db->query("SELECT c.*, 
@@ -1085,8 +1096,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const cleanHash = hash.replace('#', '');
         const triggerEl = document.querySelector(`button[data-bs-target="#${cleanHash}Tab"]`);
         if (triggerEl) {
-            const tab = new bootstrap.Tab(triggerEl);
-            tab.show();
+            bootstrap.Tab.getOrCreateInstance(triggerEl).show();
         }
     }
 
@@ -1259,12 +1269,12 @@ document.addEventListener('DOMContentLoaded', function() {
         createProdRow('Pockets', 2, 'Side pockets', 0.5);
         createProdRow('Collar / Neck', 1, 'Collar / Neck trim', 1.0);
     }
-    }
 
     // =========================================================================
     // 3. PRODUCT RECIPE / BOM BUILDER SCRIPT
     // =========================================================================
     const rawMaterialsList = <?= json_encode($materials) ?>;
+    const recipesByProduct = <?= json_encode($recipesByProduct) ?>;
     const rTbody = document.getElementById('recipeTbody');
     const lblMatCount = document.getElementById('lblRecipeMatCount');
     const btnAddRecipeRow = document.getElementById('btnAddRecipeRow');
@@ -1275,9 +1285,16 @@ document.addEventListener('DOMContentLoaded', function() {
         const tr = document.createElement('tr');
         tr.className = 'recipe-row';
 
+        if (!unit && matId) {
+            const foundMat = rawMaterialsList.find(m => String(m.id) === String(matId));
+            if (foundMat) {
+                unit = foundMat.unit_of_measure;
+            }
+        }
+
         let matOptions = '<option value="">-- Choose Raw Material --</option>';
         rawMaterialsList.forEach(m => {
-            const sel = (matId && matId == m.id) ? 'selected' : '';
+            const sel = (matId && String(matId) === String(m.id)) ? 'selected' : '';
             matOptions += `<option value="${m.id}" data-unit="${escapeHtml(m.unit_of_measure)}" ${sel}>${escapeHtml(m.name)} (${escapeHtml(m.unit_of_measure)}) [Stock: ${m.current_stock}]</option>`;
         });
 
@@ -1333,7 +1350,7 @@ document.addEventListener('DOMContentLoaded', function() {
         rows.forEach((r, i) => {
             r.querySelector('.r-idx').textContent = i + 1;
         });
-        lblMatCount.textContent = rows.length;
+        if (lblMatCount) lblMatCount.textContent = rows.length;
     }
 
     if (btnAddRecipeRow) {
@@ -1358,39 +1375,88 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Action button on Product table: "Recipe"
+    /**
+     * Unified recipe loader: switches to Recipe tab, populates existing BOM if present,
+     * or prepares a new BOM form for the given product.
+     */
+    function openRecipeForProduct(productId, productName = '') {
+        if (!productId) return;
+
+        // Switch to recipes tab
+        const recipeTabBtn = document.querySelector('button[data-bs-target="#recipesTab"]');
+        if (recipeTabBtn) {
+            bootstrap.Tab.getOrCreateInstance(recipeTabBtn).show();
+        }
+
+        if (recipeProdSelect) {
+            recipeProdSelect.value = productId;
+        }
+
+        const descInput = document.getElementById('recipe_description');
+        const wastageInput = document.getElementById('recipe_wastage');
+
+        const existing = recipesByProduct[productId];
+        if (existing) {
+            if (descInput) descInput.value = existing.description || (productName ? `Production Recipe for ${productName}` : 'Standard Production Recipe');
+            if (wastageInput) wastageInput.value = existing.wastage_percent !== undefined ? existing.wastage_percent : 3.0;
+
+            rTbody.innerHTML = '';
+            if (existing.items && existing.items.length > 0) {
+                existing.items.forEach(it => {
+                    createRecipeRow(it.material_id, it.quantity_per_piece, it.unit_of_measure);
+                });
+            } else {
+                createRecipeRow();
+            }
+        } else {
+            if (descInput) descInput.value = productName ? `Production Recipe for ${productName}` : 'Standard Production Recipe';
+            if (wastageInput) wastageInput.value = 3.0;
+
+            rTbody.innerHTML = '';
+            createRecipeRow();
+        }
+
+        const recipeForm = document.getElementById('recipeForm');
+        if (recipeForm) {
+            recipeForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    // Row-wise Recipe trigger button on Product table
     document.querySelectorAll('.btn-recipe-trigger').forEach(btn => {
         btn.addEventListener('click', function() {
             const pId = this.getAttribute('data-product-id');
             const pName = this.getAttribute('data-product-name');
-            const recipeTabBtn = document.querySelector('button[data-bs-target="#recipesTab"]');
-            if (recipeTabBtn) {
-                new bootstrap.Tab(recipeTabBtn).show();
-            }
-            recipeProdSelect.value = pId;
-            document.getElementById('recipe_description').value = `Production Recipe for ${pName}`;
-            // If already has rows or edit, trigger change
+            openRecipeForProduct(pId, pName);
         });
     });
+
+    // When product is changed in Recipe form dropdown
+    if (recipeProdSelect) {
+        recipeProdSelect.addEventListener('change', function() {
+            const pId = this.value;
+            if (pId) {
+                const optText = this.options[this.selectedIndex] ? this.options[this.selectedIndex].text : '';
+                const pName = optText.split('(')[0].trim();
+                openRecipeForProduct(pId, pName);
+            } else {
+                const descInput = document.getElementById('recipe_description');
+                const wastageInput = document.getElementById('recipe_wastage');
+                if (descInput) descInput.value = '';
+                if (wastageInput) wastageInput.value = 3.0;
+                rTbody.innerHTML = '';
+                recalcRecipeTotals();
+            }
+        });
+    }
 
     // Action button on Recipe table: "Edit Recipe"
     document.querySelectorAll('.btn-edit-recipe').forEach(btn => {
         btn.addEventListener('click', function() {
             const pId = this.getAttribute('data-product-id');
-            const desc = this.getAttribute('data-desc');
-            const wastage = this.getAttribute('data-wastage');
-            const items = JSON.parse(this.getAttribute('data-items') || '[]');
-
-            recipeProdSelect.value = pId;
-            document.getElementById('recipe_description').value = desc;
-            document.getElementById('recipe_wastage').value = wastage;
-
-            rTbody.innerHTML = '';
-            items.forEach(it => {
-                createRecipeRow(it.material_id, it.quantity_per_piece, it.unit_of_measure);
-            });
-
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            const row = this.closest('tr');
+            const pName = row ? (row.querySelector('td .fw-bold') ? row.querySelector('td .fw-bold').textContent.trim() : '') : '';
+            openRecipeForProduct(pId, pName);
         });
     });
 

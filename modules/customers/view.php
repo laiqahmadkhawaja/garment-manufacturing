@@ -74,8 +74,19 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['action']) 
 
             // Update cash/bank balance if account selected
             if ($accountId > 0) {
-                $db->prepare("UPDATE cash_bank_accounts SET current_balance = current_balance + ? WHERE id = ?")
-                   ->execute([$amount, $accountId]);
+                record_account_transaction(
+                    $accountId,
+                    $payDate,
+                    'Customer Payment',
+                    $amount,
+                    'inflow',
+                    "Payment received from {$customer['name']} ({$customer['code']})" . ($notes ? " - $notes" : ""),
+                    'CUSTOMER_PAYMENT',
+                    $receiptId,
+                    $refNo,
+                    null,
+                    $_SESSION['user_id'] ?? null
+                );
             }
 
             log_audit('RECEIVE_CUSTOMER_PAYMENT', 'customer_ledger', $receiptId, null, [

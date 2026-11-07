@@ -51,7 +51,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
         // If from account, credit back the account
         if ($pm['account_id']) {
-            $db->prepare("UPDATE cash_bank_accounts SET current_balance = current_balance + ? WHERE id = ?")->execute([$pm['amount'], $pm['account_id']]);
+            record_account_transaction(
+                (int)$pm['account_id'],
+                date('Y-m-d'),
+                'Adjustment',
+                (float)$pm['amount'],
+                'inflow',
+                "Reversal of Worker Payment Voucher {$pm['payment_number']} ($reversalReason)",
+                'WORKER_PAYMENT_REVERSAL',
+                $paymentId,
+                'REV-' . $pm['payment_number'],
+                null,
+                $_SESSION['user_id'] ?? null
+            );
         }
 
         log_audit('REVERSE_PAYMENT', 'worker_payments', $paymentId, ['status' => 'Paid'], ['status' => 'Reversed', 'reason' => $reversalReason]);

@@ -7,15 +7,27 @@ require_once __DIR__ . '/../../config/auth.php';
 
 require_login();
 
-$customerId = (int)($_GET['id'] ?? 0);
+$customerId = (int)($_GET['customer_id'] ?? $_GET['id'] ?? 0);
 $db = get_db();
+
+$allCustomers = $db->query("SELECT id, name, company_name, phone FROM customers WHERE is_active = 1 ORDER BY name ASC")->fetchAll();
+
+if ($customerId <= 0 && !empty($allCustomers)) {
+    $customerId = (int)$allCustomers[0]['id'];
+}
 
 $stmt = $db->prepare("SELECT * FROM customers WHERE id = ?");
 $stmt->execute([$customerId]);
 $customer = $stmt->fetch();
 
+if (!$customer && !empty($allCustomers)) {
+    $customerId = (int)$allCustomers[0]['id'];
+    $stmt->execute([$customerId]);
+    $customer = $stmt->fetch();
+}
+
 if (!$customer) {
-    die("Customer party not found.");
+    die("<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><title>Customer Not Found</title><link rel='stylesheet' href='" . BASE_URL . "assets/css/bootstrap.min.css'></head><body class='p-5'><div class='container' style='max-width: 600px;'><div class='card shadow-sm border-0'><div class='card-body p-4 text-center'><h4 class='fw-bold'>Customer Account Not Found</h4><p class='text-muted'>The requested customer account was not found.</p><a href='" . BASE_URL . "modules/customers/index.php' class='btn btn-primary fw-bold px-4'>Back to Customers</a></div></div></div></body></html>");
 }
 
 $dateFrom = trim($_GET['date_from'] ?? '');

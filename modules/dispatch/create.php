@@ -16,6 +16,7 @@ $error = '';
 
 // Handle Dispatch Submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'create_dispatch') {
+    check_csrf();
     $customerId = (int)($_POST['customer_id'] ?? 0);
     $dispatchDate = trim($_POST['dispatch_date'] ?? date('Y-m-d'));
     $warehouseId = (int)($_POST['warehouse_id'] ?? 1);
@@ -27,6 +28,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $stockId = (int)($_POST['stock_id'] ?? 0);
     $dispatchQty = (int)($_POST['dispatch_qty'] ?? 0);
     $unitRate = (float)($_POST['unit_rate'] ?? 0.00);
+
+    // Payment Settlement Details
+    $paymentStatus = in_array($_POST['payment_status'] ?? '', ['Paid', 'Partial', 'Credit']) ? $_POST['payment_status'] : 'Credit';
+    $paidAmount = (float)($_POST['paid_amount'] ?? 0.00);
+    $paymentMethod = trim($_POST['payment_method'] ?? 'Cash');
+    $accountId = !empty($_POST['account_id']) ? (int)$_POST['account_id'] : null;
+    $paymentRef = trim($_POST['payment_reference'] ?? '');
 
     if ($customerId <= 0 || $stockId <= 0 || $dispatchQty <= 0) {
         $error = 'Please select a customer, available stock item, and valid dispatch quantity.';
@@ -56,10 +64,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $challanNo = 'CHL-' . substr($dispNum, 4);
             }
 
+            // Compute paid & balance amounts based on settlement mode
+            if ($totalValue <= 0) {
+                $paymentStatus = 'Paid';
+                $paidAmount = 0.00;
+                $balanceAmount = 0.00;
+            } elseif ($paymentStatus === 'Paid') {
+                $paidAmount = $totalValue;
+                $balanceAmount = 0.00;
+            } elseif ($paymentStatus === 'Credit') {
+                $paidAmount = 0.00;
+                $balanceAmount = $totalValue;
+            } else { // Partial
+                $paidAmount = min($totalValue, max(0.00, $paidAmount));
+                $balanceAmount = round($totalValue - $paidAmount, 2);
+                if ($paidAmount >= $totalValue) {
+                    $paymentStatus = 'Paid';
+                    $balanceAmount = 0.00;
+                } elseif ($paidAmount <= 0) {
+                    $paymentStatus = 'Credit';
+                    $balanceAmount = $totalValue;
+                }
+            }
+
             // 1. Insert Dispatch Header
             $dStmt = $db->prepare("INSERT INTO dispatches 
-                (dispatch_number, dispatch_date, customer_id, warehouse_id, challan_no, vehicle_details, total_pieces, total_value, notes, created_by) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                (dispatch_number, dispatch_date, customer_id, warehouse_id, challan_no, vehicle_details, total_pieces, total_value, payment_status, paid_amount, balance_amount, payment_method, account_id, payment_reference, notes, created_by) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $dStmt->execute([
                 $dispNum,
                 $dispatchDate,
@@ -69,6 +100,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $vehicleDetails,
                 $dispatchQty,
                 $totalValue,
+                $paymentStatus,
+                $paidAmount,
+                $balanceAmount,
+                $paymentMethod,
+                $accountId,
+                $paymentRef,
                 $notes,
                 $_SESSION['user_id'] ?? null
             ]);
@@ -115,7 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $_SESSION['user_id'] ?? null
             ]);
 
-            // 5. Update Customer Ledger (Debit increases receivable from customer)
+            // 5. Update Customer Ledger (Debit increases receivable from customer, Credit decreases)
             if ($totalValue > 0) {
                 // Get last customer balance
                 $cbalStmt = $db->prepare("SELECT running_balance FROM customer_ledger WHERE customer_id = ? ORDER BY id DESC LIMIT 1");
@@ -128,7 +165,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 } else {
                     $lastCbal = (float)$lastCbal;
                 }
-                $newCbal = $lastCbal + $totalValue;
+
+                // 5a. Record Dispatch Bill in Customer Ledger (Receivable Debit)
+                $balAfterBill = round($lastCbal + $totalValue, 2);
+                $dispDesc = "Dispatch #$dispNum (Challan #$challanNo) - {$dispatchQty} pcs {$item['product_name']}";
 
                 $cLedg = $db->prepare("INSERT INTO customer_ledger 
                     (customer_id, transaction_date, transaction_type, reference_type, reference_id, debit, credit, running_balance, description, created_by) 
@@ -138,14 +178,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     $dispatchDate,
                     $dispatchId,
                     $totalValue,
-                    $newCbal,
-                    "Dispatched {$dispatchQty} pcs under Challan #$challanNo (Lot #{$item['lot_number']})",
+                    $balAfterBill,
+                    $dispDesc,
                     $_SESSION['user_id'] ?? null
                 ]);
+
+                // 5b. Record Immediate Payment / Advance Received (Receivable Credit)
+                if ($paidAmount > 0) {
+                    $balAfterPay = round($balAfterBill - $paidAmount, 2);
+                    $payDesc = "Payment received on Dispatch #$dispNum via $paymentMethod" . ($paymentRef ? " [Ref: $paymentRef]" : "");
+
+                    $pLedg = $db->prepare("INSERT INTO customer_ledger 
+                        (customer_id, transaction_date, transaction_type, reference_type, reference_id, debit, credit, running_balance, description, created_by) 
+                        VALUES (?, ?, 'Payment', 'DISPATCH_PAYMENT', ?, 0.00, ?, ?, ?, ?)");
+                    $pLedg->execute([
+                        $customerId,
+                        $dispatchDate,
+                        $dispatchId,
+                        $paidAmount,
+                        $balAfterPay,
+                        $payDesc,
+                        $_SESSION['user_id'] ?? null
+                    ]);
+
+                    // Add received money to Cash / Bank account if account selected
+                    if ($accountId > 0) {
+                        record_account_transaction(
+                            $accountId,
+                            $dispatchDate,
+                            'Customer Payment',
+                            $paidAmount,
+                            'inflow',
+                            "Dispatch payment for Challan #$challanNo ({$customer['name']})",
+                            'DISPATCH_PAYMENT',
+                            $dispatchId,
+                            $challanNo,
+                            null,
+                            $_SESSION['user_id'] ?? null
+                        );
+                    }
+                }
             }
 
             // 6. Update Lot Dispatch Status
-            // Check total dispatched vs total packed for this lot
             $totDispStmt = $db->prepare("SELECT COALESCE(SUM(quantity), 0) FROM dispatch_items WHERE lot_id = ?");
             $totDispStmt->execute([$item['lot_id']]);
             $lotTotalDispatched = (int)$totDispStmt->fetchColumn();
@@ -159,6 +234,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 'customer_id' => $customerId,
                 'lot_id' => $item['lot_id'],
                 'dispatched_qty' => $dispatchQty,
+                'total_value' => $totalValue,
+                'payment_status' => $paymentStatus,
+                'paid_amount' => $paidAmount,
+                'balance_amount' => $balanceAmount,
                 'challan_no' => $challanNo
             ]);
 
@@ -187,8 +266,21 @@ if ($preselectedLotId > 0) {
 $sqlStock .= " ORDER BY l.id DESC, p.name ASC";
 $availableStocks = $db->query($sqlStock)->fetchAll();
 
-$customers = $db->query("SELECT * FROM customers WHERE is_active = 1 ORDER BY name ASC")->fetchAll();
+// Fetch customers along with their current ledger running balance
+$customersSql = "SELECT c.*, 
+    COALESCE(
+        (SELECT running_balance FROM customer_ledger WHERE customer_id = c.id ORDER BY id DESC LIMIT 1),
+        c.opening_balance,
+        0.00
+    ) AS current_balance
+    FROM customers c 
+    WHERE c.is_active = 1 
+    ORDER BY c.name ASC";
+$customers = $db->query($customersSql)->fetchAll();
+
 $warehouses = $db->query("SELECT * FROM warehouses WHERE is_active = 1 ORDER BY name ASC")->fetchAll();
+$accounts = $db->query("SELECT * FROM cash_bank_accounts WHERE is_active = 1 ORDER BY id ASC")->fetchAll();
+$paymentMethods = $db->query("SELECT * FROM payment_methods WHERE is_active = 1 ORDER BY id ASC")->fetchAll();
 
 require_once __DIR__ . '/../../includes/header.php';
 require_once __DIR__ . '/../../includes/sidebar.php';
@@ -230,15 +322,24 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <input type="date" name="dispatch_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
                         </div>
                         <div class="col-12 col-md-5">
-                            <label class="form-label">Customer / Party *</label>
-                            <select name="customer_id" class="form-select fw-bold" required>
-                                <option value="">-- Select Customer / Party --</option>
+                            <label class="form-label fw-bold text-dark">Customer / Party *</label>
+                            <select name="customer_id" id="dispatchCustomerId" class="form-select fw-bold" required>
+                                <option value="" data-balance="0">-- Select Customer / Party --</option>
                                 <?php foreach ($customers as $c): ?>
-                                    <option value="<?= $c['id'] ?>">
+                                    <?php $bal = (float)$c['current_balance']; ?>
+                                    <option value="<?= $c['id'] ?>" data-balance="<?= $bal ?>">
                                         <?= clean($c['name']) ?> (<?= clean($c['city'] ?: 'Store') ?>)
+                                        <?php if ($bal > 0): ?>
+                                            — [Receivable: Rs. <?= number_format($bal, 2) ?>]
+                                        <?php elseif ($bal < 0): ?>
+                                            — [Advance: Rs. <?= number_format(abs($bal), 2) ?>]
+                                        <?php else: ?>
+                                            — [Bal: Nil]
+                                        <?php endif; ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
+                            <div id="custBalanceNotice" class="mt-1 small" style="display: none;"></div>
                         </div>
                         <div class="col-12 col-md-3">
                             <label class="form-label">Challan / Ref #</label>
@@ -279,6 +380,115 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             </div>
                         </div>
 
+                        <!-- Customer Payment & Settlement Box -->
+                        <div class="col-12">
+                            <div class="card border border-primary-subtle bg-light-subtle rounded-3 p-3 shadow-xs">
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-2 border-bottom">
+                                    <div>
+                                        <span class="fw-bold text-dark fs-6">
+                                            <i class="bi bi-wallet2 text-success me-1"></i> Customer Payment & Ledger Settlement (ادائیگی / وصولی کی تفصیلات)
+                                        </span>
+                                        <span class="text-muted small ms-2 d-none d-md-inline">• بل کے ساتھ نقد، پیشگی رقم یا مکمل ادھار درج کریں تاکہ کھاتہ فوری ہم آہنگ ہو</span>
+                                    </div>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <input type="radio" class="btn-check" name="payment_status" id="payStatusCredit" value="Credit" autocomplete="off" checked>
+                                        <label class="btn btn-outline-danger fw-bold px-3 py-1" for="payStatusCredit">
+                                            <i class="bi bi-clock-history me-1"></i> Credit / Unpaid (مکمل ادھار)
+                                        </label>
+
+                                        <input type="radio" class="btn-check" name="payment_status" id="payStatusPartial" value="Partial" autocomplete="off">
+                                        <label class="btn btn-outline-warning fw-bold px-3 py-1 text-dark" for="payStatusPartial">
+                                            <i class="bi bi-pie-chart-fill me-1"></i> Partial (جزوی / ایڈوانس)
+                                        </label>
+
+                                        <input type="radio" class="btn-check" name="payment_status" id="payStatusPaid" value="Paid" autocomplete="off">
+                                        <label class="btn btn-outline-success fw-bold px-3 py-1" for="payStatusPaid">
+                                            <i class="bi bi-check-circle-fill me-1"></i> Full Paid (مکمل نقد وصول)
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="row g-3 align-items-center">
+                                    <div class="col-12 col-md-3">
+                                        <label class="form-label small fw-semibold text-muted mb-1">Paid / Advance (وصول شدہ رقم)</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text fw-bold text-success">Rs.</span>
+                                            <input type="number" name="paid_amount" id="dispPaidAmount" class="form-control form-control-lg fw-bold text-end text-success fs-5" step="0.01" min="0" placeholder="0.00" value="0.00">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-12 col-md-3">
+                                        <label class="form-label small fw-semibold text-muted mb-1">Bill Balance Due (اس بل کا باقی)</label>
+                                        <div class="p-2 border rounded bg-white text-end fw-bold fs-5 text-danger" id="lblDispBalance">
+                                            Rs. 0.00
+                                        </div>
+                                    </div>
+
+                                    <div class="col-12 col-md-3" id="payAccountWrapper">
+                                        <label class="form-label small fw-semibold text-muted mb-1">Deposit To (وصولی کھاتہ / کیش رجسٹر)</label>
+                                        <select name="account_id" id="dispAccountId" class="form-select form-select-sm fw-semibold">
+                                            <option value="">-- Direct Factory Cash Drawer --</option>
+                                            <?php foreach ($accounts as $acc): ?>
+                                                <option value="<?= $acc['id'] ?>">
+                                                    <?= clean($acc['account_name']) ?> (Bal: Rs. <?= number_format((float)$acc['current_balance'], 2) ?>)
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-6 col-md-3" id="payMethodWrapper">
+                                        <label class="form-label small fw-semibold text-muted mb-1">Payment Method</label>
+                                        <select name="payment_method" id="dispPaymentMethod" class="form-select form-select-sm fw-semibold">
+                                            <option value="Cash">Cash (نقد)</option>
+                                            <option value="Bank Transfer">Bank Transfer (بینک ٹرانسفر)</option>
+                                            <option value="Cheque">Cheque (بینک چیک)</option>
+                                            <option value="Online / Mobile">Online (JazzCash / EasyPaisa / Raast)</option>
+                                            <?php foreach ($paymentMethods as $pm): ?>
+                                                <?php if (!in_array($pm['name'], ['Cash', 'Bank Transfer', 'Cheque', 'Online / Mobile'])): ?>
+                                                    <option value="<?= clean($pm['name']) ?>"><?= clean($pm['name']) ?></option>
+                                                <?php endif; ?>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-6 col-md-3" id="payRefWrapper">
+                                        <label class="form-label small fw-semibold text-muted mb-1">Cheque / Trx # (اختیاری)</label>
+                                        <input type="text" name="payment_reference" id="dispPaymentRef" class="form-control form-control-sm" placeholder="e.g. Chq# 4022 or Trx#">
+                                    </div>
+
+                                    <!-- Customer Financial Summary Pill Card -->
+                                    <div class="col-12">
+                                        <div class="p-3 border rounded-3 bg-white">
+                                            <div class="row text-center g-2">
+                                                <div class="col-6 col-md-3">
+                                                    <span class="text-muted small d-block">Dispatch Total Bill (موجودہ بل)</span>
+                                                    <span class="fw-bold text-dark fs-6" id="sumBillVal">Rs. 0.00</span>
+                                                </div>
+                                                <div class="col-6 col-md-3">
+                                                    <span class="text-muted small d-block">Received Now (وصول شدہ)</span>
+                                                    <span class="fw-bold text-success fs-6" id="sumPaidVal">Rs. 0.00</span>
+                                                </div>
+                                                <div class="col-6 col-md-3">
+                                                    <span class="text-muted small d-block">Previous Balance (سابقہ کھاتہ)</span>
+                                                    <span class="fw-bold fs-6" id="sumPrevBal">Rs. 0.00</span>
+                                                </div>
+                                                <div class="col-6 col-md-3">
+                                                    <span class="text-muted small d-block">Customer Net Closing (نیا مجموعی بیلنس)</span>
+                                                    <span class="fw-bold fs-6" id="sumNetBal">Rs. 0.00</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <div id="payStatusBanner" class="alert alert-secondary py-2 px-3 mb-0 small fw-semibold border">
+                                            <i class="bi bi-info-circle me-1"></i> کسٹمر اور مالیت درج کریں تاکہ ادائیگی کا تفصیلی حساب اور نیا بیلنس تیار ہو۔
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="col-12 col-md-6">
                             <label class="form-label">Vehicle / Transport Details</label>
                             <input type="text" name="vehicle_details" class="form-control" placeholder="e.g. Suzuki Pickup / Driver Billa (0300-...)">
@@ -312,17 +522,134 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const custSelect = document.getElementById('dispatchCustomerId');
+    const custBalanceNotice = document.getElementById('custBalanceNotice');
     const stockSelect = document.getElementById('dispatchStockSelect');
     const qtyInput = document.getElementById('dispQty');
     const rateInput = document.getElementById('dispUnitRate');
     const totalDisplay = document.getElementById('lblDispTotal');
     const maxNotice = document.getElementById('dispStockMaxNotice');
 
-    function calcTotal() {
+    const payStatusCredit = document.getElementById('payStatusCredit');
+    const payStatusPartial = document.getElementById('payStatusPartial');
+    const payStatusPaid = document.getElementById('payStatusPaid');
+    const paidInput = document.getElementById('dispPaidAmount');
+    const lblDispBalance = document.getElementById('lblDispBalance');
+
+    const sumBillVal = document.getElementById('sumBillVal');
+    const sumPaidVal = document.getElementById('sumPaidVal');
+    const sumPrevBal = document.getElementById('sumPrevBal');
+    const sumNetBal = document.getElementById('sumNetBal');
+    const payStatusBanner = document.getElementById('payStatusBanner');
+
+    function getSelectedStatus() {
+        if (payStatusPaid && payStatusPaid.checked) return 'Paid';
+        if (payStatusPartial && payStatusPartial.checked) return 'Partial';
+        return 'Credit';
+    }
+
+    function formatRs(num) {
+        return 'Rs. ' + Number(num).toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    function calcFinancials(fromUserTyping = false) {
         const q = parseInt(qtyInput.value) || 0;
         const r = parseFloat(rateInput.value) || 0;
-        const tot = q * r;
-        totalDisplay.textContent = 'Rs. ' + tot.toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const totalBill = Math.round(q * r * 100) / 100;
+        totalDisplay.textContent = formatRs(totalBill);
+
+        // Get customer previous balance
+        const selectedCustOpt = custSelect.options[custSelect.selectedIndex];
+        const prevBal = (selectedCustOpt && selectedCustOpt.dataset.balance) ? parseFloat(selectedCustOpt.dataset.balance) : 0;
+
+        // Update customer balance badge under dropdown
+        if (selectedCustOpt && selectedCustOpt.value) {
+            custBalanceNotice.style.display = 'block';
+            if (prevBal > 0) {
+                custBalanceNotice.innerHTML = `<span class="badge bg-danger-subtle text-danger border px-2 py-1"><i class="bi bi-clock-history me-1"></i> سابقہ واجب الادا / ادھار (Receivable): <strong>${formatRs(prevBal)}</strong></span>`;
+            } else if (prevBal < 0) {
+                custBalanceNotice.innerHTML = `<span class="badge bg-success-subtle text-success border px-2 py-1"><i class="bi bi-check-circle-fill me-1"></i> سابقہ پیشگی رقم (Advance with Factory): <strong>${formatRs(Math.abs(prevBal))}</strong></span>`;
+            } else {
+                custBalanceNotice.innerHTML = `<span class="badge bg-light text-muted border px-2 py-1"><i class="bi bi-dash-circle me-1"></i> سابقہ بیلنس: صفر (Nil Balance)</span>`;
+            }
+        } else {
+            custBalanceNotice.style.display = 'none';
+        }
+
+        const mode = getSelectedStatus();
+        let paid = parseFloat(paidInput.value) || 0;
+
+        if (mode === 'Paid') {
+            paid = totalBill;
+            paidInput.value = totalBill.toFixed(2);
+            paidInput.readOnly = true;
+        } else if (mode === 'Credit') {
+            paid = 0;
+            paidInput.value = '0.00';
+            paidInput.readOnly = true;
+        } else { // Partial
+            paidInput.readOnly = false;
+            if (!fromUserTyping) {
+                if (paid === 0 || paid >= totalBill) {
+                    paid = totalBill > 0 ? Math.round((totalBill / 2) * 100) / 100 : 0;
+                    paidInput.value = paid.toFixed(2);
+                }
+            }
+            if (paid > totalBill) {
+                paid = totalBill;
+                paidInput.value = totalBill.toFixed(2);
+            }
+        }
+
+        const remainingBill = Math.max(0, Math.round((totalBill - paid) * 100) / 100);
+        lblDispBalance.textContent = formatRs(remainingBill);
+        if (remainingBill > 0) {
+            lblDispBalance.className = 'p-2 border rounded bg-white text-end fw-bold fs-5 text-danger';
+        } else {
+            lblDispBalance.className = 'p-2 border rounded bg-white text-end fw-bold fs-5 text-success';
+        }
+
+        // Net Customer Balance = Previous Balance + Total Bill - Paid
+        const netBal = Math.round((prevBal + totalBill - paid) * 100) / 100;
+
+        sumBillVal.textContent = formatRs(totalBill);
+        sumPaidVal.textContent = formatRs(paid);
+
+        // Previous balance pill
+        if (prevBal > 0) {
+            sumPrevBal.className = 'fw-bold fs-6 text-danger';
+            sumPrevBal.textContent = formatRs(prevBal) + ' (Receivable)';
+        } else if (prevBal < 0) {
+            sumPrevBal.className = 'fw-bold fs-6 text-success';
+            sumPrevBal.textContent = formatRs(Math.abs(prevBal)) + ' (Advance)';
+        } else {
+            sumPrevBal.className = 'fw-bold fs-6 text-muted';
+            sumPrevBal.textContent = 'Rs. 0.00 (Nil)';
+        }
+
+        // Net balance pill
+        if (netBal > 0) {
+            sumNetBal.className = 'fw-bold fs-6 text-danger';
+            sumNetBal.textContent = formatRs(netBal) + ' (Receivable / کسٹمر ذمہ واجب الوصول)';
+        } else if (netBal < 0) {
+            sumNetBal.className = 'fw-bold fs-6 text-success';
+            sumNetBal.textContent = formatRs(Math.abs(netBal)) + ' (Advance / کسٹمر کا ایڈوانس موجود)';
+        } else {
+            sumNetBal.className = 'fw-bold fs-6 text-success';
+            sumNetBal.textContent = 'Rs. 0.00 (Clear / کھاتہ صاف)';
+        }
+
+        // Update status banner
+        if (mode === 'Paid') {
+            payStatusBanner.className = 'alert alert-success py-2 px-3 mb-0 small fw-semibold border';
+            payStatusBanner.innerHTML = `<i class="bi bi-check2-circle me-1"></i> <strong>Full Paid (مکمل نقد وصول):</strong> ڈسپیچ کا پورا بل (${formatRs(totalBill)}) موقع پر وصول ریکارڈ ہو گا اور کسٹمر کے کھاتے میں اس بل کا کوئی ادھار باقی نہیں رہے گا۔`;
+        } else if (mode === 'Credit') {
+            payStatusBanner.className = 'alert alert-danger py-2 px-3 mb-0 small fw-semibold border';
+            payStatusBanner.innerHTML = `<i class="bi bi-clock-history me-1"></i> <strong>Credit / Unpaid (مکمل ادھار):</strong> موجودہ ڈسپیچ کی پوری مالیت (${formatRs(totalBill)}) کسٹمر کے ذمے بقایا ادھار کھاتے (Receivable) میں شامل ہو جائے گی۔`;
+        } else {
+            payStatusBanner.className = 'alert alert-warning py-2 px-3 mb-0 small fw-semibold border';
+            payStatusBanner.innerHTML = `<i class="bi bi-pie-chart-fill me-1"></i> <strong>Partial / Advance (جزوی وصولی):</strong> بل میں سے <strong>${formatRs(paid)}</strong> نقد/بینک وصول ہو رہے ہیں جبکہ باقی <strong>${formatRs(remainingBill)}</strong> کسٹمر کے ادھار کھاتے میں درج ہوں گے۔`;
+        }
     }
 
     stockSelect.addEventListener('change', function() {
@@ -336,8 +663,32 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    qtyInput.addEventListener('input', calcTotal);
-    rateInput.addEventListener('input', calcTotal);
+    custSelect.addEventListener('change', function() {
+        calcFinancials(false);
+    });
+
+    [payStatusCredit, payStatusPartial, payStatusPaid].forEach(function(radio) {
+        if (radio) {
+            radio.addEventListener('change', function() {
+                calcFinancials(false);
+            });
+        }
+    });
+
+    qtyInput.addEventListener('input', function() {
+        calcFinancials(false);
+    });
+
+    rateInput.addEventListener('input', function() {
+        calcFinancials(false);
+    });
+
+    paidInput.addEventListener('input', function() {
+        calcFinancials(true);
+    });
+
+    // Run initial calculation
+    calcFinancials(false);
 });
 </script>
 

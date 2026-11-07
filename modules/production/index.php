@@ -366,15 +366,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     // Auto-advance to next workflow step
-                    $nextOp = get_next_lot_workflow_operation($db, $lotId, $operationId);
-                    if ($nextOp) {
-                        $nextOpId = (int)$nextOp['operation_id'];
-                        $nextMode = $nextOp['default_mode'] ?? 'cutting';
-                        $msg .= " — اگلا مرحلہ لوڈ ہو گیا: {$nextOp['op_name']}";
-                        redirect("modules/production/index.php?lot_id=$lotId&operation_id=$nextOpId&mode=$nextMode", $msg);
-                    } else {
-                        redirect("modules/production/index.php?lot_id=$lotId", $msg);
-                    }
+                    redirect_next_production_step($lotId, $operationId, $msg, 'cutting');
                 } catch (Exception $e) {
                     $db->rollBack();
                     $error = 'Error saving operator entry: ' . $e->getMessage();
@@ -626,15 +618,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $cutSuccessMsg = "Cutting entry saved successfully! $wholePieces pieces cut (Labour: " . format_currency($labourAmount) . ").";
 
                     // Auto-advance to next workflow step
-                    $nextOp = get_next_lot_workflow_operation($db, $lotId, $operationId);
-                    if ($nextOp) {
-                        $nextOpId = (int)$nextOp['operation_id'];
-                        $nextMode = $nextOp['default_mode'] ?? 'matrix';
-                        $cutSuccessMsg .= " — اگلا مرحلہ لوڈ ہو گیا: {$nextOp['op_name']}";
-                        redirect("modules/production/index.php?lot_id=$lotId&operation_id=$nextOpId&mode=$nextMode", $cutSuccessMsg);
-                    } else {
-                        redirect("modules/production/index.php?lot_id=$lotId", $cutSuccessMsg);
-                    }
+                    redirect_next_production_step($lotId, $operationId, $cutSuccessMsg, 'matrix');
                 } catch (Exception $e) {
                     $db->rollBack();
                     $error = 'Error saving cutting entry: ' . $e->getMessage();
@@ -1043,16 +1027,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($totalRework > 0) $feedbackMsg .= " (+$totalRework rework)";
                     $feedbackMsg .= " across $varCount variants. " . format_currency($totalLabour) . " credited to $workerName.";
                     // Auto-advance to next workflow step
-                    $nextOp = get_next_lot_workflow_operation($db, $lotId, $operationId);
-                    if ($nextOp) {
-                        $nextOpId = (int)$nextOp['operation_id'];
-                        $nextMode = $nextOp['default_mode'] ?? 'matrix';
-                        $feedbackMsg .= " — اگلا مرحلہ لوڈ ہو گیا: {$nextOp['op_name']}";
-                        redirect("modules/production/index.php?lot_id=$lotId&operation_id=$nextOpId&mode=$nextMode", $feedbackMsg);
-                    } else {
-                        $feedbackMsg .= " — اس لاٹ کے تمام ورک فلو مراحل مکمل ہو گئے!";
-                        redirect("modules/production/index.php?lot_id=$lotId", $feedbackMsg);
-                    }
+                    redirect_next_production_step($lotId, $operationId, $feedbackMsg, 'matrix');
                 } catch (Exception $e) {
                     $db->rollBack();
                     $error = 'Error saving batch entry: ' . $e->getMessage();
@@ -1342,16 +1317,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 // Auto-advance to next workflow step
-                $nextOp = get_next_lot_workflow_operation($db, $lotId, $operationId);
-                if ($nextOp) {
-                    $nextOpId = (int)$nextOp['operation_id'];
-                    $nextMode = $nextOp['default_mode'] ?? 'single';
-                    $feedbackMsg .= " — اگلا مرحلہ لوڈ ہو گیا: {$nextOp['op_name']}";
-                    redirect("modules/production/index.php?lot_id=$lotId&operation_id=$nextOpId&mode=$nextMode", $feedbackMsg);
-                } else {
-                    $feedbackMsg .= " — اس لاٹ کے تمام ورک فلو مراحل مکمل ہو گئے!";
-                    redirect("modules/production/index.php?lot_id=$lotId", $feedbackMsg);
-                }
+                redirect_next_production_step($lotId, $operationId, $feedbackMsg, 'single');
             } catch (Exception $e) {
                 $db->rollBack();
                 $error = 'Error saving entry: ' . $e->getMessage();

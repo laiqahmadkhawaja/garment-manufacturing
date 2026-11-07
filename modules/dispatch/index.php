@@ -76,7 +76,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <th>Warehouse Source</th>
                                 <th>Transport / Vehicle</th>
                                 <th class="text-center">Total Pieces</th>
-                                <th class="text-end">Value</th>
+                                <th class="text-end">Value & Payment</th>
                                 <th class="text-end">Actions</th>
                             </tr>
                         </thead>
@@ -98,7 +98,27 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <td><?= clean($d['warehouse_name']) ?></td>
                                         <td><?= clean($d['vehicle_details'] ?: '-') ?></td>
                                         <td class="text-center fw-bold text-success fs-6"><?= number_format($d['total_pieces']) ?> pcs</td>
-                                        <td class="text-end fw-bold text-dark"><?= format_currency($d['total_value']) ?></td>
+                                        <td class="text-end">
+                                            <div class="fw-bold text-dark"><?= format_currency($d['total_value']) ?></div>
+                                            <?php
+                                            $pStat = $d['payment_status'] ?? 'Credit';
+                                            $paidAmt = (float)($d['paid_amount'] ?? 0);
+                                            $balAmt = (float)($d['balance_amount'] ?? $d['total_value']);
+                                            ?>
+                                            <?php if ($pStat === 'Paid'): ?>
+                                                <span class="badge bg-success-subtle text-success border">
+                                                    <i class="bi bi-check-circle-fill me-1"></i>Full Paid
+                                                </span>
+                                            <?php elseif ($pStat === 'Partial'): ?>
+                                                <span class="badge bg-warning-subtle text-warning-emphasis border" title="Paid: Rs. <?= number_format($paidAmt, 2) ?> | Due: Rs. <?= number_format($balAmt, 2) ?>">
+                                                    <i class="bi bi-pie-chart-fill me-1"></i>Partial (<?= format_currency($paidAmt) ?>)
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge bg-danger-subtle text-danger border">
+                                                    <i class="bi bi-clock-history me-1"></i>Credit
+                                                </span>
+                                            <?php endif; ?>
+                                        </td>
                                         <td class="text-end">
                                             <div class="btn-group">
                                                 <a href="<?= BASE_URL ?>modules/dispatch/challan.php?id=<?= $d['id'] ?>" target="_blank" class="btn btn-sm btn-outline-primary py-1 px-2" title="Print Delivery Challan">

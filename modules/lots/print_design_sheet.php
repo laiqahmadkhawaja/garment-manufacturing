@@ -24,7 +24,9 @@ if ($lotId <= 0 && !empty($activeLots)) {
 
 $stmt = $db->prepare("SELECT l.*, p.name AS product_name, p.code AS product_code, p.product_type,
                              COALESCE(l.design_number, d.design_number) AS design_number,
-                             d.name AS design_name, d.machine_type, d.measurements_json, d.sketch_image,
+                             d.name AS design_name, d.machine_type, 
+                             COALESCE(l.measurements_json, d.measurements_json) AS measurements_json, 
+                             d.sketch_image,
                              op.name AS operator_name, op.code AS operator_code,
                              nop.name AS night_operator_name,
                              s.name AS single_size_name, s.code AS single_size_code
@@ -90,10 +92,33 @@ $measurements = !empty($lot['measurements_json']) ? json_decode($lot['measuremen
 $plaLen = $measurements['pla']['length'] ?? '41';
 $plaWid = $measurements['pla']['width'] ?? '15';
 $plaBor = $measurements['pla']['border'] ?? '46';
+$samMins = $measurements['pla']['mins'] ?? ($lot['estimated_minutes'] ?? '7');
+
 $bazoLen = $measurements['bazo']['length'] ?? '48';
 $bazoWid = $measurements['bazo']['width'] ?? '14';
 $bazoBor = $measurements['bazo']['border'] ?? '42';
-$samMins = $lot['estimated_minutes'] ?? '7';
+$bazoMins = $measurements['bazo']['mins'] ?? ($lot['estimated_minutes'] ?? '7');
+
+// Size / Color Scheme Columns 1, 2, 3, 4
+$scheme1Len = $measurements['scheme']['1']['length'] ?? '41';
+$scheme1Wid = $measurements['scheme']['1']['width'] ?? '45';
+$scheme1Bor = $measurements['scheme']['1']['border'] ?? '46';
+$scheme1Mins = $measurements['scheme']['1']['mins'] ?? '43';
+
+$scheme2Len = $measurements['scheme']['2']['length'] ?? '';
+$scheme2Wid = $measurements['scheme']['2']['width'] ?? '';
+$scheme2Bor = $measurements['scheme']['2']['border'] ?? '';
+$scheme2Mins = $measurements['scheme']['2']['mins'] ?? '';
+
+$scheme3Len = $measurements['scheme']['3']['length'] ?? '';
+$scheme3Wid = $measurements['scheme']['3']['width'] ?? '';
+$scheme3Bor = $measurements['scheme']['3']['border'] ?? '';
+$scheme3Mins = $measurements['scheme']['3']['mins'] ?? '';
+
+$scheme4Len = $measurements['scheme']['4']['length'] ?? '';
+$scheme4Wid = $measurements['scheme']['4']['width'] ?? '';
+$scheme4Bor = $measurements['scheme']['4']['border'] ?? '';
+$scheme4Mins = $measurements['scheme']['4']['mins'] ?? '';
 
 $machine = $lot['machine_type'] ?: 'CMS 430';
 $operatorDisplay = $lot['operator_name'] ?: ($lot['supervisor_name'] ?: 'ارشد');
@@ -595,22 +620,34 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                         <tr>
                             <td class="fw-bold">لمبائی</td>
                             <td class="fw-bold" dir="ltr"><?= clean($plaLen) ?></td>
-                            <td dir="ltr">41</td><td></td><td></td><td></td>
+                            <td dir="ltr"><?= clean($scheme4Len) ?></td>
+                            <td dir="ltr"><?= clean($scheme3Len) ?></td>
+                            <td dir="ltr"><?= clean($scheme2Len) ?></td>
+                            <td dir="ltr"><?= clean($scheme1Len) ?></td>
                         </tr>
                         <tr>
                             <td class="fw-bold">چوڑائی</td>
                             <td class="fw-bold" dir="ltr"><?= clean($plaWid) ?></td>
-                            <td dir="ltr">45</td><td></td><td></td><td></td>
+                            <td dir="ltr"><?= clean($scheme4Wid) ?></td>
+                            <td dir="ltr"><?= clean($scheme3Wid) ?></td>
+                            <td dir="ltr"><?= clean($scheme2Wid) ?></td>
+                            <td dir="ltr"><?= clean($scheme1Wid) ?></td>
                         </tr>
                         <tr>
                             <td class="fw-bold">بارڈر</td>
                             <td class="fw-bold" dir="ltr"><?= clean($plaBor) ?></td>
-                            <td dir="ltr">46</td><td></td><td></td><td></td>
+                            <td dir="ltr"><?= clean($scheme4Bor) ?></td>
+                            <td dir="ltr"><?= clean($scheme3Bor) ?></td>
+                            <td dir="ltr"><?= clean($scheme2Bor) ?></td>
+                            <td dir="ltr"><?= clean($scheme1Bor) ?></td>
                         </tr>
                         <tr>
                             <td class="fw-bold">منٹ</td>
                             <td class="fw-bold" dir="ltr"><?= clean($samMins) ?></td>
-                            <td dir="ltr">43</td><td></td><td></td><td></td>
+                            <td dir="ltr"><?= clean($scheme4Mins) ?></td>
+                            <td dir="ltr"><?= clean($scheme3Mins) ?></td>
+                            <td dir="ltr"><?= clean($scheme2Mins) ?></td>
+                            <td dir="ltr"><?= clean($scheme1Mins) ?></td>
                         </tr>
                     </tbody>
                 </table>
@@ -763,7 +800,7 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                                 <tr><td>لمبائی</td><td class="fw-bold" dir="ltr"><?= clean($bazoLen) ?></td></tr>
                                 <tr><td>چوڑائی</td><td class="fw-bold" dir="ltr"><?= clean($bazoWid) ?></td></tr>
                                 <tr><td>بارڈر</td><td class="fw-bold" dir="ltr"><?= clean($bazoBor) ?></td></tr>
-                                <tr><td>منٹ</td><td class="fw-bold" dir="ltr"><?= clean($samMins) ?></td></tr>
+                                <tr><td>منٹ</td><td class="fw-bold" dir="ltr"><?= clean($bazoMins) ?></td></tr>
                             </tbody>
                         </table>
                     </div>

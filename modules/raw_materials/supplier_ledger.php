@@ -53,8 +53,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
             // Deduct from Cash / Bank account if selected
             if ($accountId > 0) {
-                $db->prepare("UPDATE cash_bank_accounts SET current_balance = current_balance - ? WHERE id = ?")
-                   ->execute([$amount, $accountId]);
+                record_account_transaction(
+                    $accountId,
+                    $payDate,
+                    'Supplier Payment',
+                    $amount,
+                    'outflow',
+                    "Supplier payment to {$supp['name']} ({$supp['code']})" . ($ref ? " Ref: $ref" : ""),
+                    'SUPPLIER_PAYMENT',
+                    $payEntryId,
+                    $ref,
+                    null,
+                    $_SESSION['user_id'] ?? null
+                );
             }
 
             log_audit('SUPPLIER_PAYMENT', 'supplier_ledger', $payEntryId, null, [
@@ -76,7 +87,7 @@ $suppliersList = $db->query("SELECT id, name, code, phone, opening_balance FROM 
 $accounts = $db->query("SELECT id, account_name, bank_name, current_balance FROM cash_bank_accounts WHERE is_active = 1 ORDER BY account_name ASC")->fetchAll();
 $methods = $db->query("SELECT id, name, code FROM payment_methods WHERE is_active = 1 ORDER BY id ASC")->fetchAll();
 
-$selectedSupplierId = (int)($_GET['id'] ?? 0);
+$selectedSupplierId = (int)($_GET['supplier_id'] ?? $_GET['id'] ?? 0);
 $selectedSupplier = null;
 $transactions = [];
 $dateFrom = trim($_GET['date_from'] ?? '');

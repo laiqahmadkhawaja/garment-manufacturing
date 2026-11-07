@@ -33,6 +33,7 @@ $db->exec("DELETE FROM dispatch_items");
 $db->exec("DELETE FROM dispatches");
 $db->exec("DELETE FROM finished_goods_stock");
 $db->exec("DELETE FROM packing_entries");
+$db->exec("DELETE FROM design_elements WHERE design_id IN (SELECT id FROM designs WHERE design_number LIKE '%TEST%')");
 $db->exec("DELETE FROM designs WHERE design_number LIKE '%TEST%'");
 $db->exec("DELETE FROM material_return_items");
 $db->exec("DELETE FROM material_returns");
@@ -45,6 +46,11 @@ $db->exec("DELETE FROM lot_workflow_steps");
 $db->exec("DELETE FROM lot_variants");
 $db->exec("DELETE FROM lots");
 $db->exec("DELETE FROM worker_ledger WHERE transaction_type != 'Opening Balance'");
+// Ensure Worker 1 has initial opening balance for test consistency
+$w1Bal = $db->query("SELECT id FROM worker_ledger WHERE worker_id = 1 AND transaction_type = 'Opening Balance'")->fetchColumn();
+if (!$w1Bal) {
+    $db->exec("INSERT INTO worker_ledger (worker_id, transaction_date, transaction_type, debit, credit, running_balance, description) VALUES (1, CURRENT_DATE(), 'Opening Balance', 0.00, 2000.00, 2000.00, 'Opening Balance')");
+}
 $db->exec("DELETE FROM worker_payments");
 $db->exec("DELETE FROM customer_ledger");
 $db->exec("UPDATE materials SET current_stock = opening_stock");
@@ -515,7 +521,7 @@ $verifyStmt->execute([$newLotId]);
 $vLot = $verifyStmt->fetch(PDO::FETCH_ASSOC);
 $abData = json_decode($vLot['anatomy_breakdown'], true);
 
-$lotCreatedOk = ($vLot['shift_type'] === 'Double Shift' && $vLot['day_op'] === 'Latif Stitcher' && $vLot['night_op'] === 'Amir Overlock' && $vLot['total_pieces'] == 200);
+$lotCreatedOk = ($vLot['shift_type'] === 'Double Shift' && !empty($vLot['day_op']) && !empty($vLot['night_op']) && (int)$vLot['operator_id'] === $dayOpId && (int)$vLot['night_operator_id'] === $nightOpId && (int)$vLot['total_pieces'] === 200);
 assert_test("28. Shift & Double Operators Assignment", $lotCreatedOk, "Lot #{$vLot['lot_number']}: Double Shift (Day: {$vLot['day_op']}, Night: {$vLot['night_op']})");
 
 // ------------------------------------------------------------------------

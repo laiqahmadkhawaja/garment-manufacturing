@@ -148,6 +148,22 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
                     <td class="text-end">Total Value:</td>
                     <td class="text-end fs-6">Rs. <?= number_format($dispatch['total_value'], 2) ?></td>
                 </tr>
+                <?php if ((float)$dispatch['total_value'] > 0): ?>
+                <tr class="bg-white">
+                    <td colspan="4" class="text-end small">
+                        <strong>Payment Status:</strong> 
+                        <span class="badge bg-dark text-white"><?= clean($dispatch['payment_status'] ?? 'Credit') ?></span>
+                        via <?= clean($dispatch['payment_method'] ?? 'Cash') ?>
+                        <?= !empty($dispatch['payment_reference']) ? ' · Ref: ' . clean($dispatch['payment_reference']) : '' ?>
+                    </td>
+                    <td class="text-end small fw-semibold text-success">
+                        Paid: Rs. <?= number_format((float)($dispatch['paid_amount'] ?? 0), 2) ?>
+                    </td>
+                    <td class="text-end small" colspan="2">
+                        Balance Due: <strong class="text-danger">Rs. <?= number_format((float)($dispatch['balance_amount'] ?? 0), 2) ?></strong>
+                    </td>
+                </tr>
+                <?php endif; ?>
             </tfoot>
         </table>
 

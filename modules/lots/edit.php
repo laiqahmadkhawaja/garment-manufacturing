@@ -93,6 +93,25 @@ if (empty($operators)) {
 // Existing anatomy breakdown
 $anatomyData = !empty($lot['anatomy_breakdown']) ? json_decode($lot['anatomy_breakdown'], true) : [];
 
+// Retrieve lot measurements with fallback to defaults
+$lotMeasurements = !empty($lot['measurements_json']) ? json_decode($lot['measurements_json'], true) : [];
+$curPlaLen = $lotMeasurements['pla']['length'] ?? '41';
+$curPlaWid = $lotMeasurements['pla']['width'] ?? '15';
+$curPlaBor = $lotMeasurements['pla']['border'] ?? '46';
+$curPlaMins = $lotMeasurements['pla']['mins'] ?? ($lot['estimated_minutes'] ?? '7');
+
+$curBazoLen = $lotMeasurements['bazo']['length'] ?? '48';
+$curBazoWid = $lotMeasurements['bazo']['width'] ?? '14';
+$curBazoBor = $lotMeasurements['bazo']['border'] ?? '42';
+$curBazoMins = $lotMeasurements['bazo']['mins'] ?? ($lot['estimated_minutes'] ?? '7');
+
+$curScheme = $lotMeasurements['scheme'] ?? [
+    '1' => ['length' => '41', 'width' => '45', 'border' => '46', 'mins' => '43'],
+    '2' => ['length' => '', 'width' => '', 'border' => '', 'mins' => ''],
+    '3' => ['length' => '', 'width' => '', 'border' => '', 'mins' => ''],
+    '4' => ['length' => '', 'width' => '', 'border' => '', 'mins' => ''],
+];
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     check_csrf();
     $designNumber = trim($_POST['design_number'] ?? '');
@@ -115,12 +134,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
     }
 
+    // Pattern Measurements
+    $plaLen = trim($_POST['pla_length'] ?? '');
+    $plaWid = trim($_POST['pla_width'] ?? '');
+    $plaBor = trim($_POST['pla_border'] ?? '');
+    $plaMins = trim($_POST['pla_mins'] ?? '');
+
+    $bazoLen = trim($_POST['bazo_length'] ?? '');
+    $bazoWid = trim($_POST['bazo_width'] ?? '');
+    $bazoBor = trim($_POST['bazo_border'] ?? '');
+    $bazoMins = trim($_POST['bazo_mins'] ?? '');
+
+    $scheme = [];
+    for ($i = 1; $i <= 4; $i++) {
+        $scheme[$i] = [
+            'length' => trim($_POST["scheme_{$i}_length"] ?? ''),
+            'width' => trim($_POST["scheme_{$i}_width"] ?? ''),
+            'border' => trim($_POST["scheme_{$i}_border"] ?? ''),
+            'mins' => trim($_POST["scheme_{$i}_mins"] ?? '')
+        ];
+    }
+
+    $measurementsArray = [
+        'pla' => ['length' => $plaLen, 'width' => $plaWid, 'border' => $plaBor, 'mins' => $plaMins],
+        'bazo' => ['length' => $bazoLen, 'width' => $bazoWid, 'border' => $bazoBor, 'mins' => $bazoMins],
+        'scheme' => $scheme
+    ];
+    $measurementsJson = json_encode($measurementsArray, JSON_UNESCAPED_UNICODE);
+
     $db->beginTransaction();
     try {
         $up = $db->prepare("UPDATE lots SET design_number = ?, supervisor_name = ?, expected_date = ?, instructions = ?, 
-                            shift_type = ?, operator_id = ?, night_operator_id = ?, has_anatomy_variants = ?, anatomy_breakdown = ? 
+                            shift_type = ?, operator_id = ?, night_operator_id = ?, has_anatomy_variants = ?, anatomy_breakdown = ?, measurements_json = ? 
                             WHERE id = ?");
-        $up->execute([$designNumber ?: null, $supervisor, $expectedDate, $instructions, $shiftType, $operatorId, $nightOperatorId, $hasAnatomy, $anatomyBreakdown, $lotId]);
+        $up->execute([$designNumber ?: null, $supervisor, $expectedDate, $instructions, $shiftType, $operatorId, $nightOperatorId, $hasAnatomy, $anatomyBreakdown, $measurementsJson, $lotId]);
 
         log_audit('EDIT_LOT', 'lots', $lotId, [
             'design_number' => $lot['design_number'],
@@ -131,7 +178,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'supervisor' => $supervisor,
             'shift_type' => $shiftType,
             'operator_id' => $operatorId,
-            'night_operator_id' => $nightOperatorId
+            'night_operator_id' => $nightOperatorId,
+            'measurements' => $measurementsArray
         ]);
 
         $db->commit();
@@ -292,6 +340,140 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 </div>
                             </div>
                         <?php endif; ?>
+
+                        <!-- Garment Size & Pattern Measurements (لمبائی، چوڑائی، بارڈر، منٹ) -->
+                        <div class="col-12">
+                            <div class="card border border-warning shadow-sm">
+                                <div class="card-header bg-warning-subtle py-2 d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0 fw-bold text-dark">
+                                        <i class="bi bi-rulers me-1 text-warning-emphasis"></i> Garment Pattern Size & Cutting Measurements (سائز اور کٹنگ پیمائش: لمبائی، چوڑائی، بارڈر)
+                                    </h6>
+                                    <span class="badge bg-warning text-dark fw-bold">Lot Design Sheet Dimensions</span>
+                                </div>
+                                <div class="card-body p-3 bg-light">
+                                    <p class="text-muted small mb-3">Enter or adjust the pattern measurements for Body Panel (پلہ), Sleeves (بازو), and the 4 Size/Color Scheme columns. These reflect directly on the Lot Design Sheet (لاٹ پرچہ).</p>
+                                    
+                                    <!-- Palla & Bazo Row -->
+                                    <div class="row g-3 mb-3">
+                                        <!-- Palla -->
+                                        <div class="col-12 col-md-6">
+                                            <div class="card border h-100 shadow-sm">
+                                                <div class="card-header bg-primary text-white py-1">
+                                                    <strong class="small"><i class="bi bi-square me-1"></i> پلہ پیمائش (Body Panel)</strong>
+                                                </div>
+                                                <div class="card-body p-2 bg-white">
+                                                    <div class="row g-2">
+                                                        <div class="col-6">
+                                                            <label class="form-label small fw-bold mb-1">لمبائی (Length)</label>
+                                                            <input type="text" name="pla_length" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curPlaLen) ?>" placeholder="41">
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <label class="form-label small fw-bold mb-1">چوڑائی (Width)</label>
+                                                            <input type="text" name="pla_width" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curPlaWid) ?>" placeholder="15">
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <label class="form-label small fw-bold mb-1">بارڈر (Border)</label>
+                                                            <input type="text" name="pla_border" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curPlaBor) ?>" placeholder="46">
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <label class="form-label small fw-bold mb-1">منٹ (SAM Mins)</label>
+                                                            <input type="text" name="pla_mins" class="form-control form-control-sm text-center font-monospace fw-bold text-success" value="<?= clean($curPlaMins) ?>" placeholder="7">
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Bazo -->
+                                        <div class="col-12 col-md-6">
+                                            <div class="card border h-100 shadow-sm">
+                                                <div class="card-header bg-info text-white py-1">
+                                                    <strong class="small"><i class="bi bi-diagram-2 me-1"></i> بازو پیمائش (Sleeves)</strong>
+                                                </div>
+                                                <div class="card-body p-2 bg-white">
+                                                    <div class="row g-2">
+                                                        <div class="col-6">
+                                                            <label class="form-label small fw-bold mb-1">لمبائی (Length)</label>
+                                                            <input type="text" name="bazo_length" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curBazoLen) ?>" placeholder="48">
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <label class="form-label small fw-bold mb-1">چوڑائی (Width)</label>
+                                                            <input type="text" name="bazo_width" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curBazoWid) ?>" placeholder="14">
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <label class="form-label small fw-bold mb-1">بارڈر (Border)</label>
+                                                            <input type="text" name="bazo_border" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curBazoBor) ?>" placeholder="42">
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <label class="form-label small fw-bold mb-1">منٹ (SAM Mins)</label>
+                                                            <input type="text" name="bazo_mins" class="form-control form-control-sm text-center font-monospace fw-bold text-success" value="<?= clean($curBazoMins) ?>" placeholder="7">
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Size / Color Scheme Columns 1, 2, 3, 4 -->
+                                    <div class="card border shadow-sm">
+                                        <div class="card-header bg-white py-1 d-flex justify-content-between align-items-center">
+                                            <strong class="small text-dark"><i class="bi bi-palette me-1 text-warning"></i> سائز / کلر سکیم کالمز (Scheme Columns 1, 2, 3, 4)</strong>
+                                            <span class="badge bg-secondary-subtle text-secondary small">Columns 1 to 4</span>
+                                        </div>
+                                        <div class="card-body p-2 bg-white">
+                                            <div class="table-responsive">
+                                                <table class="table table-bordered align-middle text-center mb-0" style="font-size: 0.85rem;">
+                                                    <thead class="table-light">
+                                                        <tr>
+                                                            <th style="width: 20%;">پیمائش</th>
+                                                            <th style="width: 20%;">کالم 1</th>
+                                                            <th style="width: 20%;">کالم 2</th>
+                                                            <th style="width: 20%;">کالم 3</th>
+                                                            <th style="width: 20%;">کالم 4</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr>
+                                                            <td class="fw-bold text-start ps-2">لمبائی (Length)</td>
+                                                            <?php for ($i = 1; $i <= 4; $i++): ?>
+                                                                <td>
+                                                                    <input type="text" name="scheme_<?= $i ?>_length" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curScheme[$i]['length'] ?? '') ?>" placeholder="-">
+                                                                </td>
+                                                            <?php endfor; ?>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="fw-bold text-start ps-2">چوڑائی (Width)</td>
+                                                            <?php for ($i = 1; $i <= 4; $i++): ?>
+                                                                <td>
+                                                                    <input type="text" name="scheme_<?= $i ?>_width" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curScheme[$i]['width'] ?? '') ?>" placeholder="-">
+                                                                </td>
+                                                            <?php endfor; ?>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="fw-bold text-start ps-2">بارڈر (Border)</td>
+                                                            <?php for ($i = 1; $i <= 4; $i++): ?>
+                                                                <td>
+                                                                    <input type="text" name="scheme_<?= $i ?>_border" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curScheme[$i]['border'] ?? '') ?>" placeholder="-">
+                                                                </td>
+                                                            <?php endfor; ?>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="fw-bold text-start ps-2">منٹ (SAM Mins)</td>
+                                                            <?php for ($i = 1; $i <= 4; $i++): ?>
+                                                                <td>
+                                                                    <input type="text" name="scheme_<?= $i ?>_mins" class="form-control form-control-sm text-center font-monospace fw-bold text-success" value="<?= clean($curScheme[$i]['mins'] ?? '') ?>" placeholder="-">
+                                                                </td>
+                                                            <?php endfor; ?>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+                        </div>
 
                         <div class="col-12">
                             <label class="form-label fw-semibold">Production Instructions</label>

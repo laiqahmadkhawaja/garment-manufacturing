@@ -21,24 +21,30 @@ ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 ini_set('error_log', __DIR__ . '/../error.log');
 
-// Require DB
-require_once __DIR__ . '/db.php';
+// Database Singleton Connection Helper
+function get_db(): PDO {
+    static $instance = null;
+    if ($instance === null) {
+        $dsn = "mysql:host=127.0.0.1;dbname=garment_erp;charset=utf8mb4";
+        $options = [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ];
+        try {
+            $instance = new PDO($dsn, 'root', '', $options);
+        } catch (PDOException $e) {
+            error_log("Database connection error: " . $e->getMessage());
+            die("A database error occurred. Please ensure MySQL is running in WampServer.");
+        }
+    }
+    return $instance;
+}
 
 // Dynamically determine BASE_URL
 if (!defined('BASE_URL')) {
-    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || (!empty($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443)) ? "https://" : "http://";
-    $hostName = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    
-    // Auto calculate subfolder
-    $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
-    $parts = explode('/', trim($scriptDir, '/'));
-    $garmentIndex = array_search('Garment', $parts);
-    if ($garmentIndex !== false) {
-        $sub = '/' . implode('/', array_slice($parts, 0, $garmentIndex + 1));
-    } else {
-        $sub = '/Garment';
-    }
-    define('BASE_URL', rtrim($protocol . $hostName . $sub, '/') . '/');
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
+    define('BASE_URL', $protocol . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/Garment/');
 }
 
 define('APP_NAME', 'Garment ERP');
@@ -236,6 +242,79 @@ function get_default_warehouse_id(string $type = 'raw'): ?int {
         // Fallback to null
     }
     return null;
+}
+
+/**
+ * Record an account transaction and update account balance atomically
+ * 
+ * @param int $accountId Account ID in cash_bank_accounts
+ * @param string $date Transaction date (Y-m-d)
+ * @param string $type Transaction type ('Deposit', 'Withdrawal', 'Transfer In', 'Transfer Out', 'Customer Payment', 'Supplier Payment', 'Labour Payment', 'Expense', 'Opening Balance', 'Adjustment')
+ * @param float $amount Amount
+ * @param string $flow 'inflow' (credit to account) or 'outflow' (debit from account)
+ * @param string $description Description / notes
+ * @param string|null $refType Reference type (e.g. 'EXPENSE', 'TRANSFER', 'WORKER_PAYMENT', 'DISPATCH')
+ * @param int|null $refId Reference entity ID
+ * @param string|null $refNo Reference voucher / check / receipt number
+ * @param int|null $relatedAccId Related account ID (for transfers)
+ * @param int|null $userId User performing transaction
+ * @return int Transaction ID
+ */
+function record_account_transaction(
+    int $accountId,
+    string $date,
+    string $type,
+    float $amount,
+    string $flow,
+    string $description = '',
+    ?string $refType = null,
+    ?int $refId = null,
+    ?string $refNo = null,
+    ?int $relatedAccId = null,
+    ?int $userId = null
+): int {
+    $db = get_db();
+    $amount = abs($amount);
+    
+    // Fetch current account balance
+    $stmt = $db->prepare("SELECT current_balance FROM cash_bank_accounts WHERE id = ? FOR UPDATE");
+    $stmt->execute([$accountId]);
+    $currentBal = (float)$stmt->fetchColumn();
+    
+    if ($flow === 'inflow') {
+        $debit = 0.00;
+        $credit = $amount;
+        $newBal = $currentBal + $amount;
+        $up = $db->prepare("UPDATE cash_bank_accounts SET current_balance = current_balance + ? WHERE id = ?");
+        $up->execute([$amount, $accountId]);
+    } else {
+        $debit = $amount;
+        $credit = 0.00;
+        $newBal = $currentBal - $amount;
+        $up = $db->prepare("UPDATE cash_bank_accounts SET current_balance = current_balance - ? WHERE id = ?");
+        $up->execute([$amount, $accountId]);
+    }
+    
+    $ins = $db->prepare("INSERT INTO account_transactions 
+        (account_id, transaction_date, transaction_type, amount, debit, credit, running_balance, related_account_id, reference_type, reference_id, reference_no, description, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $ins->execute([
+        $accountId,
+        $date,
+        $type,
+        $amount,
+        $debit,
+        $credit,
+        $newBal,
+        $relatedAccId,
+        $refType,
+        $refId,
+        $refNo,
+        $description,
+        $userId ?? ($_SESSION['user_id'] ?? null)
+    ]);
+    
+    return (int)$db->lastInsertId();
 }
 
 /**
@@ -659,13 +738,22 @@ function get_lot_variant_stage_allowance(int $lotId, int $operationId): array {
 
 /**
  * Determine the immediate next workflow operation for a lot after a given operation.
+ * Supports both signatures: (int $lotId, int $currentOpId) or (PDO $db, int $lotId, int $currentOpId)
  * 
- * @param int $lotId
- * @param int $currentOpId
+ * @param mixed $arg1 Lot ID or PDO instance
+ * @param mixed $arg2 Current Op ID or Lot ID
+ * @param int|null $arg3 Current Op ID if $arg1 is PDO
  * @return array|null Next operation info ['operation_id', 'op_name', 'op_code', 'sequence', 'default_mode'] or null if final step.
  */
-function get_next_lot_workflow_operation(int $lotId, int $currentOpId): ?array {
+function get_next_lot_workflow_operation(mixed $arg1, mixed $arg2, ?int $arg3 = null): ?array {
     $db = get_db();
+    if ($arg1 instanceof PDO) {
+        $lotId = (int)$arg2;
+        $currentOpId = (int)$arg3;
+    } else {
+        $lotId = (int)$arg1;
+        $currentOpId = (int)$arg2;
+    }
 
     // Query all applicable operations in chronological sequence for this lot
     $stmt = $db->prepare("SELECT o.id AS operation_id, o.name AS op_name, o.code AS op_code,
@@ -699,5 +787,21 @@ function get_next_lot_workflow_operation(int $lotId, int $currentOpId): ?array {
         }
     }
     return null;
+}
+
+/**
+ * Redirect to the next operation in a lot's workflow or lot overview upon step completion.
+ */
+function redirect_next_production_step(int $lotId, int $operationId, string $message, string $fallbackMode = 'matrix'): void {
+    $nextOp = get_next_lot_workflow_operation($lotId, $operationId);
+    if ($nextOp) {
+        $nextOpId = (int)$nextOp['operation_id'];
+        $nextMode = $nextOp['default_mode'] ?? $fallbackMode;
+        $message .= " — اگلا مرحلہ لوڈ ہو گیا: {$nextOp['op_name']}";
+        redirect("modules/production/index.php?lot_id=$lotId&operation_id=$nextOpId&mode=$nextMode", $message);
+    } else {
+        $message .= " — اس لاٹ کے تمام ورک فلو مراحل مکمل ہو گئے!";
+        redirect("modules/production/index.php?lot_id=$lotId", $message);
+    }
 }
 
