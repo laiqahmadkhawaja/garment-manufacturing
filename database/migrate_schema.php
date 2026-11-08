@@ -304,4 +304,22 @@ if ($txCount === 0) {
     echo "[✓] Seeded opening balance transactions\n";
 }
 
+// Ensure roles table is properly seeded
+$rolesCount = (int)$db->query("SELECT COUNT(*) FROM roles")->fetchColumn();
+if ($rolesCount === 0) {
+    $db->exec("INSERT INTO `roles` (`id`, `name`, `display_name`, `description`) VALUES
+        (1, 'super_admin', 'Super Admin', 'Full system access and master configuration'),
+        (2, 'factory_manager', 'Factory Manager', 'Oversees factory lots, production, and approvals'),
+        (3, 'production_supervisor', 'Production Supervisor', 'Manages lots, assigns workers, production entry'),
+        (4, 'cutting_master', 'Cutting Master', 'Manages cutting entries and shortages'),
+        (5, 'operator', 'Department Operator', 'Work entry for assigned operations'),
+        (6, 'packing_staff', 'Packing Staff', 'Packing entries and finished stock handoff'),
+        (7, 'store_keeper', 'Store Keeper', 'Raw material purchases, issues and returns'),
+        (8, 'accountant', 'Accountant', 'Worker payments, accounts, expenses and financial reports'),
+        (9, 'dispatch_staff', 'Dispatch Staff', 'Dispatches and delivery challans'),
+        (10, 'viewer', 'Viewer', 'Read-only access to dashboards and reports')
+        ON DUPLICATE KEY UPDATE name=VALUES(name), display_name=VALUES(display_name)");
+    echo "[✓] Seeded standard system roles into roles table\n";
+}
+
 echo "[SUCCESS] Schema migration complete.\n";

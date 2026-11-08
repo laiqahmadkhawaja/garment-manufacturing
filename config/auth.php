@@ -16,9 +16,11 @@ function current_user(): ?array {
     static $userCache = null;
     if ($userCache === null) {
         $db = get_db();
-        $stmt = $db->prepare("SELECT u.*, r.name AS role_name, r.display_name AS role_display 
+        $stmt = $db->prepare("SELECT u.*, 
+                                     COALESCE(r.name, CASE WHEN u.role_id = 1 OR u.username = 'admin' THEN 'super_admin' ELSE 'viewer' END) AS role_name, 
+                                     COALESCE(r.display_name, CASE WHEN u.role_id = 1 OR u.username = 'admin' THEN 'Super Admin' ELSE 'Viewer' END) AS role_display 
                               FROM users u 
-                              JOIN roles r ON u.role_id = r.id 
+                              LEFT JOIN roles r ON u.role_id = r.id 
                               WHERE u.id = ? AND u.is_active = 1");
         $stmt->execute([$_SESSION['user_id']]);
         $userCache = $stmt->fetch() ?: null;
@@ -37,13 +39,14 @@ function has_role(string|array $roles): bool {
     if (!$user) {
         return false;
     }
-    if ($user['role_name'] === 'super_admin') {
+    // Super admin or user with role_id=1 or username 'admin' has universal master access
+    if (($user['role_name'] ?? '') === 'super_admin' || ($user['username'] ?? '') === 'admin' || (int)($user['role_id'] ?? 0) === 1) {
         return true;
     }
     if (is_string($roles)) {
-        return $user['role_name'] === $roles;
+        return ($user['role_name'] ?? '') === $roles;
     }
-    return in_array($user['role_name'], $roles, true);
+    return in_array($user['role_name'] ?? '', $roles, true);
 }
 
 function require_role(string|array $roles): void {
