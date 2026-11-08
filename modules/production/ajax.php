@@ -331,12 +331,14 @@ if ($action === 'get_operation_workers') {
     $estMins = (float)($operation['estimated_minutes'] ?? 0.00);
 
     // Workers mapped via worker_operations OR via department
-    $stmt = $db->prepare("SELECT w.id, w.name, w.code, w.worker_type, w.rate_basis, w.rate_per_minute, dep.name AS department_name,
+    $stmt = $db->prepare("SELECT w.id, w.name, w.code, w.worker_type, w.rate_basis, w.default_rate, w.default_rate AS piece_rate, w.rate_per_minute, dep.name AS department_name,
                           COALESCE(
                               (SELECT op_r.rate FROM operation_rates op_r WHERE op_r.operation_id = ? AND op_r.worker_id = w.id ORDER BY op_r.id DESC LIMIT 1),
+                              NULLIF(w.default_rate, 0.00),
+                              NULLIF(?, 0.00),
                               CASE 
                                   WHEN ? > 0 AND w.rate_per_minute > 0 THEN ROUND(? * w.rate_per_minute, 2)
-                                  ELSE ?
+                                  ELSE 0.00
                               END
                           ) AS effective_rate
                           FROM workers w
@@ -347,7 +349,8 @@ if ($action === 'get_operation_workers') {
                           ORDER BY (wo.worker_id IS NOT NULL) DESC, w.name ASC");
     $stmt->execute([
         $opId,
-        $estMins, $estMins, $operation['default_rate'],
+        $operation['default_rate'],
+        $estMins, $estMins,
         $opId, $operation['parent_id'] ?? 0,
         $operation['department_id'], $effectiveDeptId
     ]);
@@ -355,16 +358,25 @@ if ($action === 'get_operation_workers') {
 
     // Fallback: If no workers match the operation or department, return all active workers
     if (empty($relatedWorkers)) {
-        $allStmt = $db->prepare("SELECT w.id, w.name, w.code, w.worker_type, w.rate_basis, w.rate_per_minute, dep.name AS department_name,
-                                 CASE 
-                                     WHEN ? > 0 AND w.rate_per_minute > 0 THEN ROUND(? * w.rate_per_minute, 2)
-                                     ELSE ?
-                                 END AS effective_rate
+        $allStmt = $db->prepare("SELECT w.id, w.name, w.code, w.worker_type, w.rate_basis, w.default_rate, w.default_rate AS piece_rate, w.rate_per_minute, dep.name AS department_name,
+                                 COALESCE(
+                                     (SELECT op_r.rate FROM operation_rates op_r WHERE op_r.operation_id = ? AND op_r.worker_id = w.id ORDER BY op_r.id DESC LIMIT 1),
+                                     NULLIF(w.default_rate, 0.00),
+                                     NULLIF(?, 0.00),
+                                     CASE 
+                                         WHEN ? > 0 AND w.rate_per_minute > 0 THEN ROUND(? * w.rate_per_minute, 2)
+                                         ELSE 0.00
+                                     END
+                                 ) AS effective_rate
                                  FROM workers w
                                  LEFT JOIN departments dep ON w.department_id = dep.id
                                  WHERE w.is_active = 1
                                  ORDER BY w.name ASC");
-        $allStmt->execute([$estMins, $estMins, $operation['default_rate']]);
+        $allStmt->execute([
+            $opId,
+            $operation['default_rate'],
+            $estMins, $estMins
+        ]);
         $relatedWorkers = $allStmt->fetchAll();
     }
 

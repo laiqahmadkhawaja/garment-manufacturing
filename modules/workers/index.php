@@ -94,6 +94,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             <div class="fw-semibold text-dark"><?= clean($w['worker_type']) ?></div>
                                             <div class="text-muted small">
                                                 <?= clean($w['department_name'] ?? 'General') ?>
+                                                <?php if ((float)($w['default_rate'] ?? 0) > 0): ?>
+                                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1" style="font-size: 10px;">
+                                                        Rs. <?= number_format($w['default_rate'], 2) ?>/pc
+                                                    </span>
+                                                <?php endif; ?>
                                                 <span class="badge bg-success-subtle text-success border border-success-subtle ms-1" style="font-size: 10px;">
                                                     Rs. <?= number_format($w['rate_per_minute'] ?? 2.50, 2) ?>/min
                                                 </span>

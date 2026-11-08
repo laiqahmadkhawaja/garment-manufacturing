@@ -29,11 +29,10 @@ $activeNav = 'workers';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_minute_rate') {
     check_csrf();
     $newMinRate = (float)($_POST['rate_per_minute'] ?? 2.50);
-    if ($newMinRate > 0) {
-        $up = $db->prepare("UPDATE workers SET rate_per_minute = ? WHERE id = ?");
-        $up->execute([$newMinRate, $workerId]);
-        redirect("modules/workers/view.php?id=$workerId", "Worker minute rate updated to Rs. " . number_format($newMinRate, 2) . "/min!");
-    }
+    $newPieceRate = (float)($_POST['default_rate'] ?? 0.00);
+    $up = $db->prepare("UPDATE workers SET rate_per_minute = ?, default_rate = ? WHERE id = ?");
+    $up->execute([$newMinRate, $newPieceRate, $workerId]);
+    redirect("modules/workers/view.php?id=$workerId", "Worker rates updated successfully (Piece Rate: Rs. " . number_format($newPieceRate, 2) . "/pc, Minute Rate: Rs. " . number_format($newMinRate, 2) . "/min)!");
 }
 
 // Save Custom Element Rates
@@ -132,11 +131,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <div class="d-flex align-items-center gap-2">
                                 <h4 class="fw-bold text-dark mb-0"><?= clean($worker['name']) ?></h4>
                                 <span class="badge bg-light text-primary border fw-bold"><?= clean($worker['code']) ?></span>
-                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 small fw-semibold">
-                                    <i class="bi bi-stopwatch me-1"></i>Rate: Rs. <?= number_format($worker['rate_per_minute'] ?? 2.50, 2) ?>/min
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 small fw-semibold" title="Default Piece Rate">
+                                    <i class="bi bi-tag-fill me-1"></i>Piece: Rs. <?= number_format($worker['default_rate'] ?? 0.00, 2) ?>/pc
+                                </span>
+                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 small fw-semibold" title="Standard Minute Rate">
+                                    <i class="bi bi-stopwatch me-1"></i>Time: Rs. <?= number_format($worker['rate_per_minute'] ?? 2.50, 2) ?>/min
                                 </span>
                                 <?php if (($worker['rate_basis'] ?? 'whole_sweater') === 'element_wise'): ?>
-                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 small fw-semibold" title="Rate & Production Basis">
+                                    <span class="badge bg-dark-subtle text-dark border px-2 py-1 small fw-semibold" title="Rate & Production Basis">
                                         <i class="bi bi-puzzle me-1"></i>اعضاء وار (Elements)
                                     </span>
                                 <?php else: ?>
@@ -146,22 +148,27 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <?php endif; ?>
                             </div>
                             <div class="text-muted small mt-1 d-flex flex-wrap align-items-center gap-2">
-                                <span><?= clean($worker['worker_type']) ?> · <?= clean($worker['department_name'] ?? 'General') ?></span>
+                                <span class="fw-semibold text-dark"><?= clean($worker['worker_type']) ?></span>
+                                <span>· <?= clean($worker['department_name'] ?? 'General') ?></span>
                                 <?php if ($worker['phone']): ?>
                                     <span>• Tel: <?= clean($worker['phone']) ?></span>
                                 <?php endif; ?>
                                 <span class="vr"></span>
-                                <form method="POST" action="" class="d-inline-flex align-items-center gap-1">
+                                <form method="POST" action="" class="d-inline-flex flex-wrap align-items-center gap-1">
                                     <input type="hidden" name="action" value="update_minute_rate">
                                     <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
-                                    <span class="small text-muted">Change Minute Rate:</span>
-                                    <div class="input-group input-group-sm" style="width: 130px;">
+                                    <span class="small text-muted">Piece Rate:</span>
+                                    <div class="input-group input-group-sm" style="width: 110px;">
+                                        <span class="input-group-text py-0 px-1 bg-light small">Rs</span>
+                                        <input type="number" name="default_rate" class="form-control form-control-sm text-center fw-bold text-primary py-0" step="0.25" min="0" value="<?= number_format($worker['default_rate'] ?? 0.00, 2) ?>">
+                                    </div>
+                                    <span class="small text-muted ms-1">Min Rate:</span>
+                                    <div class="input-group input-group-sm" style="width: 105px;">
                                         <span class="input-group-text py-0 px-1 bg-light small">Rs</span>
                                         <input type="number" name="rate_per_minute" class="form-control form-control-sm text-center fw-bold text-success py-0" step="0.05" min="0" value="<?= number_format($worker['rate_per_minute'] ?? 2.50, 2) ?>">
-                                        <span class="input-group-text py-0 px-1 bg-light small">/m</span>
                                     </div>
-                                    <button type="submit" class="btn btn-sm btn-outline-success py-0 px-2" title="Save Minute Rate">
-                                        <i class="bi bi-check"></i>
+                                    <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-2" title="Save Rates">
+                                        <i class="bi bi-check-lg"></i>
                                     </button>
                                 </form>
                             </div>
@@ -488,8 +495,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <td><?= format_date($worker['joining_date']) ?></td>
                                 </tr>
                                 <tr>
-                                    <th class="bg-light">Default Piece Rate</th>
-                                    <td>Rs. <?= number_format($worker['default_rate'], 2) ?></td>
+                                    <th class="bg-light">Default Piece Rate (ریٹ فی پیس)</th>
+                                    <td class="fw-bold text-primary">Rs. <?= number_format($worker['default_rate'] ?? 0.00, 2) ?> / piece</td>
+                                </tr>
+                                <tr>
+                                    <th class="bg-light">Standard Minute Rate (ریٹ فی منٹ)</th>
+                                    <td class="fw-bold text-success">Rs. <?= number_format($worker['rate_per_minute'] ?? 2.50, 2) ?> / minute</td>
                                 </tr>
                             </tbody>
                         </table>

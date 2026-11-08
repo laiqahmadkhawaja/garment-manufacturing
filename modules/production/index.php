@@ -1796,8 +1796,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             <label class="form-label small fw-semibold text-muted mb-1">Cutting Master (کٹنگ ماسٹر) *</label>
                                             <select name="cutting_worker_id" id="cut_worker_id" class="form-select fw-semibold">
                                                 <option value="">-- Choose Cutting Master --</option>
-                                                <?php foreach ($cuttingWorkers as $w): ?>
-                                                    <option value="<?= $w['id'] ?>" data-minrate="<?= $w['rate_per_minute'] ?>" <?= (stripos($w['name'], 'Cut') !== false ? 'selected' : '') ?>><?= clean($w['name']) ?> (<?= clean($w['code']) ?>)</option>
+                                                <?php foreach ($cuttingWorkers as $w): 
+                                                    $cPieceRate = (float)($w['default_rate'] ?? 0.00);
+                                                ?>
+                                                    <option value="<?= $w['id'] ?>" data-minrate="<?= $w['rate_per_minute'] ?>" data-piecerate="<?= $cPieceRate ?>" <?= (stripos($w['name'], 'Cut') !== false ? 'selected' : '') ?>>
+                                                        <?= clean($w['name']) ?> (<?= clean($w['code']) ?>) <?= ($cPieceRate > 0 ? '— Rs. ' . number_format($cPieceRate, 2) . '/pc' : '') ?>
+                                                    </option>
                                                 <?php endforeach; ?>
                                             </select>
                                         </div>
@@ -2784,16 +2788,24 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateCuttingRate(fromDirectRate = false) {
         const mins = parseFloat(cutMinutesInput ? cutMinutesInput.value : 0) || 0;
         const minRate = parseFloat(cutMinRateInput ? cutMinRateInput.value : 0) || 2.50;
+        const opt = cutWorker ? cutWorker.options[cutWorker.selectedIndex] : null;
+        const pieceRate = opt ? (parseFloat(opt.dataset.piecerate) || 0) : 0;
 
         if (!fromDirectRate && cutRateInput) {
-            if (mins > 0 && minRate > 0) {
+            if (pieceRate > 0) {
+                cutRateInput.value = pieceRate.toFixed(2);
+            } else if (mins > 0 && minRate > 0) {
                 cutRateInput.value = (mins * minRate).toFixed(2);
             }
         }
 
-        const currentRate = parseFloat(cutRateInput ? cutRateInput.value : 0) || 5.00;
+        const currentRate = parseFloat(cutRateInput ? cutRateInput.value : 0) || (pieceRate > 0 ? pieceRate : 5.00);
         if (cutRateBadge) {
-            cutRateBadge.textContent = 'Rate: Rs. ' + currentRate.toFixed(2) + '/pc (' + mins.toFixed(1) + 'm @ ' + minRate.toFixed(2) + '/m)';
+            if (mins > 0 && pieceRate <= 0) {
+                cutRateBadge.textContent = 'Rate: Rs. ' + currentRate.toFixed(2) + '/pc (' + mins.toFixed(1) + 'm @ ' + minRate.toFixed(2) + '/m)';
+            } else {
+                cutRateBadge.textContent = 'Rate: Rs. ' + currentRate.toFixed(2) + '/pc (Per Piece Rate)';
+            }
         }
 
         const whole = parseInt(cutWholePcs ? cutWholePcs.value : 0) || 0;
@@ -2805,9 +2817,16 @@ document.addEventListener('DOMContentLoaded', function() {
     if (cutWorker) {
         cutWorker.addEventListener('change', function() {
             const opt = this.options[this.selectedIndex];
-            if (opt && opt.dataset.minrate && cutMinRateInput) {
-                cutMinRateInput.value = parseFloat(opt.dataset.minrate).toFixed(2);
-                updateCuttingRate(false);
+            if (opt) {
+                const minRate = parseFloat(opt.dataset.minrate) || 2.50;
+                const pieceRate = parseFloat(opt.dataset.piecerate) || 0;
+                if (cutMinRateInput) cutMinRateInput.value = minRate.toFixed(2);
+                if (pieceRate > 0 && cutRateInput) {
+                    cutRateInput.value = pieceRate.toFixed(2);
+                    updateCuttingRate(true);
+                } else {
+                    updateCuttingRate(false);
+                }
             }
         });
     }
@@ -3063,19 +3082,28 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnClearMatrix = document.getElementById('btnClearMatrix');
 
     function updateRateCalculation(fromDirectRate = false) {
-        const mins = parseFloat(minInput.value) || 0;
-        const minRate = parseFloat(minRateInput.value) || 2.50;
+        const mins = parseFloat(minInput ? minInput.value : 0) || 0;
+        const minRate = parseFloat(minRateInput ? minRateInput.value : 0) || 2.50;
 
-        if (!fromDirectRate) {
+        if (!fromDirectRate && rateInput) {
             if (mins > 0 && minRate > 0) {
                 rateInput.value = (mins * minRate).toFixed(2);
             }
         }
 
-        const currentRate = parseFloat(rateInput.value) || 0;
+        const currentRate = parseFloat(rateInput ? rateInput.value : 0) || 0;
         if (lblSamMins) lblSamMins.textContent = mins.toFixed(1);
         if (lblWorkerMinRate) lblWorkerMinRate.textContent = 'Rs. ' + minRate.toFixed(2);
         if (lblCalculatedPieceRate) lblCalculatedPieceRate.textContent = currentRate.toFixed(2);
+
+        const rateBreakdownContainer = document.getElementById('rateBreakdownText');
+        if (rateBreakdownContainer) {
+            if (mins > 0) {
+                rateBreakdownContainer.innerHTML = `<span class="fw-bold text-primary">${mins.toFixed(1)}</span> منٹ فی پیس &times; <span class="fw-bold text-success">Rs. ${minRate.toFixed(2)}</span> فی منٹ = <strong class="text-dark fs-6">Rs. ${currentRate.toFixed(2)}</strong> فی پیس`;
+            } else {
+                rateBreakdownContainer.innerHTML = `<span class="badge bg-primary px-2 py-1"><i class="bi bi-tag-fill me-1"></i>طے شدہ پیس ریٹ: Rs. ${currentRate.toFixed(2)} / پیس (Piece Rate)</span>`;
+            }
+        }
 
         calculateSingleLabour();
         recalculateMatrixTotals();
@@ -3445,10 +3473,24 @@ document.addEventListener('DOMContentLoaded', function() {
                         opt.value = w.id;
                         opt.dataset.rate = w.effective_rate || '';
                         opt.dataset.minRate = w.rate_per_minute || 2.50;
+                        opt.dataset.pieceRate = w.default_rate || w.piece_rate || 0;
+                        opt.dataset.workerType = w.worker_type || 'Piece Rate';
                         opt.dataset.rateBasis = w.rate_basis || 'whole_sweater';
+
                         const minRateTxt = parseFloat(w.rate_per_minute || 2.50).toFixed(2);
-                        const basisBadge = w.rate_basis === 'element_wise' ? ' [اعضاء وار]' : ' [سویٹر]';
-                        opt.textContent = w.name + ' (' + w.code + ')' + basisBadge + ' — Rs. ' + minRateTxt + '/min';
+                        const pieceRate = parseFloat(w.default_rate || w.piece_rate || 0);
+                        const basisBadge = w.rate_basis === 'element_wise' ? ' [اعضاء]' : ' [سویٹر]';
+
+                        let rateLabel = '';
+                        if (pieceRate > 0) {
+                            rateLabel = ' — Rs. ' + pieceRate.toFixed(2) + '/pc (Piece Rate)';
+                        } else if (parseFloat(w.effective_rate) > 0) {
+                            rateLabel = ' — Rs. ' + parseFloat(w.effective_rate).toFixed(2) + '/pc';
+                        } else {
+                            rateLabel = ' — Rs. ' + minRateTxt + '/min';
+                        }
+
+                        opt.textContent = w.name + ' (' + w.code + ')' + basisBadge + rateLabel;
                         workerSelect.appendChild(opt);
                     });
 
@@ -3469,6 +3511,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const opt = this.options[this.selectedIndex];
         if (opt && opt.value) {
             const basis = opt.dataset.rateBasis || 'whole_sweater';
+            const pieceRate = parseFloat(opt.dataset.pieceRate) || 0;
+            const effectiveRate = parseFloat(opt.dataset.rate) || 0;
+            const minRate = parseFloat(opt.dataset.minRate) || 2.50;
+
             if (workerBadge) {
                 if (basis === 'element_wise') {
                     workerBadge.innerHTML = '<i class="bi bi-puzzle me-1"></i>اعضاء وار (Elements)';
@@ -3479,11 +3525,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 workerBadge.classList.remove('d-none');
             }
-            if (minRateInput && opt.dataset.minRate) {
-                minRateInput.value = parseFloat(opt.dataset.minRate).toFixed(2);
+            if (minRateInput) {
+                minRateInput.value = minRate.toFixed(2);
             }
-            if (opt.dataset.rate && parseFloat(opt.dataset.rate) > 0) {
-                rateInput.value = parseFloat(opt.dataset.rate).toFixed(2);
+            // Prioritize worker's piece rate for all non-operator stages
+            if (pieceRate > 0) {
+                rateInput.value = pieceRate.toFixed(2);
+                updateRateCalculation(true);
+            } else if (effectiveRate > 0) {
+                rateInput.value = effectiveRate.toFixed(2);
                 updateRateCalculation(true);
             } else {
                 updateRateCalculation(false);

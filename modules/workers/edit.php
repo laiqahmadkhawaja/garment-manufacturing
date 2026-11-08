@@ -43,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $rateBasis = trim($_POST['rate_basis'] ?? 'whole_sweater');
     if ($rateBasis !== 'element_wise') $rateBasis = 'whole_sweater';
     $deptId = !empty($_POST['department_id']) ? (int)$_POST['department_id'] : null;
+    $defaultRate = (float)($_POST['default_rate'] ?? 0.00);
     $ratePerMinute = (float)($_POST['rate_per_minute'] ?? 2.50);
     if ($ratePerMinute <= 0) $ratePerMinute = 2.50;
     $joiningDate = !empty($_POST['joining_date']) ? trim($_POST['joining_date']) : null;
@@ -70,6 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     worker_type = ?, 
                     rate_basis = ?,
                     department_id = ?, 
+                    default_rate = ?,
                     rate_per_minute = ?, 
                     joining_date = ?, 
                     notes = ?, 
@@ -84,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $workerType,
                     $rateBasis,
                     $deptId,
+                    $defaultRate,
                     $ratePerMinute,
                     $joiningDate,
                     $notes,
@@ -171,20 +174,27 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <input type="text" name="name" class="form-control form-control-sm fw-bold" required value="<?= clean($_POST['name'] ?? $worker['name']) ?>">
                         </div>
                         <div class="col-12 col-md-3">
-                            <label class="form-label fw-semibold small text-muted">Worker Type *</label>
-                            <select name="worker_type" class="form-select form-select-sm">
-                                <?php 
-                                $types = ['Piece Rate', 'Monthly Salary', 'Daily Wage', 'Contractor'];
-                                $selType = $_POST['worker_type'] ?? $worker['worker_type'];
-                                foreach ($types as $t): ?>
-                                    <option value="<?= $t ?>" <?= $selType === $t ? 'selected' : '' ?>><?= $t ?></option>
+                            <label class="form-label fw-bold text-dark small">Wage / Worker Type *</label>
+                            <?php 
+                            $types = [
+                                'Piece Rate' => '👕 Piece Rate (پر پیس ریٹ - کٹنگ، ٹیلرنگ، فنشنگ)',
+                                'Minute Rate' => '⏱️ Minute Rate (منٹ ریٹ - مشین آپریٹر ٹائم ریٹ)',
+                                'Daily Wage' => '📅 Daily Wage (یومیہ اجرت - فکسڈ فی دن)',
+                                'Monthly Salary' => '💼 Monthly Salary (ماہانہ فکسڈ تنخواہ)',
+                                'Contractor' => '🤝 Contractor (ٹھیکیدار / کنٹریکٹر)'
+                            ];
+                            $selType = $_POST['worker_type'] ?? $worker['worker_type'];
+                            ?>
+                            <select name="worker_type" id="wrk_type" class="form-select form-select-sm fw-semibold border-primary">
+                                <?php foreach ($types as $val => $label): ?>
+                                    <option value="<?= $val ?>" <?= $selType === $val ? 'selected' : '' ?>><?= $label ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
                     </div>
 
                     <div class="row g-3 mb-3">
-                        <div class="col-12 col-md-4">
+                        <div class="col-12 col-md-3">
                             <label class="form-label fw-semibold small text-muted">Department</label>
                             <select name="department_id" id="wrk_dept" class="form-select form-select-sm">
                                 <option value="">-- General Factory --</option>
@@ -195,23 +205,36 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="col-12 col-md-4">
-                            <label class="form-label fw-bold small text-dark">Rate & Work Basis (کام و ریٹ کی بنیاد) *</label>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label fw-bold small text-dark">Rate & Work Basis *</label>
                             <?php $selBasis = $_POST['rate_basis'] ?? ($worker['rate_basis'] ?? 'whole_sweater'); ?>
                             <select name="rate_basis" id="wrk_rate_basis" class="form-select form-select-sm fw-semibold border-primary">
-                                <option value="whole_sweater" <?= $selBasis === 'whole_sweater' ? 'selected' : '' ?>>👕 Whole Sweaters (مکمل سویٹر وائز - ٹیلرنگ، بٹن، کاج، پریس)</option>
+                                <option value="whole_sweater" <?= $selBasis === 'whole_sweater' ? 'selected' : '' ?>>👕 Whole Sweaters (مکمل سویٹر - ٹیلرنگ، بٹن، کاج، پریس)</option>
                                 <option value="element_wise" <?= $selBasis === 'element_wise' ? 'selected' : '' ?>>🧩 Garment Elements (اعضاء وار بریک ڈاؤن - آپریٹر، کٹنگ)</option>
                             </select>
                             <div class="form-text small" style="font-size: 11px;">پروڈکشن انٹری میں ورک فلو اور ریٹ کا تعین اس بنیاد پر ہوگا۔</div>
                         </div>
-                        <div class="col-12 col-md-4">
-                            <label class="form-label fw-semibold small text-muted">Rate Per Minute (ریٹ فی منٹ) *</label>
+
+                        <!-- Piece Rate Input (روپے فی پیس) -->
+                        <div class="col-12 col-md-3" id="grp_piece_rate">
+                            <label class="form-label fw-bold small text-primary" id="lbl_piece_rate">Default Piece Rate (ریٹ فی پیس) *</label>
                             <div class="input-group input-group-sm">
-                                <span class="input-group-text">Rs</span>
-                                <input type="number" name="rate_per_minute" class="form-control form-control-sm fw-bold text-success text-center" step="0.05" min="0.1" required value="<?= clean($_POST['rate_per_minute'] ?? $worker['rate_per_minute']) ?>">
+                                <span class="input-group-text bg-primary text-white fw-bold">Rs</span>
+                                <input type="number" name="default_rate" id="wrk_piece_rate" class="form-control form-control-sm fw-bold text-primary text-center" step="0.25" min="0" value="<?= clean($_POST['default_rate'] ?? $worker['default_rate']) ?>" placeholder="0.00">
+                                <span class="input-group-text" id="unit_piece_rate">/pc</span>
+                            </div>
+                            <div class="form-text small" id="hint_piece_rate" style="font-size: 11px;">مکمل سویٹر یا کٹنگ فی پیس طے شدہ اجرت۔</div>
+                        </div>
+
+                        <!-- Minute Rate Input (روپے فی منٹ) -->
+                        <div class="col-12 col-md-3" id="grp_min_rate">
+                            <label class="form-label fw-semibold small text-success">Minute Rate (روپے فی منٹ) *</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-success text-white fw-bold">Rs</span>
+                                <input type="number" name="rate_per_minute" id="wrk_min_rate" class="form-control form-control-sm fw-bold text-success text-center" step="0.05" min="0.1" required value="<?= clean($_POST['rate_per_minute'] ?? $worker['rate_per_minute']) ?>">
                                 <span class="input-group-text">/m</span>
                             </div>
-                            <div class="form-text small text-muted" style="font-size: 11px;">Standard SAM calculation: Rate = SAM (min) × Minute Rate</div>
+                            <div class="form-text small text-muted" style="font-size: 11px;">مشین نٹنگ آپریٹر اور SAM وقت کا حساب: Rate = SAM × Rate/min</div>
                         </div>
                     </div>
 
@@ -277,5 +300,68 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             </div>
         </div>
     </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const deptSelect = document.getElementById('wrk_dept');
+    const rateBasisSelect = document.getElementById('wrk_rate_basis');
+    const typeSelect = document.getElementById('wrk_type');
+    const lblPieceRate = document.getElementById('lbl_piece_rate');
+    const unitPieceRate = document.getElementById('unit_piece_rate');
+    const hintPieceRate = document.getElementById('hint_piece_rate');
+
+    function syncWageTypeUI() {
+        if (!typeSelect) return;
+        const val = typeSelect.value;
+        if (val === 'Piece Rate') {
+            if (lblPieceRate) lblPieceRate.textContent = 'Default Piece Rate (ریٹ فی پیس) *';
+            if (unitPieceRate) unitPieceRate.textContent = '/pc';
+            if (hintPieceRate) hintPieceRate.textContent = 'مکمل سویٹر یا کٹنگ فی پیس طے شدہ اجرت۔';
+            if (rateBasisSelect && !rateBasisSelect.value) rateBasisSelect.value = 'whole_sweater';
+        } else if (val === 'Minute Rate') {
+            if (lblPieceRate) lblPieceRate.textContent = 'Standard Piece Rate Equivalent';
+            if (unitPieceRate) unitPieceRate.textContent = '/pc';
+            if (hintPieceRate) hintPieceRate.textContent = 'مشین آپریٹر کا بنیادی ریٹ نیچے منٹ ریٹ اور SAM وقت سے طے ہوگا۔';
+            if (rateBasisSelect) rateBasisSelect.value = 'element_wise';
+        } else if (val === 'Daily Wage') {
+            if (lblPieceRate) lblPieceRate.textContent = 'Daily Wage Rate (یومیہ اجرت) *';
+            if (unitPieceRate) unitPieceRate.textContent = '/day';
+            if (hintPieceRate) hintPieceRate.textContent = 'ایک دن (شفٹ) کی فکسڈ اجرت۔';
+        } else if (val === 'Monthly Salary') {
+            if (lblPieceRate) lblPieceRate.textContent = 'Monthly Fixed Salary (ماہانہ تنخواہ) *';
+            if (unitPieceRate) unitPieceRate.textContent = '/month';
+            if (hintPieceRate) hintPieceRate.textContent = 'ماہانہ فکسڈ بنیادی تنخواہ۔';
+        } else if (val === 'Contractor') {
+            if (lblPieceRate) lblPieceRate.textContent = 'Contract Piece Rate (کنٹریکٹ ریٹ) *';
+            if (unitPieceRate) unitPieceRate.textContent = '/pc';
+            if (hintPieceRate) hintPieceRate.textContent = 'ٹھیکیدار کا طے شدہ ریٹ فی پیس۔';
+        }
+    }
+
+    if (typeSelect) {
+        typeSelect.addEventListener('change', syncWageTypeUI);
+        syncWageTypeUI();
+    }
+
+    if (deptSelect && rateBasisSelect) {
+        deptSelect.addEventListener('change', function() {
+            const opt = this.options[this.selectedIndex];
+            const deptName = opt ? (opt.dataset.name || opt.textContent.toLowerCase()) : '';
+            if (deptName.includes('operat') || deptName.includes('cutt') || deptName.includes('knitt')) {
+                rateBasisSelect.value = 'element_wise';
+                if (typeSelect && (deptName.includes('operat') || deptName.includes('knitt'))) {
+                    typeSelect.value = 'Minute Rate';
+                    syncWageTypeUI();
+                } else if (typeSelect && deptName.includes('cutt')) {
+                    typeSelect.value = 'Piece Rate';
+                    syncWageTypeUI();
+                }
+            } else if (deptName) {
+                rateBasisSelect.value = 'whole_sweater';
+            }
+        });
+    }
+});
+</script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>
