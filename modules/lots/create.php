@@ -636,6 +636,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             </select>
                         </div>
 
+                        <!-- Auto-distribute button if anatomy is enabled -->
+                        <button type="button" class="btn btn-outline-primary btn-sm py-1 px-2 d-none d-sm-inline-flex align-items-center gap-1 shadow-2xs" id="btnAutoDistributeAnatomy" title="Auto-distribute With Sleeves & Sleeveless Breakdown equally across color rows">
+                            <i class="bi bi-magic"></i>
+                            <span>Auto-Fill from Breakdown (خودکار تقسیم)</span>
+                        </button>
+
                         <!-- Grand Total Badge -->
                         <div class="badge bg-primary fs-6 px-3 py-2 shadow-sm">
                             Total: <span id="lotGrandTotal">0</span> Pieces
@@ -659,7 +665,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     </th>
                                     <th style="min-width: 180px;" class="fw-bold text-dark">Size (سائز منتخب کریں) *</th>
                                     <th class="text-center" style="width: 150px;" class="fw-bold text-dark">Available Yarn Stock</th>
-                                    <th class="text-center" style="width: 190px;" class="fw-bold text-dark">Planned Pieces (تعداد) *</th>
+                                    <th class="text-center" style="width: 190px;" class="fw-bold text-dark">
+                                        Planned Pieces (تعداد) *
+                                        <small class="d-block text-primary fw-normal" style="font-size: 10px;">خودکار تقسیم بازو + واسکٹ</small>
+                                    </th>
                                     <th class="text-center" style="width: 60px;">Action</th>
                                 </tr>
                             </thead>
@@ -978,12 +987,42 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // 4. Style Anatomy Breakdown (With Sleeves vs Sleeveless)
+    function autoDistributeAnatomyToColorRows() {
+        if (!hasAnatomySwitch || !hasAnatomySwitch.checked) return;
+        const s1 = parseInt(withSleevesInput.value, 10) || 0;
+        const s2 = parseInt(sleevelessInput.value, 10) || 0;
+        const totalAnatomy = s1 + s2;
+        if (totalAnatomy <= 0) return;
+
+        const rows = document.querySelectorAll('#lotItemsTbody tr.lot-item-row');
+        const numRows = rows.length;
+        if (numRows <= 0) return;
+
+        // User formula: (with_sleeves / numRows) + (sleeveless / numRows) = totalAnatomy / numRows
+        // Balanced integer distribution ensuring exact sum match
+        const baseQty = Math.floor(totalAnatomy / numRows);
+        const remainder = totalAnatomy % numRows;
+
+        rows.forEach((tr, idx) => {
+            const qInp = tr.querySelector('.item-qty-input');
+            if (qInp) {
+                const rowQty = baseQty + (idx < remainder ? 1 : 0);
+                qInp.value = rowQty;
+            }
+        });
+
+        recalcAll();
+    }
+
     hasAnatomySwitch.addEventListener('change', function() {
         if (this.checked) {
             anatomyInputs.classList.remove('d-none');
             const total = parseInt(document.getElementById('lotGrandTotal').textContent, 10) || 0;
             if (parseInt(withSleevesInput.value, 10) === 0 && parseInt(sleevelessInput.value, 10) === 0 && total > 0) {
                 withSleevesInput.value = total;
+            }
+            if ((parseInt(withSleevesInput.value, 10) + parseInt(sleevelessInput.value, 10)) > 0) {
+                autoDistributeAnatomyToColorRows();
             }
         } else {
             anatomyInputs.classList.add('d-none');
@@ -1010,8 +1049,21 @@ document.addEventListener('DOMContentLoaded', function() {
         updateCuttingPartsPreview();
     }
 
-    withSleevesInput.addEventListener('input', validateAnatomyBreakdown);
-    sleevelessInput.addEventListener('input', validateAnatomyBreakdown);
+    withSleevesInput.addEventListener('input', function() {
+        autoDistributeAnatomyToColorRows();
+        validateAnatomyBreakdown();
+    });
+    sleevelessInput.addEventListener('input', function() {
+        autoDistributeAnatomyToColorRows();
+        validateAnatomyBreakdown();
+    });
+
+    const btnAutoDistributeAnatomy = document.getElementById('btnAutoDistributeAnatomy');
+    if (btnAutoDistributeAnatomy) {
+        btnAutoDistributeAnatomy.addEventListener('click', function() {
+            autoDistributeAnatomyToColorRows();
+        });
+    }
 
     // 5. Dynamic Row Addition (+ Add Row)
     const btnAddItemRow = document.getElementById('btnAddItemRow');
@@ -1070,7 +1122,11 @@ document.addEventListener('DOMContentLoaded', function() {
             lotItemsTbody.appendChild(tr);
             renumberRows();
             tr.querySelector('.item-color-select').focus();
-            recalcAll();
+            if (hasAnatomySwitch.checked && (parseInt(withSleevesInput.value, 10) + parseInt(sleevelessInput.value, 10)) > 0) {
+                autoDistributeAnatomyToColorRows();
+            } else {
+                recalcAll();
+            }
         });
 
         // Dynamic Row Removal
@@ -1081,7 +1137,11 @@ document.addEventListener('DOMContentLoaded', function() {
             if (rows.length > 1) {
                 btn.closest('tr').remove();
                 renumberRows();
-                recalcAll();
+                if (hasAnatomySwitch.checked && (parseInt(withSleevesInput.value, 10) + parseInt(sleevelessInput.value, 10)) > 0) {
+                    autoDistributeAnatomyToColorRows();
+                } else {
+                    recalcAll();
+                }
             } else {
                 // Clear row instead of deleting last row
                 const row = rows[0];
