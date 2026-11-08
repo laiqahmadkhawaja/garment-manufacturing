@@ -158,7 +158,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
 
                 $db->commit();
-                redirect("modules/production/history.php?lot_id=" . $entry['lot_id'], "Production entry #" . $entry['entry_number'] . " updated successfully! Ledger & balances reconciled.");
+                $returnUrl = (!empty($_GET['return_to']) && $_GET['return_to'] === 'history') 
+                    ? "modules/production/history.php?lot_id=" . $entry['lot_id']
+                    : "modules/production/index.php?lot_id=" . $entry['lot_id'];
+                redirect($returnUrl, "Production entry #" . $entry['entry_number'] . " updated successfully! Ledger & balances reconciled.");
             } catch (Exception $e) {
                 $db->rollBack();
                 $error = 'Failed to update production entry: ' . $e->getMessage();
@@ -326,7 +329,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             </div>
 
                             <div class="d-flex justify-content-between align-items-center pt-3 border-top">
-                                <a href="<?= BASE_URL ?>modules/production/history.php?lot_id=<?= $entry['lot_id'] ?>" class="btn btn-sm btn-outline-secondary px-3">
+                                <a href="<?= BASE_URL ?>modules/production/index.php?lot_id=<?= $entry['lot_id'] ?>" class="btn btn-sm btn-outline-secondary px-3">
                                     <i class="bi bi-x-circle me-1"></i> Cancel
                                 </a>
                                 <?php if (!$isLocked): ?>
@@ -411,10 +414,18 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const goodInp = document.getElementById('goodQty');
+    const rejInp = document.getElementById('rejQty');
+    const rewInp = document.getElementById('rewQty');
     const rateInp = document.getElementById('pieceRate');
     const samInp = document.getElementById('samMinutes');
     const workerSel = document.getElementById('workerSelect');
     const lblLabour = document.getElementById('lblLiveLabour');
+
+    // Baseline total batch pieces initially processed
+    const initialGood = parseInt(goodInp?.value) || 0;
+    const initialRej = parseInt(rejInp?.value) || 0;
+    const initialRew = parseInt(rewInp?.value) || 0;
+    let baseBatchTotal = initialGood + initialRej + initialRew;
 
     function recalcLiveLabour() {
         const qty = parseInt(goodInp?.value) || 0;
@@ -425,7 +436,30 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    if (goodInp) goodInp.addEventListener('input', recalcLiveLabour);
+    function autoBalanceFromDefects() {
+        const rej = parseInt(rejInp?.value) || 0;
+        const rew = parseInt(rewInp?.value) || 0;
+        if (baseBatchTotal > 0 && goodInp) {
+            const calculatedGood = Math.max(0, baseBatchTotal - rej - rew);
+            goodInp.value = calculatedGood;
+        }
+        recalcLiveLabour();
+    }
+
+    if (rejInp) rejInp.addEventListener('input', autoBalanceFromDefects);
+    if (rewInp) rewInp.addEventListener('input', autoBalanceFromDefects);
+
+    if (goodInp) {
+        goodInp.addEventListener('input', function() {
+            // When user directly changes good qty, update base total so future defect adjustments stay proportional
+            const g = parseInt(this.value) || 0;
+            const r = parseInt(rejInp?.value) || 0;
+            const w = parseInt(rewInp?.value) || 0;
+            baseBatchTotal = g + r + w;
+            recalcLiveLabour();
+        });
+    }
+
     if (rateInp) rateInp.addEventListener('input', recalcLiveLabour);
 
     if (samInp) {

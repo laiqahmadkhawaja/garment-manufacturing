@@ -25,26 +25,28 @@ function assert_test(string $name, bool $condition, string $detail = ''): void {
     }
 }
 
-// Ensure clean state for test run
+// Ensure clean state for test run (SCOPED TO TEST DATA ONLY - Preserves real user lots & entries)
 $db->exec("SET FOREIGN_KEY_CHECKS=0");
-$db->exec("DELETE FROM dispatch_return_items");
-$db->exec("DELETE FROM dispatch_returns");
-$db->exec("DELETE FROM dispatch_items");
-$db->exec("DELETE FROM dispatches");
-$db->exec("DELETE FROM finished_goods_stock");
-$db->exec("DELETE FROM packing_entries");
+$db->exec("DELETE FROM dispatch_return_items WHERE lot_id IN (SELECT id FROM lots WHERE lot_number LIKE 'LOT-TEST-%' OR lot_number = 'LOT-101')");
+$db->exec("DELETE FROM dispatch_returns WHERE dispatch_id IN (SELECT id FROM dispatches WHERE dispatch_number = 'DIS-1001' OR dispatch_number LIKE '%TEST%')");
+$db->exec("DELETE FROM dispatch_items WHERE lot_id IN (SELECT id FROM lots WHERE lot_number LIKE 'LOT-TEST-%' OR lot_number = 'LOT-101')");
+$db->exec("DELETE FROM dispatches WHERE dispatch_number = 'DIS-1001' OR dispatch_number LIKE '%TEST%'");
+$db->exec("DELETE FROM finished_goods_stock WHERE lot_id IN (SELECT id FROM lots WHERE lot_number LIKE 'LOT-TEST-%' OR lot_number = 'LOT-101')");
+$db->exec("DELETE FROM packing_entries WHERE lot_id IN (SELECT id FROM lots WHERE lot_number LIKE 'LOT-TEST-%' OR lot_number = 'LOT-101')");
 $db->exec("DELETE FROM design_elements WHERE design_id IN (SELECT id FROM designs WHERE design_number LIKE '%TEST%')");
 $db->exec("DELETE FROM designs WHERE design_number LIKE '%TEST%'");
-$db->exec("DELETE FROM material_return_items");
-$db->exec("DELETE FROM material_returns");
-$db->exec("DELETE FROM material_issue_items");
-$db->exec("DELETE FROM material_issues");
-$db->exec("DELETE FROM production_rework");
-$db->exec("DELETE FROM production_rejections");
-$db->exec("DELETE FROM production_entries");
-$db->exec("DELETE FROM lot_workflow_steps");
-$db->exec("DELETE FROM lot_variants");
-$db->exec("DELETE FROM lots");
+$db->exec("DELETE FROM material_return_items WHERE return_id IN (SELECT id FROM material_returns WHERE lot_id IN (SELECT id FROM lots WHERE lot_number LIKE 'LOT-TEST-%' OR lot_number = 'LOT-101'))");
+$db->exec("DELETE FROM material_returns WHERE lot_id IN (SELECT id FROM lots WHERE lot_number LIKE 'LOT-TEST-%' OR lot_number = 'LOT-101')");
+$db->exec("DELETE FROM material_issue_items WHERE issue_id IN (SELECT id FROM material_issues WHERE lot_id IN (SELECT id FROM lots WHERE lot_number LIKE 'LOT-TEST-%' OR lot_number = 'LOT-101'))");
+$db->exec("DELETE FROM material_issues WHERE lot_id IN (SELECT id FROM lots WHERE lot_number LIKE 'LOT-TEST-%' OR lot_number = 'LOT-101')");
+$db->exec("DELETE FROM production_rework WHERE lot_id IN (SELECT id FROM lots WHERE lot_number LIKE 'LOT-TEST-%' OR lot_number = 'LOT-101')");
+$db->exec("DELETE FROM production_rejections WHERE lot_id IN (SELECT id FROM lots WHERE lot_number LIKE 'LOT-TEST-%' OR lot_number = 'LOT-101')");
+$db->exec("DELETE FROM production_entries WHERE lot_id IN (SELECT id FROM lots WHERE lot_number LIKE 'LOT-TEST-%' OR lot_number = 'LOT-101')");
+$db->exec("DELETE FROM lot_operator_element_entries WHERE lot_id IN (SELECT id FROM lots WHERE lot_number LIKE 'LOT-TEST-%' OR lot_number = 'LOT-101')");
+$db->exec("DELETE FROM lot_status_history WHERE lot_id IN (SELECT id FROM lots WHERE lot_number LIKE 'LOT-TEST-%' OR lot_number = 'LOT-101')");
+$db->exec("DELETE FROM lot_workflow_steps WHERE lot_id IN (SELECT id FROM lots WHERE lot_number LIKE 'LOT-TEST-%' OR lot_number = 'LOT-101')");
+$db->exec("DELETE FROM lot_variants WHERE lot_id IN (SELECT id FROM lots WHERE lot_number LIKE 'LOT-TEST-%' OR lot_number = 'LOT-101')");
+$db->exec("DELETE FROM lots WHERE lot_number LIKE 'LOT-TEST-%' OR lot_number = 'LOT-101'");
 $db->exec("DELETE FROM worker_ledger WHERE transaction_type != 'Opening Balance'");
 // Ensure Worker 1 has initial opening balance for test consistency
 $w1Bal = $db->query("SELECT id FROM worker_ledger WHERE worker_id = 1 AND transaction_type = 'Opening Balance'")->fetchColumn();

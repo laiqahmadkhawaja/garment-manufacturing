@@ -29,7 +29,8 @@ function current_user(): ?array {
 }
 
 function require_login(): void {
-    if (!is_logged_in()) {
+    if (!is_logged_in() || current_user() === null) {
+        unset($_SESSION['user_id'], $_SESSION['user_name'], $_SESSION['role']);
         redirect('login.php', 'Please log in to continue.', 'warning');
     }
 }
@@ -39,14 +40,19 @@ function has_role(string|array $roles): bool {
     if (!$user) {
         return false;
     }
+    $roleName = strtolower($user['role_name'] ?? '');
+    $username = strtolower($user['username'] ?? '');
+    $roleId = (int)($user['role_id'] ?? 0);
+
     // Super admin or user with role_id=1 or username 'admin' has universal master access
-    if (($user['role_name'] ?? '') === 'super_admin' || ($user['username'] ?? '') === 'admin' || (int)($user['role_id'] ?? 0) === 1) {
+    if (in_array($roleName, ['super_admin', 'admin', 'administrator'], true) || $username === 'admin' || $roleId === 1) {
         return true;
     }
     if (is_string($roles)) {
-        return ($user['role_name'] ?? '') === $roles;
+        return strtolower($user['role_name'] ?? '') === strtolower($roles);
     }
-    return in_array($user['role_name'] ?? '', $roles, true);
+    $lowerRoles = array_map('strtolower', $roles);
+    return in_array(strtolower($user['role_name'] ?? ''), $lowerRoles, true);
 }
 
 function require_role(string|array $roles): void {

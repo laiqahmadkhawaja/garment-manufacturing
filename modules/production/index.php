@@ -1366,15 +1366,31 @@ if (empty($cuttingWorkers)) {
     $cuttingWorkers = $workers;
 }
 
-// Recent 10 entries for live history panel
-$recentEntries = $db->query("SELECT pe.*, l.lot_number, o.name AS op_name, w.name AS worker_name, c.name AS color_name, s.name AS size_name 
-                            FROM production_entries pe 
-                            JOIN lots l ON pe.lot_id = l.id 
-                            JOIN operations o ON pe.operation_id = o.id 
-                            JOIN workers w ON pe.worker_id = w.id 
-                            LEFT JOIN colors c ON pe.color_id = c.id 
-                            LEFT JOIN sizes s ON pe.size_id = s.id 
-                            ORDER BY pe.id DESC LIMIT 8")->fetchAll();
+// Active/Preselected lot for recent entries panel
+$activePanelLotId = $preselectedLotId ?: (int)($_POST['lot_id'] ?? 0);
+if ($activePanelLotId <= 0 && !empty($lots)) {
+    $activePanelLotId = (int)$lots[0]['id'];
+}
+
+$recentLot = null;
+$recentEntries = [];
+if ($activePanelLotId > 0) {
+    $rLotStmt = $db->prepare("SELECT id, lot_number FROM lots WHERE id = ?");
+    $rLotStmt->execute([$activePanelLotId]);
+    $recentLot = $rLotStmt->fetch();
+
+    $recentStmt = $db->prepare("SELECT pe.*, l.lot_number, o.name AS op_name, w.name AS worker_name, c.name AS color_name, s.name AS size_name 
+                                FROM production_entries pe 
+                                JOIN lots l ON pe.lot_id = l.id 
+                                JOIN operations o ON pe.operation_id = o.id 
+                                JOIN workers w ON pe.worker_id = w.id 
+                                LEFT JOIN colors c ON pe.color_id = c.id 
+                                LEFT JOIN sizes s ON pe.size_id = s.id 
+                                WHERE pe.lot_id = ?
+                                ORDER BY pe.id DESC LIMIT 10");
+    $recentStmt->execute([$activePanelLotId]);
+    $recentEntries = $recentStmt->fetchAll();
+}
 
 require_once __DIR__ . '/../../includes/header.php';
 require_once __DIR__ . '/../../includes/sidebar.php';
@@ -1489,15 +1505,17 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                 <!-- Top Right: Compact Recent Submissions (Restricted to Top Height) -->
                 <div class="col-12 col-xl-4">
-                    <div class="card-modern shadow-sm h-100 d-flex flex-column" style="max-height: 230px;">
+                    <div class="card-modern shadow-sm h-100 d-flex flex-column" style="max-height: 240px;">
                         <div class="card-modern-header py-2 px-3 d-flex justify-content-between align-items-center">
                             <div>
-                                <h6 class="fw-bold mb-0 text-dark small"><i class="bi bi-clock-history text-primary me-1"></i> Recent Submissions</h6>
-                                <span class="text-muted" style="font-size: 0.72rem;">Live factory entries</span>
+                                <h6 class="fw-bold mb-0 text-dark small" id="lblRecentSubHeader">
+                                    <i class="bi bi-clock-history text-primary me-1"></i> Recent Entries: <span id="lblRecentLotNum" class="text-primary font-monospace"><?= $recentLot ? '#' . clean($recentLot['lot_number']) : 'Select Lot' ?></span>
+                                </h6>
+                                <span class="text-muted" style="font-size: 0.72rem;" id="lblRecentSubSubtitle">Entries recorded for this lot</span>
                             </div>
-                            <a href="<?= BASE_URL ?>modules/production/history.php" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size: 0.72rem;">Full Log</a>
+                            <a id="btnRecentFullLog" href="<?= BASE_URL ?>modules/production/history.php<?= $recentLot ? '?lot_id=' . $recentLot['id'] : '' ?>" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size: 0.72rem;">Full Log</a>
                         </div>
-                        <div class="card-modern-body p-0 flex-grow-1 overflow-auto" style="max-height: 175px;">
+                        <div class="card-modern-body p-0 flex-grow-1 overflow-auto" style="max-height: 185px;">
                             <table class="table table-sm table-modern align-middle mb-0" style="font-size: 0.78rem;">
                                 <thead class="table-light sticky-top">
                                     <tr>
@@ -1507,9 +1525,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <th class="text-end">Labour</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody id="recentSubmissionsTbody">
                                     <?php if (empty($recentEntries)): ?>
-                                        <tr><td colspan="4" class="text-center py-3 text-muted">No entries yet today.</td></tr>
+                                        <tr><td colspan="4" class="text-center py-4 text-muted" id="recentEmptyRow"><i class="bi bi-inbox d-block fs-5 text-secondary opacity-50 mb-1"></i>No entries yet for <?= $recentLot ? 'Lot #' . clean($recentLot['lot_number']) : 'selected lot' ?>.</td></tr>
                                     <?php else: ?>
                                         <?php foreach ($recentEntries as $re): ?>
                                             <tr>
@@ -1527,11 +1545,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                     <?php if ($re['rejected_qty'] > 0): ?>
                                                         <div class="text-danger small" style="font-size: 0.68rem;"><?= $re['rejected_qty'] ?> rej</div>
                                                     <?php endif; ?>
+                                                    <?php if (!empty($re['rework_qty']) && $re['rework_qty'] > 0): ?>
+                                                        <div class="text-warning small" style="font-size: 0.68rem;"><?= $re['rework_qty'] ?> rew</div>
+                                                    <?php endif; ?>
                                                 </td>
                                                 <td class="text-end fw-bold text-dark">
                                                     <?= format_currency($re['labour_amount']) ?>
                                                     <div>
-                                                        <a href="<?= BASE_URL ?>modules/production/edit.php?id=<?= $re['id'] ?>" class="text-primary text-decoration-none small" style="font-size: 0.72rem;" title="Edit Entry">
+                                                        <a href="<?= BASE_URL ?>modules/production/edit.php?id=<?= $re['id'] ?>" class="btn btn-xs btn-outline-primary py-0 px-2 mt-1" style="font-size: 0.7rem;" title="Edit Entry">
                                                             <i class="bi bi-pencil-square"></i> Edit
                                                         </a>
                                                     </div>
@@ -2860,20 +2881,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 const cell = (grid[c.id] && grid[c.id][sz.id]) ? grid[c.id][sz.id] : { planned: 0, pending: 0 };
                 const planned = parseInt(cell.planned) || 0;
                 tbodyHtml += `
-                    <td class="p-2 border">
+                    <td class="p-2 border" data-planned="${planned}">
                         <div class="small fw-semibold text-muted mb-1">Plan: <strong>${planned}</strong> pcs</div>
                         <div class="input-group input-group-sm mb-1">
                             <span class="input-group-text px-1 bg-success-subtle text-success fw-bold small" title="Good Cut Pieces">🟢</span>
-                            <input type="number" name="matrix[${c.id}][${sz.id}][good]" class="form-control form-control-sm text-center fw-bold cut-cell-good" data-planned="${planned}" value="0" min="0" placeholder="0">
+                            <input type="number" name="matrix[${c.id}][${sz.id}][good]" class="form-control form-control-sm text-center fw-bold cut-cell-good text-success" data-planned="${planned}" value="${planned}" min="0" placeholder="0">
                         </div>
                         <div class="d-flex gap-1">
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text px-1 bg-danger-subtle text-danger small" title="Rejected / Defect Cut Pieces">🔴</span>
-                                <input type="number" name="matrix[${c.id}][${sz.id}][rejected]" class="form-control form-control-sm text-center cut-cell-rej" value="0" min="0" placeholder="0">
+                                <input type="number" name="matrix[${c.id}][${sz.id}][rejected]" class="form-control form-control-sm text-center cut-cell-rej text-danger fw-semibold" value="0" min="0" placeholder="0">
                             </div>
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text px-1 bg-warning-subtle text-warning-emphasis small" title="Rework Pieces">🟡</span>
-                                <input type="number" name="matrix[${c.id}][${sz.id}][rework]" class="form-control form-control-sm text-center cut-cell-rew" value="0" min="0" placeholder="0">
+                                <input type="number" name="matrix[${c.id}][${sz.id}][rework]" class="form-control form-control-sm text-center cut-cell-rew text-warning fw-semibold" value="0" min="0" placeholder="0">
                             </div>
                         </div>
                     </td>
@@ -2893,10 +2914,29 @@ document.addEventListener('DOMContentLoaded', function() {
         tfootHtml += `<td class="py-2 px-3 text-success fs-6" id="cutMatrixGrandTotal">0 pcs</td></tr>`;
         if (cutMatrixTfoot) cutMatrixTfoot.innerHTML = tfootHtml;
 
-        // Attach real-time input event listeners
-        cutMatrixTbody.querySelectorAll('input').forEach(inp => {
-            inp.addEventListener('input', recalculateCuttingMatrixTotals);
+        // Attach real-time interdependent adjustment listeners
+        cutMatrixTbody.querySelectorAll('td[data-planned]').forEach(td => {
+            const goodInp = td.querySelector('.cut-cell-good');
+            const rejInp = td.querySelector('.cut-cell-rej');
+            const rewInp = td.querySelector('.cut-cell-rew');
+            const plan = parseInt(td.dataset.planned) || 0;
+
+            function onCuttingDefectChanged() {
+                const rej = parseInt(rejInp ? rejInp.value : 0) || 0;
+                const rew = parseInt(rewInp ? rewInp.value : 0) || 0;
+                if (goodInp) {
+                    goodInp.value = Math.max(0, plan - rej - rew);
+                }
+                recalculateCuttingMatrixTotals();
+            }
+
+            if (rejInp) rejInp.addEventListener('input', onCuttingDefectChanged);
+            if (rewInp) rewInp.addEventListener('input', onCuttingDefectChanged);
+            if (goodInp) goodInp.addEventListener('input', recalculateCuttingMatrixTotals);
         });
+
+        // Run initial calculation to sync all totals immediately
+        recalculateCuttingMatrixTotals();
 
         // Auto fill planned pieces button (bounded strictly by operator ready pieces)
         if (btnFillAllCutting) {
@@ -3047,13 +3087,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // Mode buttons already wired via switchMode()
 
     function calculateSingleLabour() {
+        const rej = parseInt(rejInput.value) || 0;
+        const rew = parseInt(rewInput.value) || 0;
+        const rec = parseInt(recInput.value) || (parseInt(document.getElementById('lblPending')?.textContent) || 0);
+
+        // If user changed rej or rew, auto-adjust good produced: rec - rej - rew
+        if (document.activeElement === rejInput || document.activeElement === rewInput || document.activeElement === recInput) {
+            goodInput.value = Math.max(0, rec - rej - rew);
+        }
+
         const good = parseInt(goodInput.value) || 0;
         const rate = parseFloat(rateInput.value) || 0;
         const total = good * rate;
         labourDisplay.textContent = 'Rs. ' + total.toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-        const rej = parseInt(rejInput.value) || 0;
-        const rew = parseInt(rewInput.value) || 0;
         if (!recInput.value || parseInt(recInput.value) === 0) {
             recInput.placeholder = good + rej + rew;
         }
@@ -3062,9 +3109,69 @@ document.addEventListener('DOMContentLoaded', function() {
     goodInput.addEventListener('input', calculateSingleLabour);
     rejInput.addEventListener('input', calculateSingleLabour);
     rewInput.addEventListener('input', calculateSingleLabour);
+    if (recInput) recInput.addEventListener('input', calculateSingleLabour);
     rateInput.addEventListener('input', function() {
         updateRateCalculation(true);
     });
+
+    // Function to dynamically update Recent Submissions panel for the selected lot
+    function updateRecentSubmissionsForLot(lotId, lotNumber) {
+        const lblLotNum = document.getElementById('lblRecentLotNum');
+        const fullLogBtn = document.getElementById('btnRecentFullLog');
+        const tbody = document.getElementById('recentSubmissionsTbody');
+        if (lblLotNum) lblLotNum.textContent = lotNumber ? '#' + lotNumber : '---';
+        if (fullLogBtn) fullLogBtn.href = '<?= BASE_URL ?>modules/production/history.php?lot_id=' + lotId;
+        if (!tbody || !lotId) return;
+
+        fetch('<?= BASE_URL ?>modules/production/ajax.php?action=get_lot_recent_entries&lot_id=' + lotId)
+            .then(r => r.json())
+            .then(res => {
+                if (res.status === 'success' && res.entries) {
+                    if (res.entries.length === 0) {
+                        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-muted"><i class="bi bi-inbox d-block fs-5 text-secondary opacity-50 mb-1"></i>No entries yet for Lot #${res.lot.lot_number}.</td></tr>`;
+                    } else {
+                        let html = '';
+                        res.entries.forEach(e => {
+                            let defectsHtml = '';
+                            if (e.rejected_qty > 0) {
+                                defectsHtml += `<div class="text-danger small" style="font-size: 0.68rem;">${e.rejected_qty} rej</div>`;
+                            }
+                            if (e.rework_qty > 0) {
+                                defectsHtml += `<div class="text-warning small" style="font-size: 0.68rem;">${e.rework_qty} rew</div>`;
+                            }
+                            const varText = e.color_name ? `${e.color_name} (${e.size_name || ''})` : `<span class="text-secondary opacity-75">Batch / All</span>`;
+                            html += `
+                                <tr>
+                                    <td>
+                                        <span class="fw-bold text-primary">#${e.lot_number}</span>
+                                        <div>${e.op_name}</div>
+                                        <div class="text-muted" style="font-size: 0.7rem;">${varText}</div>
+                                    </td>
+                                    <td>
+                                        <span class="fw-semibold text-dark">${e.worker_name}</span>
+                                        <div class="text-muted" style="font-size: 0.7rem;">${e.entry_date}</div>
+                                    </td>
+                                    <td class="text-center fw-bold text-success">
+                                        ${e.good_qty.toLocaleString()}
+                                        ${defectsHtml}
+                                    </td>
+                                    <td class="text-end fw-bold text-dark">
+                                        ${e.labour_amount}
+                                        <div>
+                                            <a href="<?= BASE_URL ?>modules/production/edit.php?id=${e.id}" class="btn btn-xs btn-outline-primary py-0 px-2 mt-1" style="font-size: 0.7rem;" title="Edit Entry">
+                                                <i class="bi bi-pencil-square"></i> Edit
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                        tbody.innerHTML = html;
+                    }
+                }
+            })
+            .catch(err => console.error('Failed to load lot recent entries:', err));
+    }
 
     // Load operations and variants for selected lot
     function loadLotData(lotId, callback) {
@@ -3095,6 +3202,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     const totalPieces = parseInt(lot.total_pieces, 10) || 0;
                     const isDouble = (lot.shift_type === 'Double Shift');
                     const isMultiSize = (lot.size_mode === 'Multi Size');
+
+                    // Auto-update Recent Submissions panel for this specific lot
+                    updateRecentSubmissionsForLot(lotId, lot.lot_number);
+
+                    // Auto-select assigned operators on this lot
+                    if (lot.operator_id) {
+                        if (opSingleWorker && (!opSingleWorker.value || opSingleWorker.value === '')) {
+                            opSingleWorker.value = lot.operator_id;
+                        }
+                        if (opDoubleDayWorker && (!opDoubleDayWorker.value || opDoubleDayWorker.value === '')) {
+                            opDoubleDayWorker.value = lot.operator_id;
+                        }
+                    }
+                    if (lot.night_operator_id && opDoubleNightWorker && (!opDoubleNightWorker.value || opDoubleNightWorker.value === '')) {
+                        opDoubleNightWorker.value = lot.night_operator_id;
+                    }
 
                     // Populate Top Lot Info Banner
                     if (opLotTitle) opLotTitle.textContent = `LOT #${lot.lot_number || '---'}`;
@@ -3273,6 +3396,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     lotSelect.addEventListener('change', function() {
+        const selectedOpt = this.options[this.selectedIndex];
+        const match = selectedOpt ? selectedOpt.textContent.match(/LOT #([^—\s]+)/) : null;
+        const lotNum = match ? match[1] : '';
+        updateRecentSubmissionsForLot(this.value, lotNum);
         loadLotData(this.value);
         matrixPlaceholder.classList.remove('d-none');
         matrixLoading.classList.add('d-none');
@@ -3280,6 +3407,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     if (lotSelect.value) {
+        const selectedOpt = lotSelect.options[lotSelect.selectedIndex];
+        const match = selectedOpt ? selectedOpt.textContent.match(/LOT #([^—\s]+)/) : null;
+        const lotNum = match ? match[1] : '';
+        updateRecentSubmissionsForLot(lotSelect.value, lotNum);
         loadLotData(lotSelect.value);
     }
 
@@ -3426,17 +3557,30 @@ document.addEventListener('DOMContentLoaded', function() {
                             btnSaveSingle.classList.add('btn-secondary');
                         }
                     } else {
+                        const rejInput = document.getElementById('pe_rejected_qty');
+                        const rewInput = document.getElementById('pe_rework_qty');
+                        const recInput = document.getElementById('pe_qty_received');
+                        const rateInp = document.getElementById('pe_rate');
+
                         goodInput.disabled = false;
                         goodInput.max = data.pending;
+                        goodInput.value = data.pending; // Pre-fill with pending planned pieces!
+
+                        if (recInput) recInput.value = data.pending;
+                        if (rejInput) rejInput.value = 0;
+                        if (rewInput) rewInput.value = 0;
+                        if (rateInp && (!rateInp.value || parseFloat(rateInp.value) === 0)) {
+                            rateInp.value = parseFloat(data.default_rate).toFixed(2);
+                        }
+
                         if (btnSaveSingle) {
                             btnSaveSingle.disabled = false;
                             btnSaveSingle.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Save Single Production Entry';
                             btnSaveSingle.classList.remove('btn-secondary');
                             btnSaveSingle.classList.add('btn-primary');
                         }
-                        if (!goodInput.value || parseInt(goodInput.value) === 0) {
-                            goodInput.placeholder = data.pending;
-                        }
+
+                        calculateSingleLabour();
                     }
                 }
             })
@@ -3673,7 +3817,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                            data-size="${s.id}" 
                                            data-pending="${cell.pending}" 
                                            data-planned="${effectiveAllowable}" 
-                                           value="0">
+                                           value="${cell.pending}">
                                 </div>
                             </div>
                             
@@ -3756,10 +3900,29 @@ document.addEventListener('DOMContentLoaded', function() {
         </td></tr>`;
         matrixTfoot.innerHTML = tfHtml;
 
-        // Bind interactive events
-        document.querySelectorAll('.matrix-cell-input').forEach(inp => {
-            inp.addEventListener('input', recalculateMatrixTotals);
-            inp.addEventListener('focus', function() { this.select(); });
+        // Bind interactive events with interdependent adjustment
+        document.querySelectorAll('.cell-variant').forEach(cell => {
+            const goodInp = cell.querySelector('.cell-good');
+            const rejInp = cell.querySelector('.cell-rejected');
+            const rewInp = cell.querySelector('.cell-rework');
+            const pending = parseInt(cell.dataset.pending) || 0;
+
+            function adjustFastMatrixGood() {
+                const rej = parseInt(rejInp ? rejInp.value : 0) || 0;
+                const rew = parseInt(rewInp ? rewInp.value : 0) || 0;
+                if (goodInp) {
+                    goodInp.value = Math.max(0, pending - rej - rew);
+                }
+                recalculateMatrixTotals();
+            }
+
+            if (rejInp) rejInp.addEventListener('input', adjustFastMatrixGood);
+            if (rewInp) rewInp.addEventListener('input', adjustFastMatrixGood);
+            if (goodInp) goodInp.addEventListener('input', recalculateMatrixTotals);
+
+            [goodInp, rejInp, rewInp].forEach(inp => {
+                if (inp) inp.addEventListener('focus', function() { this.select(); });
+            });
         });
 
         recalculateMatrixTotals();

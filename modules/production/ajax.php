@@ -375,4 +375,55 @@ if ($action === 'get_operation_workers') {
     ]);
 }
 
+if ($action === 'get_lot_recent_entries') {
+    $lotId = (int)($_GET['lot_id'] ?? 0);
+    if ($lotId <= 0) {
+        json_response(['status' => 'error', 'message' => 'Invalid lot ID'], 400);
+    }
+
+    $lStmt = $db->prepare("SELECT id, lot_number FROM lots WHERE id = ?");
+    $lStmt->execute([$lotId]);
+    $lot = $lStmt->fetch();
+    if (!$lot) {
+        json_response(['status' => 'error', 'message' => 'Lot not found'], 404);
+    }
+
+    $entriesStmt = $db->prepare("SELECT pe.*, l.lot_number, o.name AS op_name, w.name AS worker_name, c.name AS color_name, s.name AS size_name 
+                                 FROM production_entries pe 
+                                 JOIN lots l ON pe.lot_id = l.id 
+                                 JOIN operations o ON pe.operation_id = o.id 
+                                 JOIN workers w ON pe.worker_id = w.id 
+                                 LEFT JOIN colors c ON pe.color_id = c.id 
+                                 LEFT JOIN sizes s ON pe.size_id = s.id 
+                                 WHERE pe.lot_id = ?
+                                 ORDER BY pe.id DESC LIMIT 15");
+    $entriesStmt->execute([$lotId]);
+    $entries = $entriesStmt->fetchAll();
+
+    // Format fields for frontend display
+    $formatted = [];
+    foreach ($entries as $e) {
+        $formatted[] = [
+            'id' => (int)$e['id'],
+            'entry_number' => $e['entry_number'] ?: ('PE-' . $e['id']),
+            'lot_number' => $e['lot_number'],
+            'op_name' => $e['op_name'],
+            'color_name' => $e['color_name'],
+            'size_name' => $e['size_name'],
+            'worker_name' => $e['worker_name'],
+            'entry_date' => format_date($e['entry_date']),
+            'good_qty' => (int)$e['good_qty'],
+            'rejected_qty' => (int)$e['rejected_qty'],
+            'rework_qty' => (int)$e['rework_qty'],
+            'labour_amount' => format_currency((float)$e['labour_amount'])
+        ];
+    }
+
+    json_response([
+        'status' => 'success',
+        'lot' => $lot,
+        'entries' => $formatted
+    ]);
+}
+
 json_response(['status' => 'error', 'message' => 'Unknown action'], 400);
