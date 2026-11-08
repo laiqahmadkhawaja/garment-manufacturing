@@ -21,30 +21,54 @@ ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 ini_set('error_log', __DIR__ . '/../error.log');
 
+// =========================================================================
+// 1. DATABASE CONFIGURATION (ڈیٹا بیس کنفیگریشن)
+// Update these credentials for your live hosting server or local environment:
+// =========================================================================
+if (!defined('DB_HOST')) define('DB_HOST', getenv('DB_HOST') ?: '127.0.0.1');     // Database host (usually 'localhost' or '127.0.0.1')
+if (!defined('DB_PORT')) define('DB_PORT', getenv('DB_PORT') ?: '3306');          // Database port (default: 3306)
+if (!defined('DB_NAME')) define('DB_NAME', getenv('DB_NAME') ?: 'garment_erp');   // Name of the database on MySQL
+if (!defined('DB_USER')) define('DB_USER', getenv('DB_USER') ?: 'root');          // Database username
+if (!defined('DB_PASS')) define('DB_PASS', getenv('DB_PASS') !== false ? getenv('DB_PASS') : ''); // Database password
+
 // Database Singleton Connection Helper
 function get_db(): PDO {
     static $instance = null;
     if ($instance === null) {
-        $dsn = "mysql:host=127.0.0.1;dbname=garment_erp;charset=utf8mb4";
+        $dsn = "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=utf8mb4";
         $options = [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES   => false,
         ];
         try {
-            $instance = new PDO($dsn, 'root', '', $options);
+            $instance = new PDO($dsn, DB_USER, DB_PASS, $options);
         } catch (PDOException $e) {
             error_log("Database connection error: " . $e->getMessage());
-            die("A database error occurred. Please ensure MySQL is running in WampServer.");
+            die("<strong>Database connection error:</strong> Unable to connect to MySQL database [<strong>" . htmlspecialchars(DB_NAME) . "</strong>] on <strong>" . htmlspecialchars(DB_HOST) . "</strong>.<br><br>Please verify database credentials in <code>config/config.php</code>.<br><br><small>Technical details: " . htmlspecialchars($e->getMessage()) . "</small>");
         }
     }
     return $instance;
 }
 
-// Dynamically determine BASE_URL
+// =========================================================================
+// 2. BASE URL AUTO-DETECTION (آٹو یو آر ایل ڈیٹیکشن)
+// Automatically detects directory whether hosted at /Garment/, /smartfit/, or domain root.
+// Can also be manually overridden: define('BASE_URL', 'https://example.com/smartfit/');
+// =========================================================================
 if (!defined('BASE_URL')) {
-    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
-    define('BASE_URL', $protocol . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/Garment/');
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || (!empty($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443)) ? "https://" : "http://";
+    $hostName = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    
+    $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+    if (preg_match('#^(.*?)/(modules|includes|config|api|database|scripts)/#', $scriptName, $m)) {
+        $sub = $m[1];
+    } else {
+        $dir = str_replace('\\', '/', dirname($scriptName));
+        $sub = ($dir === '/' || $dir === '.' || $dir === '') ? '' : $dir;
+    }
+    
+    define('BASE_URL', rtrim($protocol . $hostName . '/' . ltrim($sub, '/'), '/') . '/');
 }
 
 define('APP_NAME', 'Garment ERP');

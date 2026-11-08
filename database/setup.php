@@ -2,15 +2,18 @@
 /**
  * Garment ERP - Database Setup & Migrator
  */
-$host = '127.0.0.1';
-$user = 'root';
-$pass = '';
-$dbName = 'garment_erp';
+require_once __DIR__ . '/../config/config.php';
+
+$host = defined('DB_HOST') ? DB_HOST : '127.0.0.1';
+$port = defined('DB_PORT') ? DB_PORT : '3306';
+$user = defined('DB_USER') ? DB_USER : 'root';
+$pass = defined('DB_PASS') ? DB_PASS : '';
+$dbName = defined('DB_NAME') ? DB_NAME : 'garment_erp';
 
 echo "=== Garment Manufacturing & Production ERP Database Setup ===\n";
 
 try {
-    $pdo = new PDO("mysql:host=$host;charset=utf8mb4", $user, $pass, [
+    $pdo = new PDO("mysql:host=$host;port=$port;charset=utf8mb4", $user, $pass, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     ]);
