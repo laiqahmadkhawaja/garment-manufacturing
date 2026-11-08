@@ -249,12 +249,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $totalColors = count($usedColors);
                     $totalSizes = count($usedSizes);
 
+                    $machineName = trim($_POST['machine_name'] ?? 'CMS 430');
+
                     // Insert Lot Master
                     $stmt = $db->prepare("INSERT INTO lots 
-                        (lot_number, lot_date, product_id, design_number, design_id, shift_type, operator_id, night_operator_id, 
+                        (lot_number, lot_date, product_id, design_number, design_id, shift_type, machine_name, operator_id, night_operator_id, 
                          supervisor_name, expected_date, instructions, total_pieces, total_colors, total_sizes, 
                          size_mode, single_size_id, has_anatomy_variants, anatomy_breakdown, status, created_by) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft', ?)");
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft', ?)");
                     $stmt->execute([
                         $lotNumber,
                         $lotDate,
@@ -262,6 +264,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $designNumber ?: null,
                         $designId,
                         $shiftType,
+                        $machineName,
                         $operatorId,
                         $nightOperatorId,
                         $supervisor,
@@ -530,6 +533,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <div class="col-12 col-md-4">
                             <label class="form-label fw-semibold">Assigned Supervisor</label>
                             <input type="text" name="supervisor_name" class="form-control" placeholder="e.g. Master Shabbir" value="<?= clean($_POST['supervisor_name'] ?? '') ?>">
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="form-label fw-semibold">Machine(s) / مشین</label>
+                            <input type="text" name="machine_name" class="form-control font-monospace" placeholder="e.g. CMS 430 or CMS 430 / CMS 530" value="<?= clean($_POST['machine_name'] ?? 'CMS 430') ?>">
+                            <div class="form-text small" style="font-size: 11px;">Single or multiple knitting machines.</div>
                         </div>
 
                         <div class="col-12 col-md-4">

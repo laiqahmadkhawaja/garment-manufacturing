@@ -67,6 +67,14 @@ if (!in_array('measurements_json', $lCols)) {
     $db->exec("ALTER TABLE lots ADD COLUMN measurements_json JSON NULL AFTER anatomy_breakdown");
     echo "[✓] Added measurements_json to lots\n";
 }
+if (!in_array('machine_name', $lCols)) {
+    $db->exec("ALTER TABLE lots ADD COLUMN machine_name VARCHAR(100) NULL DEFAULT 'CMS 430' AFTER shift_type");
+    echo "[✓] Added machine_name to lots\n";
+}
+if (!in_array('sketch_image', $lCols)) {
+    $db->exec("ALTER TABLE lots ADD COLUMN sketch_image VARCHAR(255) NULL AFTER measurements_json");
+    echo "[✓] Added sketch_image to lots\n";
+}
 
 // 3. Lot Variants
 $vCols = $db->query("SHOW COLUMNS FROM lot_variants")->fetchAll(PDO::FETCH_COLUMN);

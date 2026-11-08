@@ -24,9 +24,11 @@ if ($lotId <= 0 && !empty($activeLots)) {
 
 $stmt = $db->prepare("SELECT l.*, p.name AS product_name, p.code AS product_code, p.product_type,
                              COALESCE(l.design_number, d.design_number) AS design_number,
-                             d.name AS design_name, d.machine_type, 
+                             d.name AS design_name, 
+                             COALESCE(NULLIF(l.machine_name, ''), d.machine_type, 'CMS 430') AS lot_machine_name,
+                             d.machine_type, 
                              COALESCE(l.measurements_json, d.measurements_json) AS measurements_json, 
-                             d.sketch_image,
+                             COALESCE(NULLIF(l.sketch_image, ''), d.sketch_image) AS sketch_image_file,
                              op.name AS operator_name, op.code AS operator_code,
                              nop.name AS night_operator_name,
                              s.name AS single_size_name, s.code AS single_size_code
@@ -84,8 +86,35 @@ $peStmt = $db->prepare("SELECT * FROM product_elements WHERE product_id = ? ORDE
 $peStmt->execute([$lot['product_id']]);
 $productElements = $peStmt->fetchAll();
 
-// Dynamic Garment Types for Cutting Master Section
-$garmentTypes = $db->query("SELECT * FROM garment_types WHERE is_active = 1 ORDER BY sort_order ASC, id ASC")->fetchAll();
+// Anatomy breakdown calculation
+$anatomyData = !empty($lot['anatomy_breakdown']) ? json_decode($lot['anatomy_breakdown'], true) : [];
+$sleevedQty = (int)($anatomyData['with_sleeves'] ?? 0);
+$sleevelessQty = (int)($anatomyData['sleeveless'] ?? 0);
+$hasAnatomy = !empty($lot['has_anatomy_variants']) && ($sleevedQty > 0 || $sleevelessQty > 0);
+$totalLotPieces = (int)$lot['total_pieces'];
+
+// Dynamic Garment Types / Product Elements for Copy #4
+$dynamicElements = [];
+if (!empty($productElements)) {
+    foreach ($productElements as $pe) {
+        $name = trim($pe['element_name']);
+        $isSleeves = (stripos($name, 'sleeve') !== false || stripos($name, 'بازو') !== false);
+        $dynamicElements[] = [
+            'name' => $name,
+            'qty' => (int)$pe['quantity'] ?: 1,
+            'is_sleeves' => $isSleeves
+        ];
+    }
+} else {
+    $dynamicElements = [
+        ['name' => 'فرنٹ (Front)', 'qty' => 1, 'is_sleeves' => false],
+        ['name' => 'بیک (Back)', 'qty' => 1, 'is_sleeves' => false],
+        ['name' => 'بازو (Sleeves)', 'qty' => 2, 'is_sleeves' => true],
+        ['name' => 'کالر / پٹی (Collar)', 'qty' => 1, 'is_sleeves' => false],
+        ['name' => 'پاکٹ (Pocket)', 'qty' => 1, 'is_sleeves' => false],
+        ['name' => 'بون (Bon)', 'qty' => 2, 'is_sleeves' => false],
+    ];
+}
 
 // Decode measurements or provide standard defaults
 $measurements = !empty($lot['measurements_json']) ? json_decode($lot['measurements_json'], true) : [];
@@ -120,7 +149,9 @@ $scheme4Wid = $measurements['scheme']['4']['width'] ?? '';
 $scheme4Bor = $measurements['scheme']['4']['border'] ?? '';
 $scheme4Mins = $measurements['scheme']['4']['mins'] ?? '';
 
-$machine = $lot['machine_type'] ?: 'CMS 430';
+$machine = !empty($lot['lot_machine_name']) ? $lot['lot_machine_name'] : 'CMS 430';
+$sketchImagePath = (!empty($lot['sketch_image_file']) && file_exists(__DIR__ . '/../../' . $lot['sketch_image_file'])) ? $lot['sketch_image_file'] : null;
+
 $operatorDisplay = $lot['operator_name'] ?: ($lot['supervisor_name'] ?: 'ارشد');
 if ($lot['shift_type'] === 'Double Shift' && $lot['night_operator_name']) {
     $operatorDisplay .= ' / ' . $lot['night_operator_name'];
@@ -150,7 +181,7 @@ $designDisplay = $lot['design_number'] ?: '39/26';
 
         @page {
             size: A4 portrait;
-            margin: 4mm 5mm 4mm 5mm;
+            margin: 3mm 4mm 3mm 4mm;
         }
         * {
             box-sizing: border-box;
@@ -161,7 +192,7 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             background: #f8fafc;
             color: #000;
             font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', 'Urdu Typesetting', Tahoma, 'Segoe UI', sans-serif;
-            font-size: 12px;
+            font-size: 13px;
             line-height: 1.45;
             direction: rtl;
             text-align: right;
@@ -181,8 +212,8 @@ $designDisplay = $lot['design_number'] ?: '39/26';
         }
 
         .sheet-container {
-            max-width: 860px;
-            margin: 10px auto;
+            max-width: 890px;
+            margin: 8px auto;
             background: #fff;
             padding: 6px 8px;
             box-shadow: 0 4px 14px rgba(0,0,0,0.08);
@@ -191,10 +222,10 @@ $designDisplay = $lot['design_number'] ?: '39/26';
         .form-section {
             border: 1.5px solid #000;
             padding: 5px 7px;
-            margin-bottom: 6px;
+            margin-bottom: 5px;
             position: relative;
             background: #fff;
-            min-height: 245px;
+            min-height: 250px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -204,7 +235,7 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             flex: 1 1 auto;
             display: flex;
             align-items: stretch;
-            margin-bottom: 4px;
+            margin-bottom: 3px;
         }
         .section-col-flex {
             display: flex;
@@ -220,36 +251,36 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             margin-bottom: 4px;
         }
         .header-grid-tbl td {
-            padding: 2px 3px;
+            padding: 2.5px 3.5px;
             vertical-align: middle;
-            font-size: 12.5px;
-            line-height: 1.45;
+            font-size: 13px;
+            line-height: 1.4;
         }
         .lbl {
             font-weight: 700;
             color: #000;
             margin-left: 2px;
-            font-size: 13px;
+            font-size: 13.5px;
         }
         .val {
             color: #000;
         }
         .badge-boxed {
             border: 1px solid #000;
-            padding: 1px 5px;
+            padding: 1.5px 6px;
             background: #f8fafc;
             border-radius: 2px;
             font-weight: 700;
-            font-size: 11px;
+            font-size: 11.5px;
             display: inline-block;
         }
         .badge-lot-dark {
             background: #000;
             color: #fff;
-            padding: 1px 6px;
+            padding: 2px 7px;
             border-radius: 2px;
             font-weight: 800;
-            font-size: 11px;
+            font-size: 11.5px;
             display: inline-block;
             letter-spacing: 0.5px;
             vertical-align: middle;
@@ -258,7 +289,7 @@ $designDisplay = $lot['design_number'] ?: '39/26';
         .perforated-cut-divider {
             position: relative;
             text-align: center;
-            margin: 5px 0;
+            margin: 4px 0;
             height: 14px;
         }
         .perforated-cut-divider .cut-line {
@@ -273,7 +304,7 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             display: inline-block;
             background: #fff;
             padding: 0 10px;
-            font-size: 10.5px;
+            font-size: 11px;
             font-weight: 700;
             color: #333;
             line-height: 14px;
@@ -282,22 +313,23 @@ $designDisplay = $lot['design_number'] ?: '39/26';
         .tbl-grid {
             width: 100%;
             border-collapse: collapse;
-            font-size: 11.5px;
+            font-size: 12.5px;
             text-align: center;
             margin-bottom: 0;
         }
         .tbl-grid th, .tbl-grid td {
             border: 1px solid #000;
-            padding: 2.5px 3px;
+            padding: 3px 3px;
             vertical-align: middle;
-            line-height: 1.4;
+            line-height: 1.35;
         }
         .tbl-grid th {
             background-color: #f1f3f5 !important;
             font-weight: 700;
-            font-size: 12px;
+            font-size: 13px;
             color: #000;
         }
+
         /* Prototype Sweater Card */
         .sweater-card {
             border: 1px solid #000;
@@ -320,7 +352,7 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             border-top: 1px dashed #777;
             padding-top: 2px;
             margin-top: 2px;
-            font-size: 9.5px;
+            font-size: 10px;
             line-height: 1.25;
             text-align: right;
             font-family: Consolas, 'Segoe UI', sans-serif;
@@ -329,24 +361,9 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             display: flex;
             justify-content: space-between;
         }
-        /* Cutting Section Grid */
-        .tbl-cutting {
-            table-layout: fixed;
-            width: 100%;
-        }
-        .tbl-cutting th {
-            font-size: 10.5px;
-            padding: 2px 1px;
-            word-break: break-word;
-            white-space: normal;
-            line-height: 1.2;
-        }
-        .tbl-cutting td {
-            padding: 2px;
-            height: 25px;
-        }
+
         .copy-footer-note {
-            font-size: 9.5px;
+            font-size: 10px;
             color: #444;
             margin-top: 3px;
             font-weight: 700;
@@ -368,7 +385,7 @@ $designDisplay = $lot['design_number'] ?: '39/26';
         @media print {
             @page {
                 size: A4 portrait;
-                margin: 4mm 5mm 4mm 5mm;
+                margin: 3mm 4mm 3mm 4mm;
             }
             html, body { 
                 background: #fff !important; 
@@ -385,7 +402,7 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                 max-width: 100% !important; 
                 height: 288mm !important;
                 max-height: 288mm !important;
-                margin: 0 !important;
+                margin: 0 !important; 
                 padding: 0 !important;
                 box-shadow: none !important;
                 border-radius: 0 !important;
@@ -400,7 +417,7 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                 min-height: 69mm !important;
                 max-height: 69mm !important;
                 margin: 0 !important; 
-                padding: 2.2mm 3.5mm !important;
+                padding: 2mm 3.2mm !important;
                 page-break-inside: avoid !important;
                 page-break-after: avoid !important;
                 display: flex !important;
@@ -440,15 +457,15 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                 padding: 0 6px !important;
             }
             .header-grid-tbl {
-                margin-bottom: 1.5mm !important;
+                margin-bottom: 1mm !important;
             }
             .header-grid-tbl td {
-                padding: 1.5px 2px !important;
-                font-size: 11.5px !important;
-                line-height: 1.3 !important;
+                padding: 1px 2px !important;
+                font-size: 11px !important;
+                line-height: 1.25 !important;
             }
             .lbl {
-                font-size: 12px !important;
+                font-size: 11.5px !important;
             }
             .tbl-grid {
                 height: 100% !important;
@@ -456,23 +473,12 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                 flex: 1 1 auto !important;
             }
             .tbl-grid th, .tbl-grid td {
-                padding: 2px 2px !important;
+                padding: 1.5px 2px !important;
                 font-size: 10.5px !important;
-                line-height: 1.3 !important;
+                line-height: 1.25 !important;
             }
-            .tbl-cutting {
-                height: 100% !important;
-                flex: 1 1 auto !important;
-                margin-bottom: 1mm !important;
-            }
-            .tbl-cutting th {
-                font-size: 9.5px !important;
-                padding: 2px 1px !important;
-                line-height: 1.2 !important;
-            }
-            .tbl-cutting td {
-                height: auto !important;
-                padding: 1px !important;
+            .tbl-grid th {
+                font-size: 11px !important;
             }
             .sweater-card {
                 height: 100% !important;
@@ -482,8 +488,8 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                 padding: 2px 3px !important;
             }
             .sketch-svg {
-                max-height: 36mm !important;
-                min-height: 28mm !important;
+                max-height: 35mm !important;
+                min-height: 26mm !important;
                 height: 100% !important;
             }
             .sketch-meta {
@@ -523,6 +529,9 @@ $designDisplay = $lot['design_number'] ?: '39/26';
         <button onclick="window.print()" class="btn btn-success btn-sm fw-bold px-3">
             <i class="bi bi-printer-fill me-1"></i> پرنٹ کریں (Print Sheet)
         </button>
+        <a href="<?= BASE_URL ?>modules/lots/edit.php?id=<?= $lotId ?>" class="btn btn-warning btn-sm fw-bold text-dark">
+            <i class="bi bi-pencil-square me-1"></i> ترمیم کریں (Edit Lot & Sketch)
+        </a>
         <a href="<?= BASE_URL ?>modules/lots/view.php?id=<?= $lotId ?>" class="btn btn-outline-secondary btn-sm text-white">
             <i class="bi bi-arrow-right me-1"></i> Back to Lot
         </a>
@@ -577,7 +586,7 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                                 <td class="fw-bold font-monospace" dir="ltr"><?= clean($cs['color_code']) ?></td>
                                 <td>
                                     <div class="d-flex align-items-center justify-content-center gap-1">
-                                        <span class="rounded-circle border d-inline-block" style="width: 7px; height: 7px; background: <?= clean($cs['hex_code']) ?>;"></span>
+                                        <span class="rounded-circle border d-inline-block" style="width: 8px; height: 8px; background: <?= clean($cs['hex_code']) ?>;"></span>
                                         <span class="fw-bold"><?= clean($cs['color_name']) ?></span>
                                     </div>
                                 </td>
@@ -653,37 +662,43 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                 </table>
             </div>
 
-            <!-- Col 3 (Left): Sweater Prototype Sketch & SAM Box -->
+            <!-- Col 3 (Left): Sweater Prototype Sketch / Photo & SAM Box -->
             <div class="col-3 section-col-flex">
                 <div class="sweater-card">
-                    <svg class="sketch-svg" viewBox="0 0 160 140" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <!-- Body -->
-                        <path d="M45 32 L115 32 L120 115 L40 115 Z" stroke="#000" stroke-width="2" fill="#ffffff"/>
-                        <!-- Ribbed Border -->
-                        <rect x="40" y="107" width="80" height="8" stroke="#000" stroke-width="1.5" fill="#f1f5f9"/>
-                        <line x1="50" y1="107" x2="50" y2="115" stroke="#000"/>
-                        <line x1="60" y1="107" x2="60" y2="115" stroke="#000"/>
-                        <line x1="70" y1="107" x2="70" y2="115" stroke="#000"/>
-                        <line x1="80" y1="107" x2="80" y2="115" stroke="#000"/>
-                        <line x1="90" y1="107" x2="90" y2="115" stroke="#000"/>
-                        <line x1="100" y1="107" x2="100" y2="115" stroke="#000"/>
-                        <line x1="110" y1="107" x2="110" y2="115" stroke="#000"/>
-                        <!-- Neck (V-Neck) -->
-                        <path d="M65 32 L80 56 L95 32 Z" stroke="#000" stroke-width="1.5" fill="#ffffff"/>
-                        <!-- Sleeves -->
-                        <?php if (empty($lot['has_anatomy_variants']) || !empty($lot['with_sleeves_qty'])): ?>
-                            <path d="M45 32 L15 75 L28 80 L50 50" stroke="#000" stroke-width="1.5" fill="#ffffff"/>
-                            <path d="M115 32 L145 75 L132 80 L110 50" stroke="#000" stroke-width="1.5" fill="#ffffff"/>
-                        <?php else: ?>
-                            <!-- Sleeveless Cross lines -->
-                            <line x1="20" y1="36" x2="45" y2="65" stroke="#dc2626" stroke-width="2" stroke-dasharray="3,3"/>
-                            <line x1="140" y1="36" x2="115" y2="65" stroke="#dc2626" stroke-width="2" stroke-dasharray="3,3"/>
-                        <?php endif; ?>
-                    </svg>
+                    <?php if ($sketchImagePath): ?>
+                        <div class="d-flex align-items-center justify-content-center p-1" style="height: 70px; background: #fff; border-radius: 2px; overflow: hidden;">
+                            <img src="<?= BASE_URL . clean($sketchImagePath) ?>" alt="Garment Photo" class="sketch-img" style="max-height: 68px; max-width: 100%; object-fit: contain; margin: 0 auto; display: block;">
+                        </div>
+                    <?php else: ?>
+                        <svg class="sketch-svg" viewBox="0 0 160 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <!-- Body -->
+                            <path d="M45 32 L115 32 L120 115 L40 115 Z" stroke="#000" stroke-width="2" fill="#ffffff"/>
+                            <!-- Ribbed Border -->
+                            <rect x="40" y="107" width="80" height="8" stroke="#000" stroke-width="1.5" fill="#f1f5f9"/>
+                            <line x1="50" y1="107" x2="50" y2="115" stroke="#000"/>
+                            <line x1="60" y1="107" x2="60" y2="115" stroke="#000"/>
+                            <line x1="70" y1="107" x2="70" y2="115" stroke="#000"/>
+                            <line x1="80" y1="107" x2="80" y2="115" stroke="#000"/>
+                            <line x1="90" y1="107" x2="90" y2="115" stroke="#000"/>
+                            <line x1="100" y1="107" x2="100" y2="115" stroke="#000"/>
+                            <line x1="110" y1="107" x2="110" y2="115" stroke="#000"/>
+                            <!-- Neck (V-Neck) -->
+                            <path d="M65 32 L80 56 L95 32 Z" stroke="#000" stroke-width="1.5" fill="#ffffff"/>
+                            <!-- Sleeves -->
+                            <?php if (empty($lot['has_anatomy_variants']) || !empty($sleevedQty)): ?>
+                                <path d="M45 32 L15 75 L28 80 L50 50" stroke="#000" stroke-width="1.5" fill="#ffffff"/>
+                                <path d="M115 32 L145 75 L132 80 L110 50" stroke="#000" stroke-width="1.5" fill="#ffffff"/>
+                            <?php else: ?>
+                                <!-- Sleeveless Cross lines -->
+                                <line x1="20" y1="36" x2="45" y2="65" stroke="#dc2626" stroke-width="2" stroke-dasharray="3,3"/>
+                                <line x1="140" y1="36" x2="115" y2="65" stroke="#dc2626" stroke-width="2" stroke-dasharray="3,3"/>
+                            <?php endif; ?>
+                        </svg>
+                    <?php endif; ?>
 
                     <div class="d-flex justify-content-between align-items-center px-1 my-1">
                         <span class="small fw-bold">منٹ: <strong class="badge-boxed" dir="ltr"><?= clean($samMins) ?></strong></span>
-                        <span class="badge bg-light text-dark border font-latin" style="font-size: 9px;"><?= clean($lot['product_name']) ?></span>
+                        <span class="badge bg-light text-dark border font-latin" style="font-size: 9.5px;"><?= clean($lot['product_name']) ?></span>
                     </div>
 
                     <div class="sketch-meta">
@@ -756,7 +771,16 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                                 <td class="fw-bold font-monospace" dir="ltr"><?= clean($cs['color_code']) ?></td>
                                 <td class="fw-bold"><?= clean($cs['color_name']) ?></td>
                                 <td class="fw-semibold" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
-                                <td class="fw-semibold" dir="ltr"><?= (int)$cs['total_qty'] * 2 ?></td>
+                                <td class="fw-semibold" dir="ltr">
+                                    <?php 
+                                    if ($hasAnatomy && $totalLotPieces > 0) {
+                                        $cWithSleeves = round(($sleevedQty / $totalLotPieces) * (int)$cs['total_qty']);
+                                        echo (int)($cWithSleeves * 2);
+                                    } else {
+                                        echo (int)$cs['total_qty'] * 2;
+                                    }
+                                    ?>
+                                </td>
                                 <td class="fw-bold" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
                             </tr>
                         <?php endforeach; ?>
@@ -768,7 +792,9 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                         <tr class="table-light fw-bold">
                             <td colspan="2" class="text-start pe-2">ٹوٹل:</td>
                             <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
-                            <td dir="ltr"><?= (int)$lot['total_pieces'] * 2 ?></td>
+                            <td dir="ltr">
+                                <?= $hasAnatomy ? (int)($sleevedQty * 2) : (int)($lot['total_pieces'] * 2) ?>
+                            </td>
                             <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
                         </tr>
                     </tfoot>
@@ -823,72 +849,125 @@ $designDisplay = $lot['design_number'] ?: '39/26';
     <?php endif; ?>
 
     <!-- ======================================================================= -->
-    <!-- SECTION 3: CUTTING MASTER SECTION (کٹائی ماسٹر) -->
+    <!-- SECTION 3: CUTTING MASTER SECTION (کٹائی ماسٹر کاپی) -->
     <!-- ======================================================================= -->
     <?php if (in_array($copyFilter, ['all', 'cutting'])): ?>
     <div class="form-section">
         <table class="header-grid-tbl">
             <tr>
-                <td style="width: 24%;">
-                    <span class="lbl">کٹائی ماسٹر:</span> <span class="val fw-bold">علی رضا (کٹنگ ماسٹر)</span>
+                <td style="width: 25%;">
+                    <span class="lbl">کٹائی ماسٹر:</span> <span class="val fw-bold">علی رضا (کٹنگ ڈیپارٹمنٹ)</span>
                 </td>
-                <td style="width: 14%;">
-                    <span class="lbl">تاریخ:</span> <span class="val font-latin" dir="ltr">_____________</span>
-                </td>
-                <td style="width: 13%;">
-                    <span class="lbl">سائز:</span> <span class="badge-boxed" dir="ltr"><?= clean($sizeDisplay) ?></span>
-                </td>
-                <td style="width: 13%;">
-                    <span class="lbl">ڈیزائن:</span> <span class="badge-boxed" dir="ltr"><?= clean($designDisplay) ?></span>
+                <td style="width: 38%; text-align: center;">
+                    <span class="badge bg-dark text-white px-2 py-1" style="font-size: 11.5px;">
+                        کل تعداد: <?= number_format($totalLotPieces) ?> پیسز 
+                        <?php if ($hasAnatomy): ?>
+                            (بازو والے: <?= number_format($sleevedQty) ?> | بغیر بازو / سینڈو: <?= number_format($sleevelessQty) ?>)
+                        <?php endif; ?>
+                    </span>
                 </td>
                 <td style="width: 12%;">
-                    <span class="lbl">تعداد:</span> <span class="badge-boxed" dir="ltr"><?= (int)$lot['total_pieces'] ?></span>
+                    <span class="lbl">سائز:</span> <span class="badge-boxed" dir="ltr"><?= clean($sizeDisplay) ?></span>
                 </td>
-                <td style="width: 24%; text-align: left;">
+                <td style="width: 11%;">
+                    <span class="lbl">ڈیزائن:</span> <span class="badge-boxed" dir="ltr"><?= clean($designDisplay) ?></span>
+                </td>
+                <td style="width: 14%; text-align: left;">
                     <span class="lbl">لاٹ #:</span> <span class="badge-lot-dark" dir="ltr"><?= clean($lot['lot_number']) ?></span>
                 </td>
             </tr>
         </table>
 
-        <!-- Dynamic Garment Types Grid (Zero Scrollbar - Fixed Table Layout) -->
-        <table class="tbl-grid tbl-cutting">
+        <!-- Dynamic Product-Centric Cutting Table (Roomy, Wide & Dynamic Columns) -->
+        <table class="tbl-grid tbl-cutting" style="table-layout: fixed; width: 100%;">
             <thead>
                 <tr>
-                    <th style="width: 7%;">خاکہ</th>
-                    <?php foreach ($garmentTypes as $gt): ?>
-                        <th><?= clean($gt['name']) ?></th>
-                    <?php endforeach; ?>
-                    <th style="width: 9%;">کل کٹنگ</th>
+                    <th style="width: 10%;">خاکہ</th>
+                    <th style="width: 24%;">رنگ (Color / Shade)</th>
+                    <th style="width: 24%;">پروڈکٹ / ڈیزائن قسم</th>
+                    <th style="width: 14%;">بازو والے (With Sleeves)</th>
+                    <th style="width: 14%;">بغیر بازو / سینڈو</th>
+                    <th style="width: 14%;">کل کٹنگ (Total Pcs)</th>
                 </tr>
             </thead>
             <tbody>
-                <!-- Row 1: Pieces Cut -->
-                <tr>
-                    <td rowspan="2" class="p-1 text-center" style="vertical-align: middle; background: #fafafa;">
-                        <svg class="sketch-svg" style="height: 50px; width: 100%; max-width: 55px;" viewBox="0 0 160 140" fill="none">
-                            <path d="M45 32 L115 32 L120 115 L40 115 Z" stroke="#000" stroke-width="2" fill="#fff"/>
-                            <path d="M65 32 L80 56 L95 32 Z" stroke="#000" stroke-width="1.5" fill="#fff"/>
-                            <path d="M45 32 L15 75 L28 80 L50 50" stroke="#000" stroke-width="1.5" fill="#fff"/>
-                            <path d="M115 32 L145 75 L132 80 L110 50" stroke="#000" stroke-width="1.5" fill="#fff"/>
-                        </svg>
-                    </td>
-                    <?php foreach ($garmentTypes as $gt): ?>
-                        <td></td>
-                    <?php endforeach; ?>
-                    <td class="fw-bold"></td>
-                </tr>
-                <!-- Row 2: Secondary Notes or Colors -->
-                <tr>
-                    <?php foreach ($garmentTypes as $gt): ?>
-                        <td></td>
-                    <?php endforeach; ?>
-                    <td></td>
-                </tr>
+                <?php 
+                $sumBazoCut = 0;
+                $sumSandoCut = 0;
+                $sumTotalCut = 0;
+                $cIndex = 0;
+                $totalColorsCount = count($colorSummary);
+                foreach ($colorSummary as $cs): 
+                    $cIndex++;
+                    $cQty = (int)$cs['total_qty'];
+                    if ($hasAnatomy && $totalLotPieces > 0) {
+                        if ($cIndex === $totalColorsCount) {
+                            $cBazo = max(0, $sleevedQty - $sumBazoCut);
+                            $cSando = max(0, $sleevelessQty - $sumSandoCut);
+                        } else {
+                            $cBazo = (int)round(($sleevedQty / $totalLotPieces) * $cQty);
+                            $cSando = max(0, $cQty - $cBazo);
+                        }
+                    } else {
+                        $cBazo = $cQty;
+                        $cSando = 0;
+                    }
+                    $sumBazoCut += $cBazo;
+                    $sumSandoCut += $cSando;
+                    $sumTotalCut += $cQty;
+                ?>
+                    <tr>
+                        <td class="p-1 text-center" style="vertical-align: middle;">
+                            <?php if ($sketchImagePath): ?>
+                                <img src="<?= BASE_URL . clean($sketchImagePath) ?>" alt="Sketch" style="max-height: 38px; max-width: 45px; object-fit: contain; display: block; margin: auto;">
+                            <?php else: ?>
+                                <svg class="sketch-svg" style="height: 32px; width: 100%; max-width: 40px; margin: auto; display: block;" viewBox="0 0 160 140" fill="none">
+                                    <path d="M45 32 L115 32 L120 115 L40 115 Z" stroke="#000" stroke-width="2" fill="#fff"/>
+                                    <path d="M65 32 L80 56 L95 32 Z" stroke="#000" stroke-width="1.5" fill="#fff"/>
+                                    <?php if ($cBazo > 0): ?>
+                                        <path d="M45 32 L15 75 L28 80 L50 50" stroke="#000" stroke-width="1.5" fill="#fff"/>
+                                        <path d="M115 32 L145 75 L132 80 L110 50" stroke="#000" stroke-width="1.5" fill="#fff"/>
+                                    <?php endif; ?>
+                                </svg>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center justify-content-center gap-1">
+                                <span class="rounded-circle border d-inline-block" style="width: 8px; height: 8px; background: <?= clean($cs['hex_code']) ?>;"></span>
+                                <strong class="font-monospace" dir="ltr"><?= clean($cs['color_code']) ?></strong>
+                                <span>-</span>
+                                <span class="fw-bold"><?= clean($cs['color_name']) ?></span>
+                            </div>
+                        </td>
+                        <td class="fw-bold">
+                            <?= clean($lot['product_name']) ?>
+                            <?php if (!empty($lot['product_type']) && $lot['product_type'] !== $lot['product_name']): ?>
+                                <span class="text-muted small">(<?= clean($lot['product_type']) ?>)</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="fw-bold" dir="ltr"><?= (int)$cBazo ?></td>
+                        <td class="fw-bold text-muted" dir="ltr"><?= (int)$cSando ?></td>
+                        <td class="fw-bold" dir="ltr"><?= (int)$cQty ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php for ($i = count($colorSummary); $i < 3; $i++): ?>
+                    <tr>
+                        <td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td>
+                    </tr>
+                <?php endfor; ?>
             </tbody>
+            <tfoot>
+                <tr class="table-light fw-bold" style="background: #e9ecef !important;">
+                    <td colspan="3" class="text-start pe-3">ٹوٹل کٹنگ بریک ڈاؤن:</td>
+                    <td dir="ltr"><?= (int)$sumBazoCut ?></td>
+                    <td dir="ltr"><?= (int)$sumSandoCut ?></td>
+                    <td dir="ltr"><?= (int)$sumTotalCut ?></td>
+                </tr>
+            </tfoot>
         </table>
 
         <div class="copy-footer-note">
-            Copy #3: Cutting Department Traveller (نقل نمبر 3: کٹائی ماسٹر کاپی) — تمام اقسام متحرک و ایڈمن سے قابلِ تبدیل ہیں
+            Copy #3: Cutting Department Traveller (نقل نمبر 3: کٹائی ماسٹر کاپی) — متحرک رنگ اور ڈیزائن بریک ڈاؤن
         </div>
     </div>
     <?php endif; ?>
@@ -926,51 +1005,83 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             </tr>
         </table>
 
+        <!-- Dynamic Product Elements Table -->
         <table class="tbl-grid" style="table-layout: fixed; width: 100%;">
             <thead>
                 <tr>
-                    <th style="width: 22%;">رنگ (Color)</th>
-                    <th style="width: 11%;">لمبی ٹیپ</th>
-                    <th style="width: 10%;">وی (V)</th>
-                    <th style="width: 11%;">کالر</th>
-                    <th style="width: 10%;">بون</th>
-                    <th style="width: 11%;">پاکٹ</th>
-                    <th style="width: 11%;">گول گلا</th>
+                    <th style="width: 20%;">رنگ (Color)</th>
+                    <?php 
+                    $elemColWidth = count($dynamicElements) > 0 ? (66 / count($dynamicElements)) : 66;
+                    foreach ($dynamicElements as $elem): 
+                    ?>
+                        <th style="width: <?= number_format($elemColWidth, 1) ?>%;">
+                            <?= clean($elem['name']) ?>
+                            <?php if ($elem['qty'] > 1): ?>
+                                <span class="badge bg-light text-dark border px-1" dir="ltr">×<?= (int)$elem['qty'] ?></span>
+                            <?php endif; ?>
+                        </th>
+                    <?php endforeach; ?>
                     <th style="width: 14%;">کل تعداد</th>
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($colorSummary as $cs): ?>
+                <?php 
+                $elemTotals = array_fill(0, count($dynamicElements), 0);
+                $grandColorTotal = 0;
+                $cIndex = 0;
+                $totalColorsCount = count($colorSummary);
+                $bazoAccumulator = 0;
+
+                foreach ($colorSummary as $cs): 
+                    $cIndex++;
+                    $cQty = (int)$cs['total_qty'];
+                    $grandColorTotal += $cQty;
+
+                    if ($hasAnatomy && $totalLotPieces > 0) {
+                        if ($cIndex === $totalColorsCount) {
+                            $cBazo = max(0, $sleevedQty - $bazoAccumulator);
+                        } else {
+                            $cBazo = (int)round(($sleevedQty / $totalLotPieces) * $cQty);
+                        }
+                    } else {
+                        $cBazo = $cQty;
+                    }
+                    $bazoAccumulator += $cBazo;
+                ?>
                     <tr>
                         <td class="fw-bold font-monospace" dir="ltr"><?= clean($cs['color_code']) ?> (<?= clean($cs['color_name']) ?>)</td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td class="fw-semibold" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
-                        <td class="fw-semibold" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
-                        <td class="fw-bold" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
+                        <?php foreach ($dynamicElements as $eIdx => $elem): 
+                            $ePieces = $elem['is_sleeves'] ? ($cBazo * $elem['qty']) : ($cQty * $elem['qty']);
+                            $elemTotals[$eIdx] += $ePieces;
+                        ?>
+                            <td class="fw-semibold" dir="ltr"><?= (int)$ePieces ?></td>
+                        <?php endforeach; ?>
+                        <td class="fw-bold" dir="ltr"><?= (int)$cQty ?></td>
                     </tr>
                 <?php endforeach; ?>
-                <?php for ($i = count($colorSummary); $i < 4; $i++): ?>
+                <?php for ($i = count($colorSummary); $i < 3; $i++): ?>
                     <tr>
-                        <td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+                        <td>&nbsp;</td>
+                        <?php foreach ($dynamicElements as $elem): ?>
+                            <td></td>
+                        <?php endforeach; ?>
+                        <td></td>
                     </tr>
                 <?php endfor; ?>
             </tbody>
             <tfoot>
-                <tr class="table-light fw-bold">
-                    <td class="text-start pe-2">ٹوٹل پیسز:</td>
-                    <td></td><td></td><td></td><td></td>
-                    <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
-                    <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
-                    <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
+                <tr class="table-light fw-bold" style="background: #e9ecef !important;">
+                    <td class="text-start pe-2">ٹوٹل اجزاء:</td>
+                    <?php foreach ($dynamicElements as $eIdx => $elem): ?>
+                        <td dir="ltr"><?= (int)$elemTotals[$eIdx] ?></td>
+                    <?php endforeach; ?>
+                    <td dir="ltr"><?= (int)$grandColorTotal ?></td>
                 </tr>
             </tfoot>
         </table>
 
         <div class="copy-footer-note">
-            Copy #4: Head Fit & Band Plate Record (نقل نمبر 4: بینڈ فلیٹ / ہینڈ پرنٹ خرچہ شیٹ)
+            Copy #4: Head Fit & Band Plate Record (نقل نمبر 4: بینڈ فلیٹ / ہینڈ پرنٹ خرچہ شیٹ) — متحرک پیٹرن اجزاء
         </div>
     </div>
     <?php endif; ?>

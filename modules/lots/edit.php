@@ -116,6 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     check_csrf();
     $designNumber = trim($_POST['design_number'] ?? '');
     $supervisor = trim($_POST['supervisor_name'] ?? '');
+    $machineName = trim($_POST['machine_name'] ?? 'CMS 430');
     $expectedDate = !empty($_POST['expected_date']) ? trim($_POST['expected_date']) : null;
     $instructions = trim($_POST['instructions'] ?? '');
     $shiftType = in_array($_POST['shift_type'] ?? '', ['Single Shift', 'Double Shift']) ? $_POST['shift_type'] : 'Single Shift';
@@ -162,23 +163,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ];
     $measurementsJson = json_encode($measurementsArray, JSON_UNESCAPED_UNICODE);
 
+    // Garment Photo / Sketch Upload Handling
+    $sketchImagePath = $lot['sketch_image'] ?? null;
+    if (!empty($_POST['remove_sketch'])) {
+        if (!empty($sketchImagePath) && file_exists(__DIR__ . '/../../' . $sketchImagePath)) {
+            @unlink(__DIR__ . '/../../' . $sketchImagePath);
+        }
+        $sketchImagePath = null;
+    }
+    if (isset($_FILES['sketch_image']) && $_FILES['sketch_image']['error'] === UPLOAD_ERR_OK) {
+        $file = $_FILES['sketch_image'];
+        $allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (in_array($ext, $allowedExts)) {
+            $uploadDir = __DIR__ . '/../../uploads/lots';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+            }
+            $fileName = 'sketch_' . $lotId . '_' . time() . '.' . $ext;
+            $dest = $uploadDir . '/' . $fileName;
+            if (move_uploaded_file($file['tmp_name'], $dest)) {
+                $sketchImagePath = 'uploads/lots/' . $fileName;
+            }
+        }
+    }
+
     $db->beginTransaction();
     try {
         $up = $db->prepare("UPDATE lots SET design_number = ?, supervisor_name = ?, expected_date = ?, instructions = ?, 
-                            shift_type = ?, operator_id = ?, night_operator_id = ?, has_anatomy_variants = ?, anatomy_breakdown = ?, measurements_json = ? 
+                            shift_type = ?, machine_name = ?, operator_id = ?, night_operator_id = ?, sketch_image = ?, has_anatomy_variants = ?, anatomy_breakdown = ?, measurements_json = ? 
                             WHERE id = ?");
-        $up->execute([$designNumber ?: null, $supervisor, $expectedDate, $instructions, $shiftType, $operatorId, $nightOperatorId, $hasAnatomy, $anatomyBreakdown, $measurementsJson, $lotId]);
+        $up->execute([$designNumber ?: null, $supervisor, $expectedDate, $instructions, $shiftType, $machineName, $operatorId, $nightOperatorId, $sketchImagePath, $hasAnatomy, $anatomyBreakdown, $measurementsJson, $lotId]);
 
         log_audit('EDIT_LOT', 'lots', $lotId, [
             'design_number' => $lot['design_number'],
             'supervisor' => $lot['supervisor_name'],
-            'shift_type' => $lot['shift_type']
+            'shift_type' => $lot['shift_type'],
+            'machine_name' => $lot['machine_name'] ?? null
         ], [
             'design_number' => $designNumber,
             'supervisor' => $supervisor,
             'shift_type' => $shiftType,
+            'machine_name' => $machineName,
             'operator_id' => $operatorId,
             'night_operator_id' => $nightOperatorId,
+            'sketch_image' => $sketchImagePath,
             'measurements' => $measurementsArray
         ]);
 
@@ -214,7 +243,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <span class="badge bg-light text-primary border fw-bold"><?= number_format($lot['total_pieces']) ?> Total Pcs</span>
             </div>
             <div class="card-modern-body">
-                <form method="POST" action="">
+                <form method="POST" action="" enctype="multipart/form-data">
                     <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
 
                     <div class="row g-3">
@@ -225,8 +254,33 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         </div>
 
                         <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Machine(s) / مشین</label>
+                            <input type="text" name="machine_name" class="form-control font-monospace fw-bold" value="<?= clean($lot['machine_name'] ?? 'CMS 430') ?>" placeholder="e.g. CMS 430 or CMS 430 / CMS 530">
+                            <div class="form-text small">Knitting machine number(s). Prints dynamically on Design Sheet.</div>
+                        </div>
+
+                        <div class="col-12 col-md-6">
                             <label class="form-label fw-semibold">Assigned Supervisor</label>
                             <input type="text" name="supervisor_name" class="form-control" value="<?= clean($lot['supervisor_name']) ?>" placeholder="e.g. Master Shabbir">
+                        </div>
+
+                        <!-- Garment Diagram / Sketch Photo (خاکہ / تصویر) -->
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Garment Diagram / Sketch Photo (خاکہ / تصویر)</label>
+                            <input type="file" name="sketch_image" class="form-control" accept="image/*">
+                            <div class="form-text small">Upload actual completed garment photo or sketch diagram.</div>
+                            <?php if (!empty($lot['sketch_image']) && file_exists(__DIR__ . '/../../' . $lot['sketch_image'])): ?>
+                                <div class="mt-2 d-flex align-items-center gap-3 p-2 border rounded bg-white">
+                                    <img src="<?= BASE_URL . clean($lot['sketch_image']) ?>" alt="Sketch" style="height: 55px; max-width: 85px; object-fit: contain;" class="rounded border">
+                                    <div>
+                                        <div class="fw-bold small text-success"><i class="bi bi-image me-1"></i> Current Photo Uploaded</div>
+                                        <div class="form-check mt-1">
+                                            <input class="form-check-input" type="checkbox" name="remove_sketch" id="remove_sketch" value="1">
+                                            <label class="form-check-label text-danger small fw-semibold" for="remove_sketch">Remove / Revert to SVG Wireframe</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                         </div>
 
                         <!-- Shift Handling -->
