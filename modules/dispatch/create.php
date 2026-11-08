@@ -203,13 +203,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
                     // Add received money to Cash / Bank account if account selected
                     if ($accountId > 0) {
+                        $custStmt = $db->prepare("SELECT name FROM customers WHERE id = ?");
+                        $custStmt->execute([$customerId]);
+                        $custName = $custStmt->fetchColumn() ?: 'Customer';
+
                         record_account_transaction(
                             $accountId,
                             $dispatchDate,
                             'Customer Payment',
                             $paidAmount,
                             'inflow',
-                            "Dispatch payment for Challan #$challanNo ({$customer['name']})",
+                            "Dispatch payment for Challan #$challanNo ($custName)",
                             'DISPATCH_PAYMENT',
                             $dispatchId,
                             $challanNo,

@@ -193,7 +193,11 @@ $topCat = $topCatStmt->fetch();
 // Dropdown options
 $categories = $db->query("SELECT ec.*, (SELECT COUNT(*) FROM expenses WHERE category_id = ec.id) AS expense_count FROM expense_categories ec ORDER BY ec.name ASC")->fetchAll();
 $accounts = $db->query("SELECT * FROM cash_bank_accounts WHERE is_active = 1 ORDER BY account_name ASC")->fetchAll();
-$activeLots = $db->query("SELECT id, lot_number, product_name FROM lots WHERE is_active = 1 ORDER BY id DESC LIMIT 50")->fetchAll();
+$activeLots = $db->query("SELECT l.id, l.lot_number, p.name AS product_name 
+                          FROM lots l 
+                          LEFT JOIN products p ON l.product_id = p.id 
+                          WHERE l.status != 'Closed' 
+                          ORDER BY l.id DESC LIMIT 50")->fetchAll();
 
 // Fetch Filtered Expenses List
 $sql = "SELECT e.*, ec.name AS category_name, cba.account_name, cba.bank_name, l.lot_number, u.full_name AS recorder_name
