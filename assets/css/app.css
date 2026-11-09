@@ -476,6 +476,134 @@ html, body {
     }
 }
 
+/* =======================================================
+   Searchable Select Dropdowns (Universal System-Wide)
+   ======================================================= */
+.searchable-native-hidden {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+.searchable-lot-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.searchable-lot-trigger {
+    background-color: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    min-height: 38px;
+    text-align: start;
+    user-select: none;
+}
+
+.searchable-lot-trigger.form-select-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8125rem;
+    min-height: 31px;
+}
+
+.searchable-lot-trigger:hover {
+    border-color: #94a3b8;
+    background-color: #f8fafc;
+}
+
+.searchable-lot-trigger:focus,
+.searchable-lot-trigger.show {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.15);
+    outline: none;
+}
+
+.searchable-lot-dropdown {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.18), 0 8px 10px -6px rgba(15, 23, 42, 0.12);
+    z-index: 1070;
+    margin-top: 4px;
+    min-width: 100%;
+    animation: fadeInSelectMenu 0.15s ease;
+}
+
+@keyframes fadeInSelectMenu {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.searchable-lot-search-input {
+    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+    padding-left: 2rem !important;
+    font-size: 0.8125rem;
+}
+
+.searchable-lot-search-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.15rem rgba(37, 99, 235, 0.15);
+}
+
+.searchable-lot-list {
+    max-height: 260px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.searchable-lot-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.searchable-lot-list::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 4px;
+}
+
+.searchable-lot-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.45rem 0.65rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.825rem;
+    color: var(--text-primary);
+    transition: background-color 0.1s ease;
+}
+
+.searchable-lot-item:hover,
+.searchable-lot-item.highlighted {
+    background-color: #f1f5f9;
+    color: var(--primary);
+}
+
+.searchable-lot-item.active {
+    background-color: #eff6ff;
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.searchable-lot-item .lot-badge {
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-weight: 700;
+    font-size: 0.75rem;
+}
+
 /* Print Stylesheet */
 @media print {
     .app-sidebar, .app-topbar, .no-print, .btn, .nav-tabs {

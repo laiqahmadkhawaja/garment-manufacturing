@@ -186,6 +186,16 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <input type="date" name="date_to" class="form-control form-control-sm" value="<?= clean($dateTo) ?>">
                     </div>
 
+                    <div class="col-12 col-md-2">
+                        <label class="form-label small fw-bold mb-1">Filter by Lot (لاٹ)</label>
+                        <select name="lot_id" class="form-select form-select-sm">
+                            <option value="">-- All Lots --</option>
+                            <?php foreach ($lots as $l): ?>
+                                <option value="<?= $l['id'] ?>" <?= $filterLot === (int)$l['id'] ? 'selected' : '' ?>>LOT #<?= clean($l['lot_number']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
                     <div class="col-8 col-md-2">
                         <label class="form-label small fw-bold mb-1">Worker (ورکر)</label>
                         <select name="worker_id" class="form-select form-select-sm">
@@ -196,9 +206,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         </select>
                     </div>
 
-                    <div class="col-4 col-md-2 d-flex align-items-end">
+                    <div class="col-4 col-md-1 d-flex align-items-end">
                         <button type="submit" class="btn btn-sm btn-primary w-100 fw-bold">
-                            <i class="bi bi-funnel-fill me-1"></i> Filter
+                            <i class="bi bi-funnel-fill me-1"></i> Go
                         </button>
                     </div>
                 </form>
