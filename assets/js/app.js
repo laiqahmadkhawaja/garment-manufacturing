@@ -349,8 +349,28 @@ function initSearchableSelects(container = document) {
                     t.setAttribute('aria-expanded', 'false');
                 }
             });
+            document.querySelectorAll('.searchable-lot-wrapper').forEach(w => {
+                if (w !== wrapper) {
+                    w.classList.remove('show');
+                    w.style.zIndex = '';
+                }
+            });
+
+            wrapper.classList.add('show');
+            wrapper.style.zIndex = '99999';
+
+            const parentCard = wrapper.closest('.card, .card-modern, .card-modern-body');
+            if (parentCard) {
+                parentCard.style.overflow = 'visible';
+                parentCard.style.zIndex = '9999';
+            }
+            const parentRow = wrapper.closest('.row');
+            if (parentRow) {
+                parentRow.style.zIndex = '9999';
+            }
 
             dropdown.style.display = 'block';
+            dropdown.style.zIndex = '100000';
             trigger.classList.add('show');
             trigger.setAttribute('aria-expanded', 'true');
 
@@ -378,6 +398,17 @@ function initSearchableSelects(container = document) {
             dropdown.style.display = 'none';
             trigger.classList.remove('show');
             trigger.setAttribute('aria-expanded', 'false');
+            wrapper.classList.remove('show');
+            wrapper.style.zIndex = '';
+
+            const parentCard = wrapper.closest('.card, .card-modern, .card-modern-body');
+            if (parentCard) {
+                parentCard.style.zIndex = '';
+            }
+            const parentRow = wrapper.closest('.row');
+            if (parentRow) {
+                parentRow.style.zIndex = '';
+            }
         }
 
         function filterItems(query) {
@@ -561,6 +592,13 @@ function initSearchableSelects(container = document) {
                 document.querySelectorAll('.searchable-lot-trigger').forEach(t => {
                     t.classList.remove('show');
                     t.setAttribute('aria-expanded', 'false');
+                });
+                document.querySelectorAll('.searchable-lot-wrapper').forEach(w => {
+                    w.classList.remove('show');
+                    w.style.zIndex = '';
+                });
+                document.querySelectorAll('.card, .card-modern, .row').forEach(el => {
+                    if (el.style.zIndex === '9999') el.style.zIndex = '';
                 });
             }
         });

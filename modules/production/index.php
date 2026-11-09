@@ -1429,7 +1429,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             <input type="hidden" name="entry_mode" id="pe_entry_mode" value="operator_initial">
 
             <!-- ROW 1: TOP CONTROL BAR & COMPACT RECENT SUBMISSIONS (SIDE BY SIDE AT TOP) -->
-            <div class="row g-3 mb-3 align-items-stretch">
+            <div class="row g-3 mb-3 align-items-stretch" style="position: relative; z-index: 20;">
                 <!-- Top Left: Work Entry Setup (Date, Lot, Stage Operation) -->
                 <div class="col-12 col-xl-8">
                     <div class="card-modern shadow-sm h-100">

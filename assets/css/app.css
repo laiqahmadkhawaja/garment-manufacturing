@@ -251,7 +251,7 @@ html, body {
     box-shadow: var(--shadow-sm);
     transition: box-shadow 0.2s ease, transform 0.2s ease;
     margin-bottom: 1.5rem;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .card-modern:hover {
@@ -261,8 +261,12 @@ html, body {
 .card-modern-header {
     padding: 1.15rem 1.4rem;
     border-bottom: 1px solid var(--border-light);
+    border-top-left-radius: calc(var(--radius-lg) - 1px);
+    border-top-right-radius: calc(var(--radius-lg) - 1px);
     display: flex;
     align-items: center;
+    justify-content: space-between;
+}
     justify-content: space-between;
     background-color: #ffffff;
 }
@@ -498,6 +502,11 @@ html, body {
     width: 100%;
 }
 
+.searchable-lot-wrapper.show,
+.searchable-lot-wrapper:focus-within {
+    z-index: 99999 !important;
+}
+
 .searchable-lot-trigger {
     background-color: #ffffff;
     border: 1px solid var(--border-color);
@@ -535,8 +544,8 @@ html, body {
     background: #ffffff;
     border: 1px solid #cbd5e1;
     border-radius: 10px;
-    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.18), 0 8px 10px -6px rgba(15, 23, 42, 0.12);
-    z-index: 1070;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.22), 0 4px 10px rgba(15, 23, 42, 0.1);
+    z-index: 100000 !important;
     margin-top: 4px;
     min-width: max(100%, 280px);
     max-width: min(580px, 92vw);
