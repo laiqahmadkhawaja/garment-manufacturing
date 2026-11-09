@@ -66,15 +66,39 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /**
- * Universal Searchable Select Component for Lots & Dropdowns across the system
+ * Universal Searchable Select Component for Lots, Workers/Operators, Operations & Dropdowns across the system
  */
 function initSearchableSelects(container = document) {
     const selectors = [
+        // Lots
         'select[name="lot_id"]',
         'select#pe_lot_id',
         'select#return_lot_id',
         'select.lot-select',
         'select.searchable-lot',
+
+        // Workers & Operators
+        'select[name="worker_id"]',
+        'select[name="operator_id"]',
+        'select[name="night_operator_id"]',
+        'select[name="day_worker_id"]',
+        'select[name="night_worker_id"]',
+        'select[name="cutting_worker_id"]',
+        'select#pe_worker_id',
+        'select#cut_worker_id',
+        'select#op_single_day_worker',
+        'select#op_double_day_worker',
+        'select#op_double_night_worker',
+        'select#workerSelect',
+        'select.worker-select',
+        'select.operator-select',
+
+        // Operations & Stages
+        'select[name="operation_id"]',
+        'select#pe_operation_id',
+        'select.operation-select',
+
+        // Explicit opt-in
         'select.searchable-select',
         'select[data-searchable="true"]'
     ].join(', ');
@@ -82,14 +106,46 @@ function initSearchableSelects(container = document) {
     const selects = container.querySelectorAll(selectors);
 
     selects.forEach(select => {
-        // Skip already initialized or explicitly opted-out
+        // Skip already initialized, explicitly opted-out, or static config selects
         if (select.dataset.searchableInit === 'true' || select.dataset.searchable === 'false') {
+            return;
+        }
+        if (select.name === 'worker_type' || select.id === 'wrk_type') {
             return;
         }
         select.dataset.searchableInit = 'true';
 
+        // Detect Entity Category
+        let entityType = 'generic';
+        const nameOrId = ((select.name || '') + ' ' + (select.id || '') + ' ' + (select.className || '')).toLowerCase();
+        if (nameOrId.includes('lot')) {
+            entityType = 'lot';
+        } else if (nameOrId.includes('worker') || nameOrId.includes('operator') || nameOrId.includes('artisan') || nameOrId.includes('cutter')) {
+            entityType = 'worker';
+        } else if (nameOrId.includes('operation') || nameOrId.includes('stage')) {
+            entityType = 'operation';
+        }
+
+        let searchPlaceholder = '🔍 Type to filter options...';
+        let emptyNoticeHtml = '<i class="bi bi-search me-1"></i> No matching options found';
+        let defaultPlaceholder = '-- Select Option --';
+
+        if (entityType === 'lot') {
+            searchPlaceholder = '🔍 Type lot # or product to filter...';
+            emptyNoticeHtml = '<i class="bi bi-inbox me-1"></i> No matching lots found';
+            defaultPlaceholder = '-- Select Lot --';
+        } else if (entityType === 'worker') {
+            searchPlaceholder = '🔍 Type worker name, code (WRK-), or wage type...';
+            emptyNoticeHtml = '<i class="bi bi-person-x me-1"></i> No matching workers/operators found';
+            defaultPlaceholder = '-- Select Worker / Operator --';
+        } else if (entityType === 'operation') {
+            searchPlaceholder = '🔍 Type stage name, #, or dept to filter...';
+            emptyNoticeHtml = '<i class="bi bi-gear me-1"></i> No matching operations found';
+            defaultPlaceholder = '-- Select Operation / Stage --';
+        }
+
         const isSm = select.classList.contains('form-select-sm') || select.classList.contains('input-sm');
-        let placeholder = select.getAttribute('placeholder') || '-- Select Lot --';
+        let placeholder = select.getAttribute('placeholder') || defaultPlaceholder;
         if (select.options.length > 0 && select.options[0].value === '') {
             placeholder = select.options[0].textContent.trim();
         }
@@ -106,6 +162,9 @@ function initSearchableSelects(container = document) {
         trigger.type = 'button';
         trigger.className = 'btn searchable-lot-trigger form-select text-start d-flex justify-content-between align-items-center w-100 ' + 
                             (isSm ? 'form-select-sm ' : '');
+        if (select.classList.contains('fw-bold')) trigger.classList.add('fw-bold');
+        if (select.classList.contains('fw-semibold')) trigger.classList.add('fw-semibold');
+        if (select.classList.contains('text-dark')) trigger.classList.add('text-dark');
         trigger.setAttribute('aria-expanded', 'false');
 
         const labelSpan = document.createElement('span');
@@ -119,7 +178,7 @@ function initSearchableSelects(container = document) {
 
         // Create Dropdown Menu
         const dropdown = document.createElement('div');
-        dropdown.className = 'searchable-lot-dropdown dropdown-menu w-100 p-2 shadow-lg border';
+        dropdown.className = 'searchable-lot-dropdown dropdown-menu p-2 shadow-lg border';
         dropdown.style.display = 'none';
         dropdown.style.position = 'absolute';
         dropdown.style.top = '100%';
@@ -130,7 +189,7 @@ function initSearchableSelects(container = document) {
         searchBox.className = 'position-relative mb-2';
         searchBox.innerHTML = `
             <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-2 text-muted small" style="pointer-events: none;"></i>
-            <input type="text" class="form-control form-control-sm ps-4 searchable-lot-search-input" placeholder="🔍 Type lot # or product to filter..." autocomplete="off">
+            <input type="text" class="form-control form-control-sm ps-4 searchable-lot-search-input" placeholder="${searchPlaceholder}" autocomplete="off">
         `;
         const searchInput = searchBox.querySelector('input');
 
@@ -141,7 +200,7 @@ function initSearchableSelects(container = document) {
         // Empty Search Notice
         const emptyNotice = document.createElement('div');
         emptyNotice.className = 'searchable-lot-empty text-center text-muted small py-3 d-none';
-        emptyNotice.innerHTML = '<i class="bi bi-inbox me-1"></i> No matching lots found';
+        emptyNotice.innerHTML = emptyNoticeHtml;
 
         dropdown.appendChild(searchBox);
         dropdown.appendChild(listContainer);
@@ -154,6 +213,9 @@ function initSearchableSelects(container = document) {
         wrapper.appendChild(dropdown);
 
         function updateTriggerLabel() {
+            if (select.options.length > 0 && select.options[0].value === '') {
+                placeholder = select.options[0].textContent.trim();
+            }
             const selectedOpt = select.options[select.selectedIndex];
             if (selectedOpt && selectedOpt.value !== '') {
                 labelSpan.textContent = selectedOpt.textContent.trim();
@@ -185,7 +247,7 @@ function initSearchableSelects(container = document) {
                 const rawText = opt.textContent.trim();
                 if (opt.value === '') {
                     item.innerHTML = `<span class="text-muted fst-italic">${rawText}</span>`;
-                } else {
+                } else if (entityType === 'lot') {
                     const lotMatch = rawText.match(/^(LOT\s*#?[^—\-\(\[\s]+)(.*)$/i);
                     if (lotMatch) {
                         const lotBadge = lotMatch[1].trim();
@@ -199,6 +261,48 @@ function initSearchableSelects(container = document) {
                     } else {
                         item.innerHTML = `<span class="text-truncate">${rawText}</span>`;
                     }
+                } else if (entityType === 'worker') {
+                    const wrkMatch = rawText.match(/^([^\(]+?)(?:\s*\(([^)]+)\))?(.*)$/);
+                    if (wrkMatch && wrkMatch[2]) {
+                        const name = wrkMatch[1].trim();
+                        const code = wrkMatch[2].trim();
+                        const details = (wrkMatch[3] || '').trim().replace(/^[\s—\-]+/, '');
+                        
+                        let detailsHtml = '';
+                        if (details.includes('Minute Rate')) {
+                            detailsHtml = `<span class="badge bg-success-subtle text-success border small flex-shrink-0 ms-auto">${details}</span>`;
+                        } else if (details.includes('Piece Rate')) {
+                            detailsHtml = `<span class="badge bg-primary-subtle text-primary border small flex-shrink-0 ms-auto">${details}</span>`;
+                        } else if (details) {
+                            detailsHtml = `<span class="small text-muted flex-shrink-0 ms-auto">${details}</span>`;
+                        }
+
+                        item.innerHTML = `
+                            <div class="d-flex align-items-center gap-2 text-truncate w-100">
+                                <span class="badge bg-light text-dark border small flex-shrink-0 worker-code-badge font-monospace">${code}</span>
+                                <span class="fw-semibold text-truncate flex-grow-1">${name}</span>
+                                ${detailsHtml}
+                            </div>
+                        `;
+                    } else {
+                        item.innerHTML = `<span class="text-truncate">${rawText}</span>`;
+                    }
+                } else if (entityType === 'operation') {
+                    const opMatch = rawText.match(/^(\s*↳?\s*\d+\.?)\s*(.*)$/);
+                    if (opMatch) {
+                        const seq = opMatch[1].trim();
+                        const remainder = opMatch[2].trim();
+                        item.innerHTML = `
+                            <div class="d-flex align-items-center gap-2 text-truncate w-100">
+                                <span class="badge bg-primary-subtle text-primary border small flex-shrink-0 op-seq-badge font-monospace">${seq}</span>
+                                <span class="text-truncate flex-grow-1">${remainder}</span>
+                            </div>
+                        `;
+                    } else {
+                        item.innerHTML = `<span class="text-truncate">${rawText}</span>`;
+                    }
+                } else {
+                    item.innerHTML = `<span class="text-truncate">${rawText}</span>`;
                 }
 
                 item.addEventListener('click', function(e) {
@@ -234,6 +338,8 @@ function initSearchableSelects(container = document) {
         }
 
         function openDropdown() {
+            if (select.disabled) return;
+
             document.querySelectorAll('.searchable-lot-dropdown').forEach(d => {
                 if (d !== dropdown) d.style.display = 'none';
             });
@@ -247,10 +353,21 @@ function initSearchableSelects(container = document) {
             dropdown.style.display = 'block';
             trigger.classList.add('show');
             trigger.setAttribute('aria-expanded', 'true');
+
+            // Prevent dropdown from overflowing right edge of viewport
+            dropdown.style.left = '0';
+            dropdown.style.right = 'auto';
+            const rect = dropdown.getBoundingClientRect();
+            if (rect.right > window.innerWidth - 10) {
+                dropdown.style.left = 'auto';
+                dropdown.style.right = '0';
+            }
+
             searchInput.value = '';
             filterItems('');
             setTimeout(() => searchInput.focus(), 60);
 
+            updateTriggerLabel();
             const activeItem = listContainer.querySelector('.searchable-lot-item.active');
             if (activeItem) {
                 activeItem.scrollIntoView({ block: 'nearest' });
@@ -363,6 +480,73 @@ function initSearchableSelects(container = document) {
             buildOptionsList();
         });
         observer.observe(select, { childList: true });
+
+        // Intercept property setters so programmatic changes (.value = ..., .selectedIndex = ...) automatically sync UI
+        try {
+            const origValueDesc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+            if (origValueDesc && origValueDesc.set) {
+                Object.defineProperty(select, 'value', {
+                    get: function() {
+                        return origValueDesc.get.call(this);
+                    },
+                    set: function(newVal) {
+                        origValueDesc.set.call(this, newVal);
+                        updateTriggerLabel();
+                        listContainer.querySelectorAll('.searchable-lot-item').forEach(it => {
+                            it.classList.toggle('active', it.dataset.value === String(newVal));
+                        });
+                    },
+                    configurable: true
+                });
+            }
+
+            const origIndexDesc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'selectedIndex');
+            if (origIndexDesc && origIndexDesc.set) {
+                Object.defineProperty(select, 'selectedIndex', {
+                    get: function() {
+                        return origIndexDesc.get.call(this);
+                    },
+                    set: function(newIdx) {
+                        origIndexDesc.set.call(this, newIdx);
+                        updateTriggerLabel();
+                        const currentVal = this.value;
+                        listContainer.querySelectorAll('.searchable-lot-item').forEach(it => {
+                            it.classList.toggle('active', it.dataset.value === String(currentVal));
+                        });
+                    },
+                    configurable: true
+                });
+            }
+
+            const origDisabledDesc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'disabled');
+            if (origDisabledDesc && origDisabledDesc.set) {
+                Object.defineProperty(select, 'disabled', {
+                    get: function() {
+                        return origDisabledDesc.get.call(this);
+                    },
+                    set: function(val) {
+                        origDisabledDesc.set.call(this, val);
+                        trigger.disabled = !!val;
+                        if (val) trigger.classList.add('disabled');
+                        else trigger.classList.remove('disabled');
+                    },
+                    configurable: true
+                });
+            }
+
+            if (select.disabled) {
+                trigger.disabled = true;
+                trigger.classList.add('disabled');
+            }
+
+            const origFocus = select.focus;
+            select.focus = function(options) {
+                if (trigger) trigger.focus(options);
+                else if (origFocus) origFocus.call(this, options);
+            };
+        } catch (e) {
+            console.debug('Searchable select property descriptor hook skipped:', e);
+        }
 
         // Initial build
         buildOptionsList();

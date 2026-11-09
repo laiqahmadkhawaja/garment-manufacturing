@@ -538,7 +538,8 @@ html, body {
     box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.18), 0 8px 10px -6px rgba(15, 23, 42, 0.12);
     z-index: 1070;
     margin-top: 4px;
-    min-width: 100%;
+    min-width: max(100%, 280px);
+    max-width: min(580px, 92vw);
     animation: fadeInSelectMenu 0.15s ease;
 }
 
@@ -598,7 +599,9 @@ html, body {
     font-weight: 600;
 }
 
-.searchable-lot-item .lot-badge {
+.searchable-lot-item .lot-badge,
+.searchable-lot-item .worker-code-badge,
+.searchable-lot-item .op-seq-badge {
     font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-weight: 700;
     font-size: 0.75rem;
