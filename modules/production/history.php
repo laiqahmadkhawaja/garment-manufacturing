@@ -108,6 +108,31 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             </div>
         </div>
 
+        <?php if ($lotId > 0 && !empty($entries)): 
+            $totLotPlanned = (int)$db->query("SELECT total_pieces FROM lots WHERE id = $lotId")->fetchColumn();
+            $totLotGood = (int)$db->query("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = $lotId")->fetchColumn();
+            $totLotRej = (int)$db->query("SELECT COALESCE(SUM(rejected_qty), 0) FROM production_entries WHERE lot_id = $lotId")->fetchColumn();
+            $totLotRew = (int)$db->query("SELECT COALESCE(SUM(rework_qty), 0) FROM production_entries WHERE lot_id = $lotId")->fetchColumn();
+            $totLotLabour = (float)$db->query("SELECT COALESCE(SUM(labour_amount), 0) FROM production_entries WHERE lot_id = $lotId")->fetchColumn();
+            $totLotUnmade = max(0, $totLotPlanned - ($totLotGood + $totLotRej + $totLotRew));
+        ?>
+        <div class="card-modern mb-3 bg-light border p-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h6 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-pie-chart-fill text-primary me-2"></i> لاٹ پروڈکشن لیجر سمری (Lot Production Audit Summary)
+                </h6>
+                <div class="d-flex flex-wrap gap-2">
+                    <span class="badge bg-white text-dark border p-2">🎯 کل منصوبہ بندی (Planned): <strong><?= number_format($totLotPlanned) ?> pcs</strong></span>
+                    <span class="badge bg-success text-white p-2">✅ کل تیار (Good Done): <strong><?= number_format($totLotGood) ?> pcs</strong></span>
+                    <span class="badge bg-danger text-white p-2">🔴 کل خراب (Rejected): <strong><?= number_format($totLotRej) ?> pcs</strong></span>
+                    <span class="badge bg-warning text-dark p-2">🟡 کل ری ورک (In Rework): <strong><?= number_format($totLotRew) ?> pcs</strong></span>
+                    <span class="badge bg-secondary text-white p-2">⏳ بنے ہی نہیں (Unproduced): <strong><?= number_format($totLotUnmade) ?> pcs</strong></span>
+                    <span class="badge bg-primary text-white p-2">💰 کل اجرت (Total Labour): <strong><?= format_currency($totLotLabour) ?></strong></span>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- History Table -->
         <div class="card-modern">
             <div class="card-modern-header d-flex justify-content-between align-items-center">

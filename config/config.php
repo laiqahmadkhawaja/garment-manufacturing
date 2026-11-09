@@ -639,8 +639,11 @@ function get_lot_variant_stage_allowance(int $lotId, int $operationId): array {
         }
     }
 
-    // 4. Query already recorded good quantities in current operation
-    $curDoneStmt = $db->prepare("SELECT color_id, size_id, COALESCE(SUM(good_qty), 0) AS good_done, COALESCE(SUM(rejected_qty), 0) AS rejected_done
+    // 4. Query already recorded good quantities, rejections, and rework in current operation
+    $curDoneStmt = $db->prepare("SELECT color_id, size_id, 
+                                        COALESCE(SUM(good_qty), 0) AS good_done, 
+                                        COALESCE(SUM(rejected_qty), 0) AS rejected_done,
+                                        COALESCE(SUM(rework_qty), 0) AS rework_done
                                  FROM production_entries 
                                  WHERE lot_id = ? AND operation_id = ? AND color_id IS NOT NULL
                                  GROUP BY color_id, size_id");
@@ -649,7 +652,8 @@ function get_lot_variant_stage_allowance(int $lotId, int $operationId): array {
     while ($cd = $curDoneStmt->fetch()) {
         $currentDoneMap[$cd['color_id'] . '_' . $cd['size_id']] = [
             'good_done' => (int)$cd['good_done'],
-            'rejected_done' => (int)$cd['rejected_done']
+            'rejected_done' => (int)$cd['rejected_done'],
+            'rework_done' => (int)$cd['rework_done']
         ];
     }
 
@@ -657,10 +661,12 @@ function get_lot_variant_stage_allowance(int $lotId, int $operationId): array {
     $prevGoodMap = [];
     $prevColorGoodTotals = [];
     $prevColorRejTotals = [];
+    $prevColorRewTotals = [];
     if ($prevColorOpId !== null) {
         $pStmt = $db->prepare("SELECT color_id, size_id, 
                                       COALESCE(SUM(good_qty), 0) AS good_done,
-                                      COALESCE(SUM(rejected_qty), 0) AS rejected_done
+                                      COALESCE(SUM(rejected_qty), 0) AS rejected_done,
+                                      COALESCE(SUM(rework_qty), 0) AS rework_done
                                FROM production_entries
                                WHERE lot_id = ? AND operation_id = ? AND color_id IS NOT NULL
                                GROUP BY color_id, size_id");
@@ -669,11 +675,13 @@ function get_lot_variant_stage_allowance(int $lotId, int $operationId): array {
             $k = $pRow['color_id'] . '_' . $pRow['size_id'];
             $prevGoodMap[$k] = [
                 'good_done' => (int)$pRow['good_done'],
-                'rejected_done' => (int)$pRow['rejected_done']
+                'rejected_done' => (int)$pRow['rejected_done'],
+                'rework_done' => (int)$pRow['rework_done']
             ];
             $cId = (int)$pRow['color_id'];
             $prevColorGoodTotals[$cId] = ($prevColorGoodTotals[$cId] ?? 0) + (int)$pRow['good_done'];
             $prevColorRejTotals[$cId] = ($prevColorRejTotals[$cId] ?? 0) + (int)$pRow['rejected_done'];
+            $prevColorRewTotals[$cId] = ($prevColorRewTotals[$cId] ?? 0) + (int)$pRow['rework_done'];
         }
     }
 
@@ -689,11 +697,14 @@ function get_lot_variant_stage_allowance(int $lotId, int $operationId): array {
 
         $curDone = (int)($currentDoneMap[$k]['good_done'] ?? 0);
         $curRej = (int)($currentDoneMap[$k]['rejected_done'] ?? 0);
+        $curRew = (int)($currentDoneMap[$k]['rework_done'] ?? 0);
 
         if ($prevColorOpId !== null) {
             // Preceding color stage exists: allowable is good pieces passed from prev stage
             $prevGood = (int)($prevGoodMap[$k]['good_done'] ?? 0);
             $prevRej = (int)($prevGoodMap[$k]['rejected_done'] ?? 0);
+            $prevRew = (int)($prevGoodMap[$k]['rework_done'] ?? 0);
+            $prevUnproduced = max(0, $planned - ($prevGood + $prevRej + $prevRew));
             $allowable = min($planned, $prevGood);
             if ($prevOpTotalGood !== null) {
                 $allowable = min($allowable, (int)$prevOpTotalGood);
@@ -703,6 +714,8 @@ function get_lot_variant_stage_allowance(int $lotId, int $operationId): array {
             // Allowable is strictly bounded by what was completed in immediate preceding stage
             $prevGood = min($planned, (int)$prevOpTotalGood);
             $prevRej = 0;
+            $prevRew = 0;
+            $prevUnproduced = max(0, $planned - $prevGood);
             $allowable = $prevGood;
             if (empty($prevColorOpName) && !empty($prevSteps[0]['op_name'])) {
                 $prevColorOpName = $prevSteps[0]['op_name'];
@@ -711,10 +724,13 @@ function get_lot_variant_stage_allowance(int $lotId, int $operationId): array {
             // First stage in lot workflow: bounded by planned quantity
             $prevGood = $planned;
             $prevRej = 0;
+            $prevRew = 0;
+            $prevUnproduced = 0;
             $allowable = $planned;
         }
 
         $pending = max(0, $allowable - $curDone);
+        $curUnproduced = max(0, $allowable - ($curDone + $curRej + $curRew));
 
         $variantAllowances[$k] = [
             'color_id' => $cId,
@@ -726,10 +742,14 @@ function get_lot_variant_stage_allowance(int $lotId, int $operationId): array {
             'planned' => $planned,
             'prev_stage_good' => $prevGood,
             'prev_stage_rejected' => $prevRej,
+            'prev_stage_rework' => $prevRew,
+            'prev_stage_unproduced' => $prevUnproduced,
             'allowable' => $allowable,
             'current_done' => $curDone,
             'current_rejected' => $curRej,
-            'pending' => $pending
+            'current_rework' => $curRew,
+            'pending' => $pending,
+            'current_unproduced' => $curUnproduced
         ];
 
         // Color aggregated allowances
@@ -741,17 +761,27 @@ function get_lot_variant_stage_allowance(int $lotId, int $operationId): array {
                 'planned' => 0,
                 'prev_stage_good' => 0,
                 'prev_stage_rejected' => 0,
+                'prev_stage_rework' => 0,
+                'prev_stage_unproduced' => 0,
                 'allowable' => 0,
                 'current_done' => 0,
-                'pending' => 0
+                'current_rejected' => 0,
+                'current_rework' => 0,
+                'pending' => 0,
+                'current_unproduced' => 0
             ];
         }
         $colorAllowances[$cId]['planned'] += $planned;
         $colorAllowances[$cId]['prev_stage_good'] += $prevGood;
         $colorAllowances[$cId]['prev_stage_rejected'] += $prevRej;
+        $colorAllowances[$cId]['prev_stage_rework'] += $prevRew;
+        $colorAllowances[$cId]['prev_stage_unproduced'] += $prevUnproduced;
         $colorAllowances[$cId]['allowable'] += $allowable;
         $colorAllowances[$cId]['current_done'] += $curDone;
+        $colorAllowances[$cId]['current_rejected'] += $curRej;
+        $colorAllowances[$cId]['current_rework'] += $curRew;
         $colorAllowances[$cId]['pending'] += $pending;
+        $colorAllowances[$cId]['current_unproduced'] += $curUnproduced;
     }
 
     return [
@@ -759,6 +789,8 @@ function get_lot_variant_stage_allowance(int $lotId, int $operationId): array {
         'prev_operation_id' => $prevColorOpId,
         'prev_operation_name' => $prevColorOpName,
         'prev_stage_total_good' => $prevOpTotalGood,
+        'prev_stage_total_rejected' => array_sum($prevColorRejTotals),
+        'prev_stage_total_rework' => array_sum($prevColorRewTotals),
         'variants' => $variantAllowances,
         'colors' => $colorAllowances
     ];

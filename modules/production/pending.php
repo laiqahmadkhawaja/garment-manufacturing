@@ -148,6 +148,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         $pending = max(0, $total - $good);
                                         $rej = (int)$st['rejected_done'];
                                         $rew = (int)$st['rework_done'];
+                                        $unproduced = max(0, $total - ($good + $rej + $rew));
 
                                         $isOver = ($good > $total);
                                         $isComplete = ($good === $total);
@@ -165,10 +166,17 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             <td><?= clean($st['dept_name']) ?></td>
                                             <td class="text-center fw-bold"><?= number_format($total) ?></td>
                                             <td class="text-center fw-bold <?= $isOver ? 'text-danger' : 'text-success' ?>"><?= number_format($good) ?></td>
-                                            <td class="text-center <?= $rej > 0 ? 'text-danger fw-bold' : 'text-muted' ?>"><?= number_format($rej) ?></td>
-                                            <td class="text-center <?= $rew > 0 ? 'text-warning fw-bold' : 'text-muted' ?>"><?= number_format($rew) ?></td>
+                                            <td class="text-center <?= $rej > 0 ? 'text-danger fw-bold' : 'text-muted' ?>">
+                                                <?= $rej > 0 ? '<span class="badge bg-danger-subtle text-danger border">🔴 ' . number_format($rej) . '</span>' : '0' ?>
+                                            </td>
+                                            <td class="text-center <?= $rew > 0 ? 'text-warning fw-bold' : 'text-muted' ?>">
+                                                <?= $rew > 0 ? '<span class="badge bg-warning-subtle text-warning-emphasis border">🟡 ' . number_format($rew) . '</span>' : '0' ?>
+                                            </td>
                                             <td class="text-center fw-bold fs-6 <?= $isOver ? 'text-danger' : ($pending > 0 ? 'text-warning-emphasis' : 'text-success') ?>">
                                                 <?= $isOver ? '<span class="text-danger fw-bold">+' . number_format($good - $total) . ' Over</span>' : number_format($pending) ?>
+                                                <?php if ($unproduced > 0 && !$isOver && !$isComplete): ?>
+                                                    <div class="small fw-normal text-muted" style="font-size: 0.7rem;">(⏳ <?= $unproduced ?> بنے ہی نہیں)</div>
+                                                <?php endif; ?>
                                             </td>
                                             <td>
                                                 <?php if ($isOver): ?>
@@ -178,12 +186,20 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <?php elseif ($isComplete): ?>
                                                     <span class="badge-status badge-completed"><i class="bi bi-check-circle-fill"></i> Completed</span>
                                                 <?php elseif ($isShortage): ?>
-                                                    <span class="badge-status badge-critical">
-                                                        <span class="pulse-indicator"></span>
-                                                        <span><?= $pending ?> Short / Incomplete</span>
-                                                    </span>
+                                                    <div class="d-flex flex-wrap gap-1 align-items-center">
+                                                        <span class="badge bg-warning-subtle text-warning-emphasis border"><i class="bi bi-hourglass-split"></i> <?= number_format($pending) ?> باقی</span>
+                                                        <?php if ($rej > 0): ?>
+                                                            <span class="badge bg-danger text-white">🔴 <?= $rej ?> خراب</span>
+                                                        <?php endif; ?>
+                                                        <?php if ($rew > 0): ?>
+                                                            <span class="badge bg-warning text-dark">🟡 <?= $rew ?> ری ورک</span>
+                                                        <?php endif; ?>
+                                                        <?php if ($unproduced > 0): ?>
+                                                            <span class="badge bg-secondary text-white">⏳ <?= $unproduced ?> غیر تیار</span>
+                                                        <?php endif; ?>
+                                                    </div>
                                                 <?php else: ?>
-                                                    <span class="badge-status badge-draft"><i class="bi bi-hourglass"></i> Not Started</span>
+                                                    <span class="badge bg-secondary-subtle text-secondary border">Not Started (<?= $total ?> unmade)</span>
                                                 <?php endif; ?>
                                             </td>
                                             <td class="text-end">

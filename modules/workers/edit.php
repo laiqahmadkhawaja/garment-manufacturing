@@ -313,28 +313,57 @@ document.addEventListener('DOMContentLoaded', function() {
     function syncWageTypeUI() {
         if (!typeSelect) return;
         const val = typeSelect.value;
+        const grpMin = document.getElementById('grp_min_rate');
+        const grpPiece = document.getElementById('grp_piece_rate');
+
         if (val === 'Piece Rate') {
             if (lblPieceRate) lblPieceRate.textContent = 'Default Piece Rate (ریٹ فی پیس) *';
             if (unitPieceRate) unitPieceRate.textContent = '/pc';
             if (hintPieceRate) hintPieceRate.textContent = 'مکمل سویٹر یا کٹنگ فی پیس طے شدہ اجرت۔';
+            if (grpPiece) {
+                grpPiece.classList.remove('opacity-50');
+                grpPiece.style.borderLeft = '3px solid #0d6efd';
+                grpPiece.style.paddingLeft = '8px';
+            }
+            if (grpMin) {
+                grpMin.classList.add('opacity-75');
+                grpMin.style.borderLeft = 'none';
+                grpMin.style.paddingLeft = '0';
+            }
             if (rateBasisSelect && !rateBasisSelect.value) rateBasisSelect.value = 'whole_sweater';
         } else if (val === 'Minute Rate') {
-            if (lblPieceRate) lblPieceRate.textContent = 'Standard Piece Rate Equivalent';
+            if (lblPieceRate) lblPieceRate.textContent = 'Standard Piece Rate (اختیاری / ریفرنس)';
             if (unitPieceRate) unitPieceRate.textContent = '/pc';
-            if (hintPieceRate) hintPieceRate.textContent = 'مشین آپریٹر کا بنیادی ریٹ نیچے منٹ ریٹ اور SAM وقت سے طے ہوگا۔';
+            if (hintPieceRate) hintPieceRate.textContent = 'کاریگر کا ریٹ منٹ ریٹ اور SAM وقت سے خودکار طے ہوگا۔';
+            if (grpMin) {
+                grpMin.classList.remove('opacity-75');
+                grpMin.style.borderLeft = '3px solid #198754';
+                grpMin.style.paddingLeft = '8px';
+            }
+            if (grpPiece) {
+                grpPiece.classList.add('opacity-50');
+                grpPiece.style.borderLeft = 'none';
+                grpPiece.style.paddingLeft = '0';
+            }
             if (rateBasisSelect) rateBasisSelect.value = 'element_wise';
         } else if (val === 'Daily Wage') {
             if (lblPieceRate) lblPieceRate.textContent = 'Daily Wage Rate (یومیہ اجرت) *';
             if (unitPieceRate) unitPieceRate.textContent = '/day';
             if (hintPieceRate) hintPieceRate.textContent = 'ایک دن (شفٹ) کی فکسڈ اجرت۔';
+            if (grpPiece) grpPiece.classList.remove('opacity-50');
+            if (grpMin) grpMin.classList.add('opacity-75');
         } else if (val === 'Monthly Salary') {
             if (lblPieceRate) lblPieceRate.textContent = 'Monthly Fixed Salary (ماہانہ تنخواہ) *';
             if (unitPieceRate) unitPieceRate.textContent = '/month';
             if (hintPieceRate) hintPieceRate.textContent = 'ماہانہ فکسڈ بنیادی تنخواہ۔';
+            if (grpPiece) grpPiece.classList.remove('opacity-50');
+            if (grpMin) grpMin.classList.add('opacity-75');
         } else if (val === 'Contractor') {
             if (lblPieceRate) lblPieceRate.textContent = 'Contract Piece Rate (کنٹریکٹ ریٹ) *';
             if (unitPieceRate) unitPieceRate.textContent = '/pc';
             if (hintPieceRate) hintPieceRate.textContent = 'ٹھیکیدار کا طے شدہ ریٹ فی پیس۔';
+            if (grpPiece) grpPiece.classList.remove('opacity-50');
+            if (grpMin) grpMin.classList.add('opacity-75');
         }
     }
 

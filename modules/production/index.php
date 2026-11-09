@@ -1603,8 +1603,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 </label>
                                                 <select name="day_worker_id" id="op_single_day_worker" class="form-select fw-semibold" required>
                                                     <option value="">-- Choose Operator --</option>
-                                                    <?php foreach ($workers as $w): ?>
-                                                        <option value="<?= $w['id'] ?>" data-minrate="<?= $w['rate_per_minute'] ?>"><?= clean($w['name']) ?> (<?= clean($w['code']) ?>)</option>
+                                                    <?php foreach ($workers as $w): 
+                                                        $wMin = (float)($w['rate_per_minute'] ?? 2.50);
+                                                        $wPiece = (float)($w['default_rate'] ?? 0.00);
+                                                        $wType = $w['worker_type'] ?? 'Minute Rate';
+                                                        $wBasis = $w['rate_basis'] ?? 'element_wise';
+                                                        $rateTxt = ($wType === 'Minute Rate') ? ('— Rs. ' . number_format($wMin, 2) . '/m (Minute Rate)') : ($wPiece > 0 ? ('— Rs. ' . number_format($wPiece, 2) . '/pc (Piece Rate)') : '');
+                                                    ?>
+                                                        <option value="<?= $w['id'] ?>" data-minrate="<?= $wMin ?>" data-piecerate="<?= $wPiece ?>" data-workertype="<?= clean($wType) ?>" data-ratebasis="<?= clean($wBasis) ?>"><?= clean($w['name']) ?> (<?= clean($w['code']) ?>) <?= $rateTxt ?></option>
                                                     <?php endforeach; ?>
                                                 </select>
                                                 <div class="text-muted small mt-1">
@@ -1646,8 +1652,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                         <label class="form-label small fw-semibold text-muted mb-1">Day Operator (ڈے آپریٹر) *</label>
                                                         <select name="day_worker_id" id="op_double_day_worker" class="form-select fw-semibold">
                                                             <option value="">-- Select Day Operator --</option>
-                                                            <?php foreach ($workers as $w): ?>
-                                                                <option value="<?= $w['id'] ?>" data-minrate="<?= $w['rate_per_minute'] ?>"><?= clean($w['name']) ?> (<?= clean($w['code']) ?>)</option>
+                                                            <?php foreach ($workers as $w): 
+                                                                $wMin = (float)($w['rate_per_minute'] ?? 2.50);
+                                                                $wPiece = (float)($w['default_rate'] ?? 0.00);
+                                                                $wType = $w['worker_type'] ?? 'Minute Rate';
+                                                                $wBasis = $w['rate_basis'] ?? 'element_wise';
+                                                                $rateTxt = ($wType === 'Minute Rate') ? ('— Rs. ' . number_format($wMin, 2) . '/m (Minute Rate)') : ($wPiece > 0 ? ('— Rs. ' . number_format($wPiece, 2) . '/pc (Piece Rate)') : '');
+                                                            ?>
+                                                                <option value="<?= $w['id'] ?>" data-minrate="<?= $wMin ?>" data-piecerate="<?= $wPiece ?>" data-workertype="<?= clean($wType) ?>" data-ratebasis="<?= clean($wBasis) ?>"><?= clean($w['name']) ?> (<?= clean($w['code']) ?>) <?= $rateTxt ?></option>
                                                             <?php endforeach; ?>
                                                         </select>
                                                     </div>
@@ -1673,8 +1685,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                         <label class="form-label small fw-semibold text-muted mb-1">Night Operator (نائٹ آپریٹر) *</label>
                                                         <select name="night_worker_id" id="op_double_night_worker" class="form-select fw-semibold">
                                                             <option value="">-- Select Night Operator --</option>
-                                                            <?php foreach ($workers as $w): ?>
-                                                                <option value="<?= $w['id'] ?>" data-minrate="<?= $w['rate_per_minute'] ?>"><?= clean($w['name']) ?> (<?= clean($w['code']) ?>)</option>
+                                                            <?php foreach ($workers as $w): 
+                                                                $wMin = (float)($w['rate_per_minute'] ?? 2.50);
+                                                                $wPiece = (float)($w['default_rate'] ?? 0.00);
+                                                                $wType = $w['worker_type'] ?? 'Minute Rate';
+                                                                $wBasis = $w['rate_basis'] ?? 'element_wise';
+                                                                $rateTxt = ($wType === 'Minute Rate') ? ('— Rs. ' . number_format($wMin, 2) . '/m (Minute Rate)') : ($wPiece > 0 ? ('— Rs. ' . number_format($wPiece, 2) . '/pc (Piece Rate)') : '');
+                                                            ?>
+                                                                <option value="<?= $w['id'] ?>" data-minrate="<?= $wMin ?>" data-piecerate="<?= $wPiece ?>" data-workertype="<?= clean($wType) ?>" data-ratebasis="<?= clean($wBasis) ?>"><?= clean($w['name']) ?> (<?= clean($w['code']) ?>) <?= $rateTxt ?></option>
                                                             <?php endforeach; ?>
                                                         </select>
                                                     </div>
@@ -1798,9 +1816,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <option value="">-- Choose Cutting Master --</option>
                                                 <?php foreach ($cuttingWorkers as $w): 
                                                     $cPieceRate = (float)($w['default_rate'] ?? 0.00);
+                                                    $cMinRate = (float)($w['rate_per_minute'] ?? 2.50);
+                                                    $cType = $w['worker_type'] ?? 'Piece Rate';
+                                                    $cBasis = $w['rate_basis'] ?? 'whole_sweater';
+                                                    $rateTxt = ($cType === 'Minute Rate') ? ('— Rs. ' . number_format($cMinRate, 2) . '/m (Minute Rate)') : ($cPieceRate > 0 ? ('— Rs. ' . number_format($cPieceRate, 2) . '/pc (Piece Rate)') : '');
                                                 ?>
-                                                    <option value="<?= $w['id'] ?>" data-minrate="<?= $w['rate_per_minute'] ?>" data-piecerate="<?= $cPieceRate ?>" <?= (stripos($w['name'], 'Cut') !== false ? 'selected' : '') ?>>
-                                                        <?= clean($w['name']) ?> (<?= clean($w['code']) ?>) <?= ($cPieceRate > 0 ? '— Rs. ' . number_format($cPieceRate, 2) . '/pc' : '') ?>
+                                                    <option value="<?= $w['id'] ?>" data-minrate="<?= $cMinRate ?>" data-piecerate="<?= $cPieceRate ?>" data-workertype="<?= clean($cType) ?>" data-ratebasis="<?= clean($cBasis) ?>" <?= (stripos($w['name'], 'Cut') !== false ? 'selected' : '') ?>>
+                                                        <?= clean($w['name']) ?> (<?= clean($w['code']) ?>) <?= $rateTxt ?>
                                                     </option>
                                                 <?php endforeach; ?>
                                             </select>
@@ -1826,7 +1848,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     </div>
 
                                     <!-- Real-time SAM Minutes & Rate Calculation Scheme for Cutting -->
-                                    <div class="p-3 bg-white border rounded-2 mb-3 shadow-sm">
+                                    <div class="p-3 bg-white border rounded-2 mb-3 shadow-sm" id="cuttingRateSchemeBox">
                                         <div class="d-flex justify-content-between align-items-center mb-2">
                                             <label class="form-label small fw-bold text-dark mb-0">
                                                 <i class="bi bi-calculator text-primary me-1"></i> Rate & Time Scheme for Specific Lot (ریئل ٹائم ریٹ و وقت کا تعین)
@@ -1954,14 +1976,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         </span>
                                     </div>
                                     <div class="row g-2">
-                                        <div class="col-4">
+                                        <div class="col-4" id="grpDownstreamMinutes">
                                             <div class="input-group">
                                                 <input type="number" name="minutes_per_piece" id="pe_minutes" class="form-control fw-bold text-center text-primary" step="0.1" min="0" value="0.0" placeholder="SAM Min" title="Operation Standard Time (SAM Minutes per piece)">
                                                 <span class="input-group-text px-1 small text-muted">min</span>
                                             </div>
                                             <div class="form-text text-center small" style="font-size: 10px;">وقت فی پیس</div>
                                         </div>
-                                        <div class="col-4">
+                                        <div class="col-4" id="grpDownstreamMinRate">
                                             <div class="input-group">
                                                 <span class="input-group-text px-1 small text-muted">Rs</span>
                                                 <input type="number" name="worker_minute_rate" id="pe_min_rate" class="form-control fw-bold text-center text-success" step="0.05" min="0" value="2.50" placeholder="Rs/min" title="Worker's agreed rate per minute">
@@ -1969,7 +1991,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             </div>
                                             <div class="form-text text-center small" style="font-size: 10px;">ریٹ فی منٹ</div>
                                         </div>
-                                        <div class="col-4">
+                                        <div class="col-4" id="grpDownstreamRate">
                                             <div class="input-group">
                                                 <span class="input-group-text px-1 small text-muted">Rs</span>
                                                 <input type="number" name="rate" id="pe_rate" class="form-control fw-bold text-end text-dark" step="0.25" min="0" value="0.00" title="Final Piece Rate">
@@ -2130,9 +2152,15 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <!-- Live Stage Balance Pill -->
                                     <div class="col-12 d-none" id="stageBalanceAlert">
                                         <div class="p-3 bg-light border rounded-3 d-flex flex-wrap justify-content-between align-items-center gap-2 small">
-                                            <div>Planned Variant Qty: <strong id="lblPlanned" class="text-dark">0</strong></div>
-                                            <div>Already Good Done: <strong id="lblDone" class="text-success">0</strong></div>
-                                            <div>Pending in Stage: <strong id="lblPending" class="text-warning-emphasis fw-bold">0</strong></div>
+                                            <div>🎯 ہدف (Planned): <strong id="lblPlanned" class="text-dark">0</strong></div>
+                                            <div>✂️ موصولہ تیار (Ready): <strong id="lblAllowable" class="text-primary">0</strong></div>
+                                            <div id="boxPrevDefects" class="d-flex flex-wrap gap-1">
+                                                <span class="badge bg-danger text-white" id="badgePrevRej">🔴 0 خراب</span>
+                                                <span class="badge bg-warning text-dark" id="badgePrevRew">🟡 0 ری ورک</span>
+                                                <span class="badge bg-secondary text-white" id="badgePrevUnproduced">⏳ 0 غیر تیار</span>
+                                            </div>
+                                            <div>✅ مکمل (Good Done): <strong id="lblDone" class="text-success">0</strong></div>
+                                            <div>⚡ بقایا (Pending): <strong id="lblPending" class="text-danger fw-bold">0</strong></div>
                                         </div>
                                     </div>
 
@@ -2363,6 +2391,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             const lblHint = document.getElementById('lblCutWholeMaxCount');
             if (lblHint) lblHint.textContent = maxWhole;
+            updateCuttingRate(false);
 
             const plannedNotice = document.getElementById('cutLotPlannedNotice');
             if (plannedNotice) {
@@ -2786,28 +2815,43 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnClearCutting = document.getElementById('btnClearCutting');
 
     function updateCuttingRate(fromDirectRate = false) {
-        const mins = parseFloat(cutMinutesInput ? cutMinutesInput.value : 0) || 0;
-        const minRate = parseFloat(cutMinRateInput ? cutMinRateInput.value : 0) || 2.50;
-        const opt = cutWorker ? cutWorker.options[cutWorker.selectedIndex] : null;
-        const pieceRate = opt ? (parseFloat(opt.dataset.piecerate) || 0) : 0;
+        const opt = (cutWorker && cutWorker.selectedIndex >= 0) ? cutWorker.options[cutWorker.selectedIndex] : null;
+        const schemeBox = document.getElementById('cuttingRateSchemeBox');
+        const workerType = opt ? (opt.dataset.workertype || 'Piece Rate') : 'Piece Rate';
+        const workerMinRate = opt ? (parseFloat(opt.dataset.minrate) || 2.50) : 2.50;
+        const workerPieceRate = opt ? (parseFloat(opt.dataset.piecerate) || 0) : 0;
 
-        if (!fromDirectRate && cutRateInput) {
-            if (pieceRate > 0) {
-                cutRateInput.value = pieceRate.toFixed(2);
-            } else if (mins > 0 && minRate > 0) {
+        if (workerType === 'Piece Rate') {
+            // HIDE minute rate scheme for Piece Rate workers
+            if (schemeBox) schemeBox.classList.add('d-none');
+            if (!fromDirectRate && cutRateInput) {
+                cutRateInput.value = (workerPieceRate > 0 ? workerPieceRate : 5.00).toFixed(2);
+            }
+            const currentRate = parseFloat(cutRateInput ? cutRateInput.value : 0) || (workerPieceRate > 0 ? workerPieceRate : 5.00);
+            if (cutRateBadge) {
+                cutRateBadge.className = 'badge bg-primary-subtle text-primary border';
+                cutRateBadge.innerHTML = `<i class="bi bi-tag-fill me-1"></i>Rate: Rs. ${currentRate.toFixed(2)}/pc (Piece Rate — پر پیس ریٹ)`;
+            }
+        } else {
+            // SHOW minute rate scheme for Minute Rate workers
+            if (schemeBox) schemeBox.classList.remove('d-none');
+            if (cutMinRateInput && !cutMinRateInput.dataset.userEdited) {
+                cutMinRateInput.value = workerMinRate.toFixed(2);
+            }
+            const mins = parseFloat(cutMinutesInput ? cutMinutesInput.value : 0) || 2.0;
+            const minRate = parseFloat(cutMinRateInput ? cutMinRateInput.value : 0) || workerMinRate;
+
+            if (!fromDirectRate && cutRateInput) {
                 cutRateInput.value = (mins * minRate).toFixed(2);
             }
-        }
-
-        const currentRate = parseFloat(cutRateInput ? cutRateInput.value : 0) || (pieceRate > 0 ? pieceRate : 5.00);
-        if (cutRateBadge) {
-            if (mins > 0 && pieceRate <= 0) {
-                cutRateBadge.textContent = 'Rate: Rs. ' + currentRate.toFixed(2) + '/pc (' + mins.toFixed(1) + 'm @ ' + minRate.toFixed(2) + '/m)';
-            } else {
-                cutRateBadge.textContent = 'Rate: Rs. ' + currentRate.toFixed(2) + '/pc (Per Piece Rate)';
+            const currentRate = parseFloat(cutRateInput ? cutRateInput.value : 0) || (mins * minRate);
+            if (cutRateBadge) {
+                cutRateBadge.className = 'badge bg-success-subtle text-success border';
+                cutRateBadge.innerHTML = `<i class="bi bi-stopwatch me-1"></i>Rate: Rs. ${currentRate.toFixed(2)}/pc (${mins.toFixed(1)}m @ Rs. ${minRate.toFixed(2)}/m — منٹ ریٹ)`;
             }
         }
 
+        const currentRate = parseFloat(cutRateInput ? cutRateInput.value : 0) || 0;
         const whole = parseInt(cutWholePcs ? cutWholePcs.value : 0) || 0;
         if (lblCutLabour) {
             lblCutLabour.textContent = 'Rs. ' + (whole * currentRate).toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -2816,23 +2860,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (cutWorker) {
         cutWorker.addEventListener('change', function() {
-            const opt = this.options[this.selectedIndex];
-            if (opt) {
-                const minRate = parseFloat(opt.dataset.minrate) || 2.50;
-                const pieceRate = parseFloat(opt.dataset.piecerate) || 0;
-                if (cutMinRateInput) cutMinRateInput.value = minRate.toFixed(2);
-                if (pieceRate > 0 && cutRateInput) {
-                    cutRateInput.value = pieceRate.toFixed(2);
-                    updateCuttingRate(true);
-                } else {
-                    updateCuttingRate(false);
-                }
-            }
+            if (cutMinRateInput) delete cutMinRateInput.dataset.userEdited;
+            updateCuttingRate(false);
         });
+        updateCuttingRate(false);
     }
 
-    if (cutMinutesInput) cutMinutesInput.addEventListener('input', () => updateCuttingRate(false));
-    if (cutMinRateInput) cutMinRateInput.addEventListener('input', () => updateCuttingRate(false));
+    if (cutMinutesInput) cutMinutesInput.addEventListener('input', () => {
+        cutMinutesInput.dataset.userEdited = '1';
+        updateCuttingRate(false);
+    });
+    if (cutMinRateInput) cutMinRateInput.addEventListener('input', () => {
+        cutMinRateInput.dataset.userEdited = '1';
+        updateCuttingRate(false);
+    });
     if (cutRateInput) cutRateInput.addEventListener('input', () => updateCuttingRate(true));
 
     if (cutWholePcs) {
@@ -2906,7 +2947,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <span class="input-group-text px-1 bg-success-subtle text-success fw-bold small" title="Good Cut Pieces">🟢</span>
                             <input type="number" name="matrix[${c.id}][${sz.id}][good]" class="form-control form-control-sm text-center fw-bold cut-cell-good text-success" data-planned="${planned}" value="${planned}" min="0" placeholder="0">
                         </div>
-                        <div class="d-flex gap-1">
+                        <div class="d-flex gap-1 mb-1">
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text px-1 bg-danger-subtle text-danger small" title="Rejected / Defect Cut Pieces">🔴</span>
                                 <input type="number" name="matrix[${c.id}][${sz.id}][rejected]" class="form-control form-control-sm text-center cut-cell-rej text-danger fw-semibold" value="0" min="0" placeholder="0">
@@ -2916,6 +2957,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <input type="number" name="matrix[${c.id}][${sz.id}][rework]" class="form-control form-control-sm text-center cut-cell-rew text-warning fw-semibold" value="0" min="0" placeholder="0">
                             </div>
                         </div>
+                        <div class="cut-status-line small text-muted text-center" style="font-size: 10px;"></div>
                     </td>
                 `;
             });
@@ -2940,18 +2982,43 @@ document.addEventListener('DOMContentLoaded', function() {
             const rewInp = td.querySelector('.cut-cell-rew');
             const plan = parseInt(td.dataset.planned) || 0;
 
+            function updateStatusLine() {
+                const g = parseInt(goodInp ? goodInp.value : 0) || 0;
+                const r = parseInt(rejInp ? rejInp.value : 0) || 0;
+                const w = parseInt(rewInp ? rewInp.value : 0) || 0;
+                const unmade = Math.max(0, plan - (g + r + w));
+                const line = td.querySelector('.cut-status-line');
+                if (line) {
+                    if (r > 0 || w > 0 || unmade > 0) {
+                        line.innerHTML = `
+                            ${r > 0 ? `<span class="badge bg-danger-subtle text-danger px-1">🔴 ${r} خراب</span> ` : ''}
+                            ${w > 0 ? `<span class="badge bg-warning-subtle text-warning-emphasis px-1">🟡 ${w} ری ورک</span> ` : ''}
+                            ${unmade > 0 ? `<span class="badge bg-secondary-subtle text-secondary px-1">⏳ ${unmade} غیر کٹ</span>` : ''}
+                        `;
+                    } else {
+                        line.innerHTML = `<span class="text-success small">✓ مکمل کٹنگ</span>`;
+                    }
+                }
+            }
+
             function onCuttingDefectChanged() {
                 const rej = parseInt(rejInp ? rejInp.value : 0) || 0;
                 const rew = parseInt(rewInp ? rewInp.value : 0) || 0;
                 if (goodInp) {
                     goodInp.value = Math.max(0, plan - rej - rew);
                 }
+                updateStatusLine();
                 recalculateCuttingMatrixTotals();
             }
 
             if (rejInp) rejInp.addEventListener('input', onCuttingDefectChanged);
             if (rewInp) rewInp.addEventListener('input', onCuttingDefectChanged);
-            if (goodInp) goodInp.addEventListener('input', recalculateCuttingMatrixTotals);
+            if (goodInp) goodInp.addEventListener('input', () => {
+                updateStatusLine();
+                recalculateCuttingMatrixTotals();
+            });
+
+            updateStatusLine();
         });
 
         // Run initial calculation to sync all totals immediately
@@ -3082,12 +3149,39 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnClearMatrix = document.getElementById('btnClearMatrix');
 
     function updateRateCalculation(fromDirectRate = false) {
+        const opt = (workerSelect && workerSelect.selectedIndex >= 0) ? workerSelect.options[workerSelect.selectedIndex] : null;
+        const workerType = opt ? (opt.dataset.workerType || 'Piece Rate') : 'Piece Rate';
         const mins = parseFloat(minInput ? minInput.value : 0) || 0;
         const minRate = parseFloat(minRateInput ? minRateInput.value : 0) || 2.50;
 
-        if (!fromDirectRate && rateInput) {
-            if (mins > 0 && minRate > 0) {
-                rateInput.value = (mins * minRate).toFixed(2);
+        const grpMin = document.getElementById('grpDownstreamMinutes');
+        const grpMinRate = document.getElementById('grpDownstreamMinRate');
+        const grpRate = document.getElementById('grpDownstreamRate');
+        const lblFormula = document.getElementById('lblFormulaBadge');
+
+        if (workerType === 'Piece Rate') {
+            if (grpMin) grpMin.classList.add('d-none');
+            if (grpMinRate) grpMinRate.classList.add('d-none');
+            if (grpRate) grpRate.className = 'col-12';
+            if (rateInput) rateInput.readOnly = true;
+            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-tag-fill me-1"></i>Piece Rate Scheme (طے شدہ پیس ریٹ)';
+
+            const pieceRate = opt ? (parseFloat(opt.dataset.pieceRate) || 0) : 0;
+            const effRate = opt ? (parseFloat(opt.dataset.rate) || 0) : 0;
+            if (!fromDirectRate && rateInput) {
+                rateInput.value = (pieceRate > 0 ? pieceRate : (effRate > 0 ? effRate : 5.00)).toFixed(2);
+            }
+        } else {
+            if (grpMin) grpMin.classList.remove('d-none');
+            if (grpMinRate) grpMinRate.classList.remove('d-none');
+            if (grpRate) grpRate.className = 'col-4';
+            if (rateInput) rateInput.readOnly = false;
+            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-calculator me-1"></i>Minutes × Rate/min = Piece Rate';
+
+            if (!fromDirectRate && rateInput) {
+                if (mins > 0 && minRate > 0) {
+                    rateInput.value = (mins * minRate).toFixed(2);
+                }
             }
         }
 
@@ -3098,10 +3192,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const rateBreakdownContainer = document.getElementById('rateBreakdownText');
         if (rateBreakdownContainer) {
-            if (mins > 0) {
-                rateBreakdownContainer.innerHTML = `<span class="fw-bold text-primary">${mins.toFixed(1)}</span> منٹ فی پیس &times; <span class="fw-bold text-success">Rs. ${minRate.toFixed(2)}</span> فی منٹ = <strong class="text-dark fs-6">Rs. ${currentRate.toFixed(2)}</strong> فی پیس`;
+            if (workerType === 'Minute Rate' && mins > 0) {
+                rateBreakdownContainer.innerHTML = `<span class="fw-bold text-primary">${mins.toFixed(1)}</span> منٹ فی پیس &times; <span class="fw-bold text-success">Rs. ${minRate.toFixed(2)}</span> فی منٹ = <strong class="text-dark fs-6">Rs. ${currentRate.toFixed(2)}</strong> فی پیس (Minute Rate)`;
             } else {
-                rateBreakdownContainer.innerHTML = `<span class="badge bg-primary px-2 py-1"><i class="bi bi-tag-fill me-1"></i>طے شدہ پیس ریٹ: Rs. ${currentRate.toFixed(2)} / پیس (Piece Rate)</span>`;
+                rateBreakdownContainer.innerHTML = `<span class="badge bg-primary px-2 py-1"><i class="bi bi-tag-fill me-1"></i>طے شدہ پیس ریٹ: Rs. ${currentRate.toFixed(2)} / پیس (Piece Rate — پر پیس ریٹ)</span>`;
             }
         }
 
@@ -3379,6 +3473,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
 
                         renderCuttingElements(data.elements, parseInt(cutWholePcs ? cutWholePcs.value : 0) || 0);
+                        updateCuttingRate(false);
                     }
 
                     if (targetOpId && data.operations.some(op => op.operation_id == targetOpId)) {
@@ -3480,9 +3575,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         const minRateTxt = parseFloat(w.rate_per_minute || 2.50).toFixed(2);
                         const pieceRate = parseFloat(w.default_rate || w.piece_rate || 0);
                         const basisBadge = w.rate_basis === 'element_wise' ? ' [اعضاء]' : ' [سویٹر]';
+                        const isMinuteRate = (w.worker_type === 'Minute Rate');
 
                         let rateLabel = '';
-                        if (pieceRate > 0) {
+                        if (isMinuteRate) {
+                            rateLabel = ' — Rs. ' + minRateTxt + '/m (Minute Rate)';
+                        } else if (pieceRate > 0) {
                             rateLabel = ' — Rs. ' + pieceRate.toFixed(2) + '/pc (Piece Rate)';
                         } else if (parseFloat(w.effective_rate) > 0) {
                             rateLabel = ' — Rs. ' + parseFloat(w.effective_rate).toFixed(2) + '/pc';
@@ -3511,29 +3609,34 @@ document.addEventListener('DOMContentLoaded', function() {
         const opt = this.options[this.selectedIndex];
         if (opt && opt.value) {
             const basis = opt.dataset.rateBasis || 'whole_sweater';
+            const workerType = opt.dataset.workerType || 'Piece Rate';
             const pieceRate = parseFloat(opt.dataset.pieceRate) || 0;
             const effectiveRate = parseFloat(opt.dataset.rate) || 0;
             const minRate = parseFloat(opt.dataset.minRate) || 2.50;
 
             if (workerBadge) {
-                if (basis === 'element_wise') {
-                    workerBadge.innerHTML = '<i class="bi bi-puzzle me-1"></i>اعضاء وار (Elements)';
+                if (workerType === 'Minute Rate') {
+                    workerBadge.innerHTML = `<i class="bi bi-stopwatch me-1"></i>Minute Rate (Rs. ${minRate.toFixed(2)}/m)`;
+                    workerBadge.className = 'badge bg-success-subtle text-success border small';
+                } else if (basis === 'element_wise') {
+                    workerBadge.innerHTML = '<i class="bi bi-puzzle me-1"></i>Piece Rate [اعضاء]';
                     workerBadge.className = 'badge bg-primary-subtle text-primary border small';
                 } else {
-                    workerBadge.innerHTML = '<i class="bi bi-layers me-1"></i>مکمل سویٹر (Whole)';
-                    workerBadge.className = 'badge bg-success-subtle text-success border small';
+                    workerBadge.innerHTML = '<i class="bi bi-layers me-1"></i>Piece Rate [سویٹر]';
+                    workerBadge.className = 'badge bg-primary-subtle text-primary border small';
                 }
                 workerBadge.classList.remove('d-none');
             }
             if (minRateInput) {
                 minRateInput.value = minRate.toFixed(2);
             }
-            // Prioritize worker's piece rate for all non-operator stages
-            if (pieceRate > 0) {
-                rateInput.value = pieceRate.toFixed(2);
-                updateRateCalculation(true);
-            } else if (effectiveRate > 0) {
-                rateInput.value = effectiveRate.toFixed(2);
+            
+            if (workerType === 'Piece Rate') {
+                if (pieceRate > 0) {
+                    rateInput.value = pieceRate.toFixed(2);
+                } else if (effectiveRate > 0) {
+                    rateInput.value = effectiveRate.toFixed(2);
+                }
                 updateRateCalculation(true);
             } else {
                 updateRateCalculation(false);
@@ -3592,9 +3695,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.status === 'success') {
                     const balBox = document.getElementById('stageBalanceAlert');
                     balBox.classList.remove('d-none');
-                    document.getElementById('lblPlanned').textContent = data.planned + ' pcs';
-                    document.getElementById('lblDone').textContent = data.good_done + ' pcs';
-                    document.getElementById('lblPending').textContent = data.pending + ' pcs';
+                    if (document.getElementById('lblPlanned')) document.getElementById('lblPlanned').textContent = data.planned + ' pcs';
+                    if (document.getElementById('lblAllowable')) document.getElementById('lblAllowable').textContent = data.allowable + ' pcs';
+                    if (document.getElementById('lblDone')) document.getElementById('lblDone').textContent = data.good_done + ' pcs';
+                    if (document.getElementById('lblPending')) document.getElementById('lblPending').textContent = data.pending + ' pcs';
+
+                    const bRej = document.getElementById('badgePrevRej');
+                    const bRew = document.getElementById('badgePrevRew');
+                    const bUnmade = document.getElementById('badgePrevUnproduced');
+                    if (bRej) {
+                        bRej.textContent = '🔴 ' + (data.prev_rejected || 0) + ' خراب';
+                        bRej.classList.toggle('d-none', (data.prev_rejected || 0) <= 0);
+                    }
+                    if (bRew) {
+                        bRew.textContent = '🟡 ' + (data.prev_rework || 0) + ' ری ورک';
+                        bRew.classList.toggle('d-none', (data.prev_rework || 0) <= 0);
+                    }
+                    if (bUnmade) {
+                        bUnmade.textContent = '⏳ ' + (data.prev_unproduced || 0) + ' بنے ہی نہیں';
+                        bUnmade.classList.toggle('d-none', (data.prev_unproduced || 0) <= 0);
+                    }
 
                     const btnSaveSingle = document.getElementById('btnSaveSingle');
                     if (data.pending <= 0) {
@@ -3779,15 +3899,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 subBtn.classList.remove('btn-primary');
                 subBtn.classList.add('btn-secondary');
             }
-        } else if (data.prev_operation_name && totals.allowable < totals.planned) {
+        } else if (data.prev_operation_name && (totals.allowable < totals.planned || (data.total_prev_rejected || 0) > 0 || (data.total_prev_rework || 0) > 0 || (data.total_prev_unproduced || 0) > 0)) {
+            const prevRej = data.total_prev_rejected || 0;
+            const prevRew = data.total_prev_rework || 0;
+            const prevUnmade = data.total_prev_unproduced || Math.max(0, totals.planned - (totals.allowable + prevRej + prevRew));
+
             stageNoticeEl.className = 'alert alert-info d-flex flex-wrap align-items-center justify-content-between p-3 mb-3 border border-info rounded-3 shadow-sm';
             stageNoticeEl.innerHTML = `
                 <div class="d-flex align-items-center gap-2">
                     <i class="bi bi-arrow-right-circle text-info fs-3"></i>
                     <div>
-                        <div class="fw-bold text-dark">Preceding Stage Output Enforced: ${data.prev_operation_name} (${totals.allowable} Pcs Available)</div>
-                        <div class="small text-muted">
-                            سابقہ مرحلہ (<strong>${data.prev_operation_name}</strong>) سے ${totals.allowable} پیس موصول ہوئے۔ اس مرحلے میں زیادہ سے زیادہ <strong>${totals.allowable}</strong> پیسز کی انٹری کی جا سکتی ہے (${totals.pending} پیسز باقی ہیں)۔
+                        <div class="fw-bold text-dark">Preceding Stage Reconciliation: ${data.prev_operation_name} (${totals.allowable} Pcs Available)</div>
+                        <div class="small text-muted mb-2">
+                            سابقہ مرحلہ (<strong>${data.prev_operation_name}</strong>) سے ${totals.allowable} پیس موصول ہوئے۔ پچھلے خراب یا زیرِ اصلاح پیسز اگلے مرحلے میں شامل نہیں ہو سکتے۔
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 small">
+                            <span class="badge bg-white text-dark border">🎯 کل ہدف: <strong>${totals.planned} pcs</strong></span>
+                            <span class="badge bg-primary text-white">✂️ موصولہ تیار: <strong>${totals.allowable} pcs</strong></span>
+                            ${prevRej > 0 ? `<span class="badge bg-danger text-white">🔴 خراب: <strong>${prevRej} pcs</strong></span>` : ''}
+                            ${prevRew > 0 ? `<span class="badge bg-warning text-dark">🟡 ری ورک: <strong>${prevRew} pcs</strong></span>` : ''}
+                            ${prevUnmade > 0 ? `<span class="badge bg-secondary text-white">⏳ بنے ہی نہیں: <strong>${prevUnmade} pcs</strong></span>` : ''}
+                            <span class="badge bg-success text-white">✅ اس مرحلے میں مکمل: <strong>${totals.good_done} pcs</strong></span>
+                            <span class="badge bg-warning-subtle text-warning-emphasis border">⚡ بقایا کام: <strong>${totals.pending} pcs</strong></span>
                         </div>
                     </div>
                 </div>
@@ -3899,12 +4032,14 @@ document.addEventListener('DOMContentLoaded', function() {
                             </div>
 
                             <div class="cell-status small text-muted mt-1" style="font-size: 0.72rem; line-height: 1.1;">
-                                ${cell.has_prev_stage && cell.allowable < cell.planned ? 
-                                    `<span class="badge bg-danger-subtle text-danger border border-danger-subtle" title="${cell.prev_rejected} rejected in ${cell.prev_stage_name}">
-                                        <i class="bi bi-shield-exclamation"></i> Max: <strong>${cell.pending}</strong>/${cell.allowable} (${cell.prev_rejected} rej in ${cell.prev_stage_name})
-                                    </span>` : 
-                                    `<span class="badge bg-light text-secondary border">Pending: <strong>${cell.pending}</strong>/${effectiveAllowable}</span>`
-                                }
+                                <span class="badge bg-light text-secondary border">Pending: <strong>${cell.pending}</strong>/${effectiveAllowable}</span>
+                                ${(cell.prev_rejected > 0 || cell.prev_rework > 0 || cell.prev_unproduced > 0) ? `
+                                    <div class="d-flex flex-wrap gap-1 mt-1 justify-content-center" style="font-size: 9px;">
+                                        ${cell.prev_rejected > 0 ? `<span class="badge bg-danger text-white px-1" title="پچھلے مرحلے میں خراب پیسز">🔴 ${cell.prev_rejected} Rej</span>` : ''}
+                                        ${cell.prev_rework > 0 ? `<span class="badge bg-warning text-dark px-1" title="ری ورک میں موجود">🟡 ${cell.prev_rework} Rew</span>` : ''}
+                                        ${cell.prev_unproduced > 0 ? `<span class="badge bg-secondary text-white px-1" title="پچھلے مرحلے میں بنے ہی نہیں">⏳ ${cell.prev_unproduced} Unmade</span>` : ''}
+                                    </div>
+                                ` : ''}
                             </div>
                         </td>`;
                     } else {
@@ -4255,8 +4390,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 opSingleWorker.value = lot.operator_id;
             }
             const workerOpt = opSingleWorker ? opSingleWorker.selectedOptions[0] : null;
+            const workerType = workerOpt ? (workerOpt.dataset.workertype || 'Minute Rate') : 'Minute Rate';
             const workerMinRate = workerOpt ? (parseFloat(workerOpt.dataset.minrate) || 2.50) : 2.50;
-            const pieceRate = finalMins > 0 ? (finalMins * workerMinRate) : opDefRate;
+            const workerPieceRate = workerOpt ? (parseFloat(workerOpt.dataset.piecerate) || 0) : 0;
+            const pieceRate = (workerType === 'Piece Rate' && workerPieceRate > 0)
+                ? workerPieceRate 
+                : (finalMins > 0 ? (finalMins * workerMinRate) : opDefRate);
 
             if (opSingleMinutes && !opSingleMinutes.dataset.userEdited) opSingleMinutes.value = finalMins > 0 ? finalMins.toFixed(1) : (opMins > 0 ? opMins.toFixed(1) : '0.0');
             if (opSingleMinRate && !opSingleMinRate.dataset.userEdited) opSingleMinRate.value = workerMinRate.toFixed(2);
@@ -4266,11 +4405,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 const curR = parseFloat(opSingleRate ? opSingleRate.value : pieceRate) || 0;
                 const curM = parseFloat(opSingleMinutes ? opSingleMinutes.value : finalMins) || 0;
                 const curMR = parseFloat(opSingleMinRate ? opSingleMinRate.value : workerMinRate) || 0;
-                opSingleRateBadge.textContent = curM > 0 ? `Rate: Rs. ${curR.toFixed(2)}/pc (${curM}m × Rs. ${curMR.toFixed(2)}/m)` : `Rate: Rs. ${curR.toFixed(2)}/pc (Direct Rate)`;
+                if (workerType === 'Piece Rate') {
+                    opSingleRateBadge.className = 'badge bg-primary-subtle text-primary border';
+                    opSingleRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/pc (Piece Rate — پر پیس ریٹ)`;
+                } else {
+                    opSingleRateBadge.className = 'badge bg-success-subtle text-success border';
+                    opSingleRateBadge.textContent = curM > 0 ? `Rate: Rs. ${curR.toFixed(2)}/pc (${curM}m × Rs. ${curMR.toFixed(2)}/m — منٹ ریٹ)` : `Rate: Rs. ${curR.toFixed(2)}/pc (Direct Rate)`;
+                }
             }
 
             if (document.getElementById('lblSingleMinRateBadge')) {
-                document.getElementById('lblSingleMinRateBadge').textContent = `Rs. ${workerMinRate.toFixed(2)}/m`;
+                if (workerType === 'Piece Rate') {
+                    document.getElementById('lblSingleMinRateBadge').textContent = `Rs. ${pieceRate.toFixed(2)}/pc (Piece Rate)`;
+                } else {
+                    document.getElementById('lblSingleMinRateBadge').textContent = `Rs. ${workerMinRate.toFixed(2)}/m`;
+                }
             }
 
             if (opSinglePieces && (!opSinglePieces.dataset.userEdited || !opSinglePieces.value || parseInt(opSinglePieces.value, 10) > remainingLotPieces || parseInt(opSinglePieces.value, 10) === totalPieces)) {
@@ -4293,18 +4442,22 @@ document.addEventListener('DOMContentLoaded', function() {
             if (lot.night_operator_id && opDoubleNightWorker && !opDoubleNightWorker.value) opDoubleNightWorker.value = lot.night_operator_id;
 
             const dayWorkerOpt = opDoubleDayWorker ? opDoubleDayWorker.selectedOptions[0] : null;
+            const dayType = dayWorkerOpt ? (dayWorkerOpt.dataset.workertype || 'Minute Rate') : 'Minute Rate';
             const dayMinRate = dayWorkerOpt ? (parseFloat(dayWorkerOpt.dataset.minrate) || 2.50) : 2.50;
-            const dayPieceRate = finalMins > 0 ? (finalMins * dayMinRate) : opDefRate;
+            const dayPiece = dayWorkerOpt ? (parseFloat(dayWorkerOpt.dataset.piecerate) || 0) : 0;
+            const dayPieceRate = (dayType === 'Piece Rate' && dayPiece > 0) ? dayPiece : (finalMins > 0 ? (finalMins * dayMinRate) : opDefRate);
 
             const nightWorkerOpt = opDoubleNightWorker ? opDoubleNightWorker.selectedOptions[0] : null;
+            const nightType = nightWorkerOpt ? (nightWorkerOpt.dataset.workertype || 'Minute Rate') : 'Minute Rate';
             const nightMinRate = nightWorkerOpt ? (parseFloat(nightWorkerOpt.dataset.minrate) || 2.50) : 2.50;
-            const nightPieceRate = finalMins > 0 ? (finalMins * nightMinRate) : opDefRate;
+            const nightPiece = nightWorkerOpt ? (parseFloat(nightWorkerOpt.dataset.piecerate) || 0) : 0;
+            const nightPieceRate = (nightType === 'Piece Rate' && nightPiece > 0) ? nightPiece : (finalMins > 0 ? (finalMins * nightMinRate) : opDefRate);
 
             if (document.getElementById('lblDoubleDayMinRateBadge')) {
-                document.getElementById('lblDoubleDayMinRateBadge').textContent = `Rs. ${dayMinRate.toFixed(2)}/m`;
+                document.getElementById('lblDoubleDayMinRateBadge').textContent = (dayType === 'Piece Rate') ? `Rs. ${dayPieceRate.toFixed(2)}/pc (Piece Rate)` : `Rs. ${dayMinRate.toFixed(2)}/m`;
             }
             if (document.getElementById('lblDoubleNightMinRateBadge')) {
-                document.getElementById('lblDoubleNightMinRateBadge').textContent = `Rs. ${nightMinRate.toFixed(2)}/m`;
+                document.getElementById('lblDoubleNightMinRateBadge').textContent = (nightType === 'Piece Rate') ? `Rs. ${nightPieceRate.toFixed(2)}/pc (Piece Rate)` : `Rs. ${nightMinRate.toFixed(2)}/m`;
             }
 
             if (opDoubleDayMinutes && !opDoubleDayMinutes.dataset.userEdited) opDoubleDayMinutes.value = finalMins > 0 ? finalMins.toFixed(1) : (opMins > 0 ? opMins.toFixed(1) : '0.0');
@@ -4319,13 +4472,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 const curR = parseFloat(opDoubleDayRate ? opDoubleDayRate.value : dayPieceRate) || 0;
                 const curM = parseFloat(opDoubleDayMinutes ? opDoubleDayMinutes.value : finalMins) || 0;
                 const curMR = parseFloat(opDoubleDayMinRate ? opDoubleDayMinRate.value : dayMinRate) || 0;
-                opDoubleDayRateBadge.textContent = curM > 0 ? `Rs. ${curR.toFixed(2)}/pc (${curM}m @ ${curMR.toFixed(2)}/m)` : `Rs. ${curR.toFixed(2)}/pc`;
+                opDoubleDayRateBadge.textContent = (dayType === 'Piece Rate') ? `Rs. ${curR.toFixed(2)}/pc (Piece Rate)` : (curM > 0 ? `Rs. ${curR.toFixed(2)}/pc (${curM}m @ ${curMR.toFixed(2)}/m)` : `Rs. ${curR.toFixed(2)}/pc`);
             }
             if (opDoubleNightRateBadge) {
                 const curR = parseFloat(opDoubleNightRate ? opDoubleNightRate.value : nightPieceRate) || 0;
                 const curM = parseFloat(opDoubleNightMinutes ? opDoubleNightMinutes.value : finalMins) || 0;
                 const curMR = parseFloat(opDoubleNightMinRate ? opDoubleNightMinRate.value : nightMinRate) || 0;
-                opDoubleNightRateBadge.textContent = curM > 0 ? `Rs. ${curR.toFixed(2)}/pc (${curM}m @ ${curMR.toFixed(2)}/m)` : `Rs. ${curR.toFixed(2)}/pc`;
+                opDoubleNightRateBadge.textContent = (nightType === 'Piece Rate') ? `Rs. ${curR.toFixed(2)}/pc (Piece Rate)` : (curM > 0 ? `Rs. ${curR.toFixed(2)}/pc (${curM}m @ ${curMR.toFixed(2)}/m)` : `Rs. ${curR.toFixed(2)}/pc`);
             }
 
             // Auto-balance default (e.g. 50/50 of remaining pieces)
@@ -4376,15 +4529,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (opSingleWorker) {
         opSingleWorker.addEventListener('change', function() {
+            if (opSingleRate) delete opSingleRate.dataset.userEdited;
+            if (opSingleMinRate) delete opSingleMinRate.dataset.userEdited;
+            if (opSingleMinutes) delete opSingleMinutes.dataset.userEdited;
             updateOperatorRatesAndQuantities();
             syncWorkerCustomRates(this.value);
         });
     }
     if (opDoubleDayWorker) {
-        opDoubleDayWorker.addEventListener('change', updateOperatorRatesAndQuantities);
+        opDoubleDayWorker.addEventListener('change', function() {
+            if (opDoubleDayRate) delete opDoubleDayRate.dataset.userEdited;
+            if (opDoubleDayMinRate) delete opDoubleDayMinRate.dataset.userEdited;
+            if (opDoubleDayMinutes) delete opDoubleDayMinutes.dataset.userEdited;
+            updateOperatorRatesAndQuantities();
+        });
     }
     if (opDoubleNightWorker) {
-        opDoubleNightWorker.addEventListener('change', updateOperatorRatesAndQuantities);
+        opDoubleNightWorker.addEventListener('change', function() {
+            if (opDoubleNightRate) delete opDoubleNightRate.dataset.userEdited;
+            if (opDoubleNightMinRate) delete opDoubleNightMinRate.dataset.userEdited;
+            if (opDoubleNightMinutes) delete opDoubleNightMinutes.dataset.userEdited;
+            updateOperatorRatesAndQuantities();
+        });
     }
 
     // Auto-balance Day and Night pieces in real-time & sync element breakdown
