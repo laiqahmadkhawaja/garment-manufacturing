@@ -19,6 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         check_csrf();
         $code = trim($_POST['code'] ?? '');
         $name = trim($_POST['name'] ?? '');
+        $description = trim($_POST['description'] ?? '');
         $parentId = !empty($_POST['parent_id']) ? (int)$_POST['parent_id'] : null;
         $deptId = !empty($_POST['department_id']) ? (int)$_POST['department_id'] : null;
         $sequence = (int)($_POST['sequence'] ?? 10);
@@ -33,10 +34,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($code) || empty($name)) {
             set_flash('danger', 'Operation code and name are required.');
         } else {
-            $stmt = $db->prepare("INSERT INTO operations (parent_id, code, name, department_id, sequence, estimated_minutes, is_mandatory, default_rate, rate_unit, is_active) 
-                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)");
-            $stmt->execute([$parentId, $code, $name, $deptId, $sequence, $minutes, $mandatory, $rate, $unit]);
-            log_audit('CREATE', 'operations', (int)$db->lastInsertId(), null, ['code' => $code, 'name' => $name, 'rate' => $rate, 'minutes' => $minutes]);
+            $stmt = $db->prepare("INSERT INTO operations (parent_id, code, name, description, department_id, sequence, estimated_minutes, is_mandatory, default_rate, rate_unit, is_active) 
+                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)");
+            $stmt->execute([$parentId, $code, $name, $description, $deptId, $sequence, $minutes, $mandatory, $rate, $unit]);
+            log_audit('CREATE', 'operations', (int)$db->lastInsertId(), null, ['code' => $code, 'name' => $name, 'description' => $description, 'rate' => $rate, 'minutes' => $minutes]);
             redirect('modules/settings/operations.php', "Operation '$name' created successfully!");
         }
     }
@@ -169,9 +170,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <input type="text" name="code" id="op_code" class="form-control text-uppercase fw-bold" placeholder="OP-TAIL-SLV" required>
                                 </div>
 
-                                <div class="col-12 col-sm-6 col-md-4">
+                                <div class="col-12 col-sm-6 col-md-3">
                                     <label class="form-label fw-semibold">Operation / Part Name *</label>
                                     <input type="text" name="name" class="form-control" placeholder="e.g. Attach Sleeves (بازو لگانا)" required>
+                                </div>
+
+                                <div class="col-12 col-md-4">
+                                    <label class="form-label fw-semibold">Detail / Description (تفصیل)</label>
+                                    <input type="text" name="description" class="form-control" placeholder="e.g. Cut Shawl Label / shawl dori / Moti Fancy">
                                 </div>
 
                                 <div class="col-12 col-sm-6 col-md-3">
@@ -187,7 +193,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <div class="col-12 col-sm-4 col-md-2">
                                     <label class="form-label fw-semibold">Standard Time (SAM) *</label>
                                     <div class="input-group">
-                                        <input type="number" name="estimated_minutes" id="estimated_minutes" class="form-control fw-bold text-primary" step="0.1" min="0" value="2.0" required>
+                                        <input type="number" name="estimated_minutes" id="estimated_minutes" class="form-control fw-bold text-primary" step="any" min="0" value="2.0" required>
                                         <span class="input-group-text">min</span>
                                     </div>
                                     <div class="form-text small" style="font-size: 11px;">وقت منٹوں میں (فی پیس)</div>
@@ -197,7 +203,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <label class="form-label fw-semibold">Default Rate (Rs.) *</label>
                                     <div class="input-group">
                                         <span class="input-group-text">Rs.</span>
-                                        <input type="number" name="default_rate" id="default_rate" class="form-control fw-bold text-success" step="0.25" min="0" value="5.00" required>
+                                        <input type="number" name="default_rate" id="default_rate" class="form-control fw-bold text-success" step="any" min="0" value="5.00" required>
                                     </div>
                                     <div class="form-text small" style="font-size: 11px;">منٹس × 2.50 روپے یا مینوئل ریٹ</div>
                                 </div>
@@ -211,16 +217,19 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <label class="form-label fw-semibold">Rate Unit</label>
                                     <select name="rate_unit" class="form-select">
                                         <option value="Per piece">Per piece (فی پیس)</option>
+                                        <option value="Per minute">Per minute (فی منٹ)</option>
+                                        <option value="Per pala">Per pala (فی پلہ)</option>
+                                        <option value="Per operation">Per operation (فی آپریشن)</option>
                                         <option value="Per dozen">Per dozen (فی درجن)</option>
                                     </select>
                                 </div>
 
-                                <div class="col-12 col-sm-6 col-md-3 d-flex align-items-end justify-content-between gap-2">
-                                    <div class="form-check mb-2">
+                                <div class="col-12 d-flex align-items-center justify-content-between pt-2 border-top">
+                                    <div class="form-check">
                                         <input class="form-check-input" type="checkbox" name="is_mandatory" value="1" id="is_mandatory" checked>
-                                        <label class="form-check-label small fw-semibold" for="is_mandatory">Mandatory</label>
+                                        <label class="form-check-label small fw-semibold" for="is_mandatory">Mandatory Step in Standard Workflow</label>
                                     </div>
-                                    <button type="submit" class="btn btn-primary fw-semibold px-4 flex-grow-1">
+                                    <button type="submit" class="btn btn-primary fw-semibold px-4">
                                         <i class="bi bi-plus-lg me-1"></i> Add Operation
                                     </button>
                                 </div>
@@ -271,7 +280,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <?php else: ?>
                                                     <div class="fw-bold text-dark fs-6"><?= clean($op['name']) ?></div>
                                                 <?php endif; ?>
-                                                <div class="text-muted small ms-<?= $isSub ? '4' : '0' ?>">Unit: <?= clean($op['rate_unit']) ?></div>
+                                                <?php if (!empty($op['description'])): ?>
+                                                    <div class="text-muted small ms-<?= $isSub ? '4' : '0' ?>"><i class="bi bi-card-text me-1 text-primary"></i><?= clean($op['description']) ?></div>
+                                                <?php endif; ?>
+                                                <div class="text-muted small ms-<?= $isSub ? '4' : '0' ?>">Unit: <span class="badge bg-light text-dark border"><?= clean($op['rate_unit'] ?? 'Per piece') ?></span></div>
                                             </td>
                                             <td>
                                                 <?php if ($isSub): ?>
@@ -305,13 +317,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                     <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
                                                     
                                                     <div class="input-group input-group-sm" style="width: 105px;" title="Estimated Minutes">
-                                                        <input type="number" name="estimated_minutes" class="form-control text-center" step="0.1" min="0" value="<?= (float)$op['estimated_minutes'] ?>" placeholder="Min">
+                                                        <input type="number" name="estimated_minutes" class="form-control text-center" step="any" min="0" value="<?= (float)$op['estimated_minutes'] ?>" placeholder="Min">
                                                         <span class="input-group-text px-1 small">m</span>
                                                     </div>
 
                                                     <div class="input-group input-group-sm" style="width: 105px;" title="Default Piece Rate">
                                                         <span class="input-group-text px-1 small">Rs</span>
-                                                        <input type="number" name="default_rate" class="form-control text-end" step="0.25" min="0" value="<?= $op['default_rate'] ?>">
+                                                        <input type="number" name="default_rate" class="form-control text-end" step="any" min="0" value="<?= $op['default_rate'] ?>">
                                                     </div>
 
                                                     <button type="submit" class="btn btn-sm btn-outline-primary py-1 px-2" title="Save Time & Rate">

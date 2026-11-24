@@ -66,6 +66,29 @@ $db->exec("INSERT INTO workflow_template_steps (template_id, operation_id, seque
     (2, 3, 4, 1),
     (2, 8, 5, 1),
     (2, 9, 6, 1)");
+
+// Ensure Design 1 exists for test suite
+$d1 = $db->query("SELECT id FROM designs WHERE id = 1")->fetchColumn();
+if (!$d1) {
+    $db->exec("INSERT INTO designs (id, design_number, name, product_id) VALUES (1, 'DES-901', 'Design 901', 1)");
+}
+
+// Ensure Material 1 & 2 exist for test suite
+$m1 = $db->query("SELECT id FROM materials WHERE id = 1")->fetchColumn();
+if (!$m1) {
+    $db->exec("INSERT INTO materials (id, code, name, category, unit_id, opening_stock, current_stock, cost_price, is_active) VALUES (1, 'MAT-YARN-01', 'Woolen Yarn', 'Yarn', 3, 500.00, 500.00, 1200.00, 1)");
+}
+$m2 = $db->query("SELECT id FROM materials WHERE id = 2")->fetchColumn();
+if (!$m2) {
+    $db->exec("INSERT INTO materials (id, code, name, category, unit_id, opening_stock, current_stock, cost_price, is_active) VALUES (2, 'MAT-SPOOL-01', 'Sewing Spool', 'Trims', 7, 100.00, 100.00, 50.00, 1)");
+}
+
+// Ensure Customer 1 exists for test suite
+$c1 = $db->query("SELECT id FROM customers WHERE id = 1")->fetchColumn();
+if (!$c1) {
+    $db->exec("INSERT INTO customers (id, code, name, city, is_active) VALUES (1, 'CUST-001', 'Al-Karam Garments', 'Lahore', 1)");
+}
+
 $db->exec("SET FOREIGN_KEY_CHECKS=1");
 
 // ------------------------------------------------------------------------
@@ -427,9 +450,10 @@ assert_test("24. Product Recipe BOM & Batch Material Estimation", $bomItemCount 
 $db->beginTransaction();
 // Get or create Tailoring main operation
 $tailOp = $db->query("SELECT id FROM operations WHERE code = 'OP-TAIL' OR name LIKE '%Tailoring%' LIMIT 1")->fetch();
-$tailId = (int)$tailOp['id'];
+$tailId = !empty($tailOp['id']) ? (int)$tailOp['id'] : null;
 
 // Check sub-operation: Attach Pockets with 2.5 min
+$db->exec("DELETE FROM production_entries WHERE operation_id IN (SELECT id FROM operations WHERE code = 'OP-TEST-PCK')");
 $db->prepare("DELETE FROM operations WHERE code = 'OP-TEST-PCK'")->execute();
 $insSubOp = $db->prepare("INSERT INTO operations (parent_id, code, name, department_id, sequence, estimated_minutes, default_rate, rate_unit, is_mandatory, is_active)
                           VALUES (?, 'OP-TEST-PCK', 'Attach Pockets Test', 2, 25, 2.50, 6.25, 'Per piece', 1, 1)");

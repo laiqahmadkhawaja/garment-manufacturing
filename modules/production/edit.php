@@ -36,7 +36,7 @@ $activeNav = 'production_history';
 $lockedStatuses = ['Closed', 'Dispatched', 'Completed', 'Archived'];
 $isLocked = in_array($entry['lot_status'], $lockedStatuses);
 
-$workers = $db->query("SELECT id, name, code, rate_per_minute FROM workers WHERE is_active = 1 ORDER BY name ASC")->fetchAll();
+$workers = $db->query("SELECT id, name, code, worker_type, default_rate, rate_per_minute FROM workers WHERE is_active = 1 ORDER BY name ASC")->fetchAll();
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -58,7 +58,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newMins = max(0, (float)($_POST['minutes_per_piece'] ?? 0));
         $newNotes = trim($_POST['notes'] ?? '');
 
-        $newLabour = round($newGoodQty * $newRate, 2);
+        // Check worker wage type
+        $wTypeStmt = $db->prepare("SELECT worker_type FROM workers WHERE id = ?");
+        $wTypeStmt->execute([$newWorkerId]);
+        $newWorkerWageType = $wTypeStmt->fetchColumn() ?: 'Piece Rate';
+
+        if ($newWorkerWageType === 'Daily Wage') {
+            $newLabour = $newRate;
+            $desc = "Production entry on Lot #" . $entry['lot_number'] . " (" . $newGoodQty . " pcs @ Rs. " . number_format($newRate, 2) . "/day Daily Wage)";
+        } elseif ($newWorkerWageType === 'Monthly Salary') {
+            $newLabour = 0.00;
+            $desc = "Production entry on Lot #" . $entry['lot_number'] . " (" . $newGoodQty . " pcs - Monthly Salary)";
+        } else {
+            $newLabour = round($newGoodQty * $newRate, 2);
+            $desc = "Production entry on Lot #" . $entry['lot_number'] . " (" . $newGoodQty . " pcs @ Rs. " . number_format($newRate, 2) . "/pc)";
+        }
         $newTotalMins = round($newGoodQty * $newMins, 2);
 
         if ($newGoodQty <= 0 && $newRejQty <= 0 && $newRewQty <= 0) {
@@ -260,9 +274,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <select name="worker_id" id="workerSelect" class="form-select form-select-sm fw-bold" required <?= $isLocked ? 'disabled' : '' ?>>
                                         <?php 
                                         $curWId = (int)($_POST['worker_id'] ?? $entry['worker_id']);
-                                        foreach ($workers as $w): ?>
-                                            <option value="<?= $w['id'] ?>" data-minrate="<?= $w['rate_per_minute'] ?>" <?= $curWId === (int)$w['id'] ? 'selected' : '' ?>>
-                                                <?= clean($w['name']) ?> (<?= clean($w['code']) ?>)
+                                        foreach ($workers as $w): 
+                                            $rateTxt = format_worker_wage_label($w);
+                                        ?>
+                                            <option value="<?= $w['id'] ?>" data-minrate="<?= $w['rate_per_minute'] ?>" data-piecerate="<?= $w['default_rate'] ?>" data-dailyrate="<?= $w['default_rate'] ?>" data-workertype="<?= clean($w['worker_type']) ?>" <?= $curWId === (int)$w['id'] ? 'selected' : '' ?>>
+                                                <?= clean($w['name']) ?> (<?= clean($w['code']) ?>) <?= $rateTxt ?>
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
@@ -296,22 +312,22 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <div class="p-3 bg-light rounded-3 border mb-3">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <span class="small fw-bold text-dark"><i class="bi bi-calculator text-primary me-1"></i> Rate & SAM Calculation Scheme</span>
-                                    <span class="text-muted small">Labour = Good Qty × Rate</span>
+                                    <span class="text-muted small" id="lblEditLabourFormula">Labour = Good Qty × Rate</span>
                                 </div>
                                 <div class="row g-2 align-items-center">
                                     <div class="col-12 col-md-4">
                                         <label class="form-label small fw-semibold text-muted mb-1" style="font-size: 11px;">SAM Minutes / Piece</label>
                                         <div class="input-group input-group-sm">
-                                            <input type="number" name="minutes_per_piece" id="samMinutes" class="form-control form-control-sm text-center fw-bold text-primary" step="0.1" min="0" value="<?= clean($_POST['minutes_per_piece'] ?? $entry['minutes_per_piece']) ?>" <?= $isLocked ? 'disabled' : '' ?>>
+                                            <input type="number" name="minutes_per_piece" id="samMinutes" class="form-control form-control-sm text-center fw-bold text-primary" step="any" min="0" value="<?= clean($_POST['minutes_per_piece'] ?? $entry['minutes_per_piece']) ?>" <?= $isLocked ? 'disabled' : '' ?>>
                                             <span class="input-group-text px-1 small text-muted">min</span>
                                         </div>
                                     </div>
                                     <div class="col-12 col-md-4">
-                                        <label class="form-label small fw-semibold text-muted mb-1" style="font-size: 11px;">Piece Rate (Rs./pc) *</label>
+                                        <label class="form-label small fw-semibold text-muted mb-1" id="lblEditRateType" style="font-size: 11px;">Piece Rate (Rs./pc) *</label>
                                         <div class="input-group input-group-sm">
                                             <span class="input-group-text px-1 small text-muted">Rs</span>
-                                            <input type="number" name="rate" id="pieceRate" class="form-control form-control-sm text-center fw-bold text-dark" step="0.25" min="0" required value="<?= clean($_POST['rate'] ?? $entry['rate']) ?>" <?= $isLocked ? 'disabled' : '' ?>>
-                                            <span class="input-group-text px-1 small text-muted">/pc</span>
+                                            <input type="number" name="rate" id="pieceRate" class="form-control form-control-sm text-center fw-bold text-dark" step="any" min="0" required value="<?= clean($_POST['rate'] ?? $entry['rate']) ?>" <?= $isLocked ? 'disabled' : '' ?>>
+                                            <span class="input-group-text px-1 small text-muted" id="unitEditRate">/pc</span>
                                         </div>
                                     </div>
                                     <div class="col-12 col-md-4 text-md-end">
@@ -428,9 +444,17 @@ document.addEventListener('DOMContentLoaded', function() {
     let baseBatchTotal = initialGood + initialRej + initialRew;
 
     function recalcLiveLabour() {
+        const workerOpt = workerSel ? workerSel.selectedOptions[0] : null;
+        const workerType = workerOpt ? (workerOpt.dataset.workertype || '') : '';
         const qty = parseInt(goodInp?.value) || 0;
         const rate = parseFloat(rateInp?.value) || 0;
-        const total = qty * rate;
+        
+        let total = qty * rate;
+        if (workerType === 'Daily Wage') {
+            total = rate;
+        } else if (workerType === 'Monthly Salary') {
+            total = 0.00;
+        }
         if (lblLabour) {
             lblLabour.textContent = 'Rs. ' + total.toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         }
@@ -465,6 +489,10 @@ document.addEventListener('DOMContentLoaded', function() {
     if (samInp) {
         samInp.addEventListener('input', function() {
             const workerOpt = workerSel ? workerSel.selectedOptions[0] : null;
+            const workerType = workerOpt ? (workerOpt.dataset.workertype || '') : '';
+            if (workerType === 'Daily Wage' || workerType === 'Monthly Salary') {
+                return;
+            }
             const minRate = workerOpt ? (parseFloat(workerOpt.dataset.minrate) || 2.50) : 2.50;
             const sam = parseFloat(this.value) || 0;
             if (sam > 0 && rateInp) {
@@ -474,16 +502,76 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    function applyWorkerWageTypeUI() {
+        if (!workerSel) return;
+        const workerOpt = workerSel.selectedOptions[0];
+        if (!workerOpt) return;
+        const workerType = workerOpt.dataset.workertype || '';
+        const minRate = parseFloat(workerOpt.dataset.minrate) || 2.50;
+        const pieceRate = parseFloat(workerOpt.dataset.piecerate) || 0;
+        const dailyRate = parseFloat(workerOpt.dataset.dailyrate) || 0;
+        const sam = parseFloat(samInp ? samInp.value : 0) || 0;
+
+        const lblRate = document.getElementById('lblEditRateType');
+        const unitRate = document.getElementById('unitEditRate');
+        const schemeHint = document.getElementById('lblEditLabourFormula');
+
+        if (workerType === 'Daily Wage') {
+            if (lblRate) lblRate.textContent = 'Daily Wage Rate (Rs./day) *';
+            if (unitRate) unitRate.textContent = '/day';
+            if (schemeHint) schemeHint.textContent = 'Labour = Fixed Daily Wage';
+            if (rateInp && (!rateInp.value || parseFloat(rateInp.value) === 0)) {
+                rateInp.value = dailyRate.toFixed(2);
+            }
+        } else if (workerType === 'Monthly Salary') {
+            if (lblRate) lblRate.textContent = 'Monthly Salary Rate *';
+            if (unitRate) unitRate.textContent = '/mo';
+            if (schemeHint) schemeHint.textContent = 'Labour = Fixed Monthly (Rs. 0.00 in batch)';
+            if (rateInp && (!rateInp.value || parseFloat(rateInp.value) === 0)) {
+                rateInp.value = dailyRate.toFixed(2);
+            }
+        } else if (workerType === 'Piece Rate' || workerType === 'Contractor' || workerType === 'Contract') {
+            if (lblRate) lblRate.textContent = 'Piece Rate (Rs./pc) *';
+            if (unitRate) unitRate.textContent = '/pc';
+            if (schemeHint) schemeHint.textContent = 'Labour = Good Qty × Rate';
+            if (rateInp && (!rateInp.value || parseFloat(rateInp.value) === 0)) {
+                rateInp.value = pieceRate.toFixed(2);
+            }
+        } else {
+            if (lblRate) lblRate.textContent = 'Piece Rate (Rs./pc) *';
+            if (unitRate) unitRate.textContent = '/pc';
+            if (schemeHint) schemeHint.textContent = 'Labour = Good Qty × Rate (from SAM Minutes)';
+            if (sam > 0 && rateInp && (!rateInp.value || parseFloat(rateInp.value) === 0)) {
+                rateInp.value = (sam * minRate).toFixed(2);
+            }
+        }
+        recalcLiveLabour();
+    }
+
     if (workerSel) {
         workerSel.addEventListener('change', function() {
             const workerOpt = this.selectedOptions[0];
-            const minRate = workerOpt ? (parseFloat(workerOpt.dataset.minrate) || 2.50) : 2.50;
+            if (!workerOpt) return;
+            const workerType = workerOpt.dataset.workertype || '';
+            const minRate = parseFloat(workerOpt.dataset.minrate) || 2.50;
+            const pieceRate = parseFloat(workerOpt.dataset.piecerate) || 0;
+            const dailyRate = parseFloat(workerOpt.dataset.dailyrate) || 0;
             const sam = parseFloat(samInp ? samInp.value : 0) || 0;
-            if (sam > 0 && rateInp) {
+
+            if (workerType === 'Daily Wage' && rateInp) {
+                rateInp.value = dailyRate.toFixed(2);
+            } else if (workerType === 'Monthly Salary' && rateInp) {
+                rateInp.value = dailyRate.toFixed(2);
+            } else if ((workerType === 'Piece Rate' || workerType === 'Contractor' || workerType === 'Contract') && rateInp) {
+                rateInp.value = pieceRate.toFixed(2);
+            } else if (sam > 0 && rateInp) {
                 rateInp.value = (sam * minRate).toFixed(2);
-                recalcLiveLabour();
             }
+            applyWorkerWageTypeUI();
         });
+
+        // Initialize on load
+        applyWorkerWageTypeUI();
     }
 });
 </script>

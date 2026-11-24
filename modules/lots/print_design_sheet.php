@@ -93,28 +93,35 @@ $sleevelessQty = (int)($anatomyData['sleeveless'] ?? 0);
 $hasAnatomy = !empty($lot['has_anatomy_variants']) && ($sleevedQty > 0 || $sleevelessQty > 0);
 $totalLotPieces = (int)$lot['total_pieces'];
 
-// Dynamic Garment Types / Product Elements for Copy #4
-$dynamicElements = [];
+// Dynamic Garment Types / Product Elements for Copy #4 (Excludes plain back & sleeves per factory standard)
+$bandPlateElements = [];
 if (!empty($productElements)) {
     foreach ($productElements as $pe) {
         $name = trim($pe['element_name']);
+        // Exclude knitted back panel and sleeves from printing / band plate traveller
+        $isBack = (stripos($name, 'back') !== false || stripos($name, 'پچھلا') !== false || stripos($name, 'بیک') !== false);
         $isSleeves = (stripos($name, 'sleeve') !== false || stripos($name, 'بازو') !== false);
-        $dynamicElements[] = [
+        if ($isBack || $isSleeves) {
+            continue;
+        }
+        $bandPlateElements[] = [
             'name' => $name,
             'qty' => (int)$pe['quantity'] ?: 1,
-            'is_sleeves' => $isSleeves
+            'is_sleeves' => false
         ];
     }
-} else {
-    $dynamicElements = [
-        ['name' => 'فرنٹ (Front)', 'qty' => 1, 'is_sleeves' => false],
-        ['name' => 'بیک (Back)', 'qty' => 1, 'is_sleeves' => false],
-        ['name' => 'بازو (Sleeves)', 'qty' => 2, 'is_sleeves' => true],
-        ['name' => 'کالر / پٹی (Collar)', 'qty' => 1, 'is_sleeves' => false],
-        ['name' => 'پاکٹ (Pocket)', 'qty' => 1, 'is_sleeves' => false],
-        ['name' => 'بون (Bon)', 'qty' => 2, 'is_sleeves' => false],
+}
+
+if (empty($bandPlateElements)) {
+    $bandPlateElements = [
+        ['name' => 'سامنے (Front Panel)', 'qty' => 1, 'is_sleeves' => false],
+        ['name' => 'وی ٹیپ / گلا (VTape / Gala)', 'qty' => 1, 'is_sleeves' => false],
+        ['name' => 'موڈھے ٹیپ (Moday Tape)', 'qty' => 1, 'is_sleeves' => false],
     ];
 }
+
+// Keep dynamicElements for backwards compatibility if needed
+$dynamicElements = $bandPlateElements;
 
 // Decode measurements or provide standard defaults
 $measurements = !empty($lot['measurements_json']) ? json_decode($lot['measurements_json'], true) : [];
@@ -128,11 +135,35 @@ $bazoWid = $measurements['bazo']['width'] ?? '14';
 $bazoBor = $measurements['bazo']['border'] ?? '42';
 $bazoMins = $measurements['bazo']['mins'] ?? ($lot['estimated_minutes'] ?? '7');
 
-// Size / Color Scheme Columns 1, 2, 3, 4
-$scheme1Len = $measurements['scheme']['1']['length'] ?? '41';
-$scheme1Wid = $measurements['scheme']['1']['width'] ?? '45';
-$scheme1Bor = $measurements['scheme']['1']['border'] ?? '46';
-$scheme1Mins = $measurements['scheme']['1']['mins'] ?? '43';
+// Extract unique size labels from lot variants or single size for Size Auto Pick
+$lotSizeLabels = [];
+foreach ($variants as $v) {
+    $sLabel = $v['size_code'] ?: $v['size_name'];
+    if ($sLabel && !in_array($sLabel, $lotSizeLabels)) {
+        $lotSizeLabels[] = $sLabel;
+    }
+}
+if (empty($lotSizeLabels)) {
+    if (!empty($lot['single_size_code'])) {
+        $lotSizeLabels[] = $lot['single_size_code'];
+    } elseif (!empty($lot['single_size_name'])) {
+        $lotSizeLabels[] = $lot['single_size_name'];
+    } else {
+        $lotSizeLabels[] = '34/36';
+    }
+}
+
+// Columns 1 to 4 size headers (Auto-picked)
+$sizeCol1 = $lotSizeLabels[0] ?? (!empty($lot['single_size_name']) ? $lot['single_size_name'] : '34/36');
+$sizeCol2 = $lotSizeLabels[1] ?? (isset($measurements['scheme']['2']) && !empty($measurements['scheme']['2']['length']) ? '2' : '');
+$sizeCol3 = $lotSizeLabels[2] ?? (isset($measurements['scheme']['3']) && !empty($measurements['scheme']['3']['length']) ? '3' : '');
+$sizeCol4 = $lotSizeLabels[3] ?? (isset($measurements['scheme']['4']) && !empty($measurements['scheme']['4']['length']) ? '4' : '');
+
+// Size / Color Scheme Columns 1, 2, 3, 4 (Auto-fill from Palla if empty)
+$scheme1Len = !empty($measurements['scheme']['1']['length']) ? $measurements['scheme']['1']['length'] : $plaLen;
+$scheme1Wid = !empty($measurements['scheme']['1']['width']) ? $measurements['scheme']['1']['width'] : $plaWid;
+$scheme1Bor = !empty($measurements['scheme']['1']['border']) ? $measurements['scheme']['1']['border'] : $plaBor;
+$scheme1Mins = !empty($measurements['scheme']['1']['mins']) ? $measurements['scheme']['1']['mins'] : $samMins;
 
 $scheme2Len = $measurements['scheme']['2']['length'] ?? '';
 $scheme2Wid = $measurements['scheme']['2']['width'] ?? '';
@@ -569,15 +600,14 @@ $designDisplay = $lot['design_number'] ?: '39/26';
         </table>
 
         <div class="row g-2 align-items-stretch section-body-row">
-            <!-- Col 1 (Right): Color Table with Piece Breakdown -->
+            <!-- Col 1 (Right): Color Table with Piece Breakdown (Clean without duplicate columns) -->
             <div class="col-5 section-col-flex">
                 <table class="tbl-grid">
                     <thead>
                         <tr>
-                            <th style="width: 24%;">رنگ نمبر</th>
-                            <th style="width: 36%;">رنگ نام</th>
-                            <th style="width: 20%;">تعداد</th>
-                            <th style="width: 20%;">پلا/بازو</th>
+                            <th style="width: 28%;">رنگ نمبر</th>
+                            <th style="width: 44%;">رنگ نام</th>
+                            <th style="width: 28%;">تعداد (Pcs)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -591,38 +621,36 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                                     </div>
                                 </td>
                                 <td class="fw-bold" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
-                                <td class="fw-semibold" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
                             </tr>
                         <?php endforeach; ?>
                         <?php for ($i = count($colorSummary); $i < 4; $i++): ?>
-                            <tr><td>&nbsp;</td><td></td><td></td><td></td></tr>
+                            <tr><td>&nbsp;</td><td></td><td></td></tr>
                         <?php endfor; ?>
                     </tbody>
                     <tfoot>
                         <tr class="table-light fw-bold">
                             <td colspan="2" class="text-start pe-2">کل تعداد:</td>
                             <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
-                            <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
                         </tr>
                     </tfoot>
                 </table>
             </div>
 
-            <!-- Col 2 (Center): Palla Measurements & Color Scheme -->
+            <!-- Col 2 (Center): Palla Measurements & Size Auto Pick Scheme -->
             <div class="col-4 section-col-flex">
                 <table class="tbl-grid">
                     <thead>
                         <tr>
-                            <th colspan="2" style="width: 45%;">پلا پیمائش</th>
-                            <th colspan="4" style="width: 55%;">کلر سکیم</th>
+                            <th colspan="2" style="width: 40%;">پلا پیمائش</th>
+                            <th colspan="4" style="width: 60%;">سائز پیمائش (Size Specs)</th>
                         </tr>
                         <tr>
                             <th>تفصیل</th>
                             <th>سائز</th>
-                            <th>4</th>
-                            <th>3</th>
-                            <th>2</th>
-                            <th>1</th>
+                            <th><?= clean($sizeCol4 ?: '4') ?></th>
+                            <th><?= clean($sizeCol3 ?: '3') ?></th>
+                            <th><?= clean($sizeCol2 ?: '2') ?></th>
+                            <th><?= clean($sizeCol1 ?: '1') ?></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -758,11 +786,10 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                 <table class="tbl-grid">
                     <thead>
                         <tr>
-                            <th style="width: 20%;">رنگ نمبر</th>
-                            <th style="width: 32%;">رنگ نام</th>
-                            <th style="width: 16%;">پلا تعداد</th>
-                            <th style="width: 16%;">بازو تعداد</th>
-                            <th style="width: 16%;">کل تعداد</th>
+                            <th style="width: 24%;">رنگ نمبر</th>
+                            <th style="width: 40%;">رنگ نام</th>
+                            <th style="width: 18%;">پلا تعداد</th>
+                            <th style="width: 18%;">بازو تعداد</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -781,11 +808,10 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                                     }
                                     ?>
                                 </td>
-                                <td class="fw-bold" dir="ltr"><?= (int)$cs['total_qty'] ?></td>
                             </tr>
                         <?php endforeach; ?>
                         <?php for ($i = count($colorSummary); $i < 4; $i++): ?>
-                            <tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>
+                            <tr><td>&nbsp;</td><td></td><td></td><td></td></tr>
                         <?php endfor; ?>
                     </tbody>
                     <tfoot>
@@ -795,19 +821,18 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                             <td dir="ltr">
                                 <?= $hasAnatomy ? (int)($sleevedQty * 2) : (int)($lot['total_pieces'] * 2) ?>
                             </td>
-                            <td dir="ltr"><?= (int)$lot['total_pieces'] ?></td>
                         </tr>
                     </tfoot>
                 </table>
             </div>
 
-            <!-- Left: Side-by-side Palla & Bazo Measurements (50%) -->
+            <!-- Left: Side-by-side Palla & Bazo Measurements (50%) with Size Auto Pick -->
             <div class="col-6 section-col-flex">
                 <div class="row g-1">
                     <div class="col-6 section-col-flex">
                         <table class="tbl-grid">
                             <thead>
-                                <tr><th colspan="2">پلا پیمائش</th></tr>
+                                <tr><th colspan="2">پلا پیمائش (سائز: <?= clean($sizeDisplay) ?>)</th></tr>
                             </thead>
                             <tbody>
                                 <tr><td>لمبائی</td><td class="fw-bold" dir="ltr"><?= clean($plaLen) ?></td></tr>
@@ -820,7 +845,7 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                     <div class="col-6 section-col-flex">
                         <table class="tbl-grid">
                             <thead>
-                                <tr><th colspan="2">بازو پیمائش</th></tr>
+                                <tr><th colspan="2">بازو پیمائش (سائز: <?= clean($sizeDisplay) ?>)</th></tr>
                             </thead>
                             <tbody>
                                 <tr><td>لمبائی</td><td class="fw-bold" dir="ltr"><?= clean($bazoLen) ?></td></tr>
@@ -1005,14 +1030,14 @@ $designDisplay = $lot['design_number'] ?: '39/26';
             </tr>
         </table>
 
-        <!-- Dynamic Product Elements Table -->
+        <!-- Dynamic Product Elements Table (Print & Band Plate Only - No Back, No Sleeves, No Extra Total) -->
         <table class="tbl-grid" style="table-layout: fixed; width: 100%;">
             <thead>
                 <tr>
-                    <th style="width: 20%;">رنگ (Color)</th>
+                    <th style="width: 28%;">رنگ (Color)</th>
                     <?php 
-                    $elemColWidth = count($dynamicElements) > 0 ? (66 / count($dynamicElements)) : 66;
-                    foreach ($dynamicElements as $elem): 
+                    $elemColWidth = count($bandPlateElements) > 0 ? (72 / count($bandPlateElements)) : 72;
+                    foreach ($bandPlateElements as $elem): 
                     ?>
                         <th style="width: <?= number_format($elemColWidth, 1) ?>%;">
                             <?= clean($elem['name']) ?>
@@ -1021,63 +1046,31 @@ $designDisplay = $lot['design_number'] ?: '39/26';
                             <?php endif; ?>
                         </th>
                     <?php endforeach; ?>
-                    <th style="width: 14%;">کل تعداد</th>
                 </tr>
             </thead>
             <tbody>
                 <?php 
-                $elemTotals = array_fill(0, count($dynamicElements), 0);
-                $grandColorTotal = 0;
-                $cIndex = 0;
-                $totalColorsCount = count($colorSummary);
-                $bazoAccumulator = 0;
-
                 foreach ($colorSummary as $cs): 
-                    $cIndex++;
                     $cQty = (int)$cs['total_qty'];
-                    $grandColorTotal += $cQty;
-
-                    if ($hasAnatomy && $totalLotPieces > 0) {
-                        if ($cIndex === $totalColorsCount) {
-                            $cBazo = max(0, $sleevedQty - $bazoAccumulator);
-                        } else {
-                            $cBazo = (int)round(($sleevedQty / $totalLotPieces) * $cQty);
-                        }
-                    } else {
-                        $cBazo = $cQty;
-                    }
-                    $bazoAccumulator += $cBazo;
                 ?>
                     <tr>
                         <td class="fw-bold font-monospace" dir="ltr"><?= clean($cs['color_code']) ?> (<?= clean($cs['color_name']) ?>)</td>
-                        <?php foreach ($dynamicElements as $eIdx => $elem): 
-                            $ePieces = $elem['is_sleeves'] ? ($cBazo * $elem['qty']) : ($cQty * $elem['qty']);
-                            $elemTotals[$eIdx] += $ePieces;
+                        <?php foreach ($bandPlateElements as $elem): 
+                            $ePieces = $cQty * $elem['qty'];
                         ?>
                             <td class="fw-semibold" dir="ltr"><?= (int)$ePieces ?></td>
                         <?php endforeach; ?>
-                        <td class="fw-bold" dir="ltr"><?= (int)$cQty ?></td>
                     </tr>
                 <?php endforeach; ?>
                 <?php for ($i = count($colorSummary); $i < 3; $i++): ?>
                     <tr>
                         <td>&nbsp;</td>
-                        <?php foreach ($dynamicElements as $elem): ?>
+                        <?php foreach ($bandPlateElements as $elem): ?>
                             <td></td>
                         <?php endforeach; ?>
-                        <td></td>
                     </tr>
                 <?php endfor; ?>
             </tbody>
-            <tfoot>
-                <tr class="table-light fw-bold" style="background: #e9ecef !important;">
-                    <td class="text-start pe-2">ٹوٹل اجزاء:</td>
-                    <?php foreach ($dynamicElements as $eIdx => $elem): ?>
-                        <td dir="ltr"><?= (int)$elemTotals[$eIdx] ?></td>
-                    <?php endforeach; ?>
-                    <td dir="ltr"><?= (int)$grandColorTotal ?></td>
-                </tr>
-            </tfoot>
         </table>
 
         <div class="copy-footer-note">

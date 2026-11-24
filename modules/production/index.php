@@ -57,6 +57,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $singleSizeId = !empty($_POST['single_size_id']) ? (int)$_POST['single_size_id'] : null;
         $daySizes = $_POST['day_sizes'] ?? [];
         $nightSizes = $_POST['night_sizes'] ?? [];
+        $elementsData = $_POST['elements'] ?? [];
+
+        // Calculate pieces entered across elements or shift fields
+        $calcDayPcs = 0;
+        $calcNightPcs = 0;
+        if (!empty($elementsData)) {
+            foreach ($elementsData as $elId => $vals) {
+                $calcDayPcs += max(0, (int)($vals['op1_pieces'] ?? 0));
+                if ($shiftType === 'Double Shift') {
+                    $calcNightPcs += max(0, (int)($vals['op2_pieces'] ?? 0));
+                }
+            }
+        } elseif ($sizeMode === 'Multi Size') {
+            foreach ($daySizes as $sQty) $calcDayPcs += max(0, (int)$sQty);
+            if ($shiftType === 'Double Shift') {
+                foreach ($nightSizes as $sQty) $calcNightPcs += max(0, (int)$sQty);
+            }
+        } else {
+            $calcDayPcs = $dayPieces;
+            $calcNightPcs = ($shiftType === 'Double Shift') ? $nightPieces : 0;
+        }
+
+        $hasDayPieces = ($calcDayPcs > 0 || $dayPieces > 0);
+        $hasNightPieces = ($shiftType === 'Double Shift' && ($calcNightPcs > 0 || $nightPieces > 0));
 
         if ($lotId <= 0) {
             $error = 'Please select a production lot.';
@@ -79,12 +103,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $nightPieces = 0;
                     $nightRate = 0.00;
                     $nightSizes = [];
+                    $hasNightPieces = false;
                 }
 
-                if ($dayWorkerId <= 0) {
+                if (!$hasDayPieces && !$hasNightPieces) {
+                    $error = 'Please enter produced pieces for at least one element or shift (کم از کم ایک حصے یا شفٹ کے پیسز درج کریں).';
+                } elseif ($hasDayPieces && $dayWorkerId <= 0) {
+                    $error = 'Please select Day Operator for day produced pieces (ڈے آپریٹر منتخب کریں).';
+                } elseif ($hasNightPieces && $nightWorkerId <= 0) {
+                    $error = 'Please select Night Operator for night produced pieces (نائٹ آپریٹر منتخب کریں).';
+                } elseif ($shiftType !== 'Double Shift' && $dayWorkerId <= 0) {
                     $error = 'Please select Day Operator.';
-                } elseif ($shiftType === 'Double Shift' && $nightWorkerId <= 0) {
-                    $error = 'Please select Night Operator for Double Shift lot.';
                 } else {
                     $lotNum = $lotRow['lot_number'];
                     if (!$singleSizeId) $singleSizeId = $lotRow['single_size_id'];
@@ -143,7 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $dayTotalLabour = 0.00;
                     $firstDayId = null;
 
-                    if ($calcElemDayLabour > 0) {
+                    if ($dayWorkerId > 0 && $calcElemDayLabour > 0) {
                         $dayTotalLabour = $calcElemDayLabour;
                         $minsTotal = $calcElemDayMins;
                         if ($dayPieces <= 0 && $calcElemDayPcsMax > 0) {
@@ -156,18 +185,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $notes = ($notes ? $notes . ' | ' : '') . implode(', ', $elementNotesArr);
                         }
 
-                        $entryNum = $baseDocNum . '-D';
+                        $entryNum = ensure_unique_doc_number($db, 'production_entries', 'entry_number', $baseDocNum . '-D');
                         $ins = $db->prepare("INSERT INTO production_entries 
                             (entry_number, entry_date, lot_id, operation_id, worker_id, shift, color_id, size_id, qty_received, good_qty, rate, minutes_per_piece, worker_minute_rate, total_minutes, labour_amount, notes, created_by)
                             VALUES (?, ?, ?, ?, ?, 'Day Shift', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                         $ins->execute([$entryNum, $entryDate, $lotId, $operationId, $dayWorkerId, $singleSizeId, $dayPieces, $dayPieces, $effectiveDayRate, $effectiveDayMins, $dayMinRate, $minsTotal, $dayTotalLabour, $notes, $_SESSION['user_id'] ?? null]);
                         $firstDayId = (int)$db->lastInsertId();
-                    } elseif ($sizeMode === 'Multi Size' && !empty($daySizes)) {
+                    } elseif ($dayWorkerId > 0 && $sizeMode === 'Multi Size' && !empty($daySizes)) {
                         $seq = 1;
                         foreach ($daySizes as $sId => $sQty) {
                             $sQty = (int)$sQty;
                             if ($sQty <= 0) continue;
-                            $entryNum = $baseDocNum . '-D' . $seq++;
+                            $entryNum = ensure_unique_doc_number($db, 'production_entries', 'entry_number', $baseDocNum . '-D' . ($seq++));
                             $labour = round($sQty * $dayRate, 2);
                             $minsTotal = round($sQty * $dayMins, 2);
                             $ins = $db->prepare("INSERT INTO production_entries 
@@ -179,10 +208,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $dayTotalPcs += $sQty;
                             $dayTotalLabour += $labour;
                         }
-                    } else {
-                        $entryNum = $baseDocNum . '-D';
+                    } elseif ($dayWorkerId > 0 && ($dayPieces > 0 || empty($elementsData))) {
+                        $entryNum = ensure_unique_doc_number($db, 'production_entries', 'entry_number', $baseDocNum . '-D');
                         $dayTotalPcs = $dayPieces;
-                        $dayTotalLabour = round($dayPieces * $dayRate, 2);
+
+                        // Check Day Worker Wage Type
+                        $dayWTypeStmt = $db->prepare("SELECT worker_type FROM workers WHERE id = ?");
+                        $dayWTypeStmt->execute([$dayWorkerId]);
+                        $dayWorkerType = (string)($dayWTypeStmt->fetchColumn() ?: 'Minute Rate');
+                        $isDayDaily = (stripos($dayWorkerType, 'daily') !== false || stripos($dayWorkerType, 'یومیہ') !== false);
+                        $isDayMonthly = (stripos($dayWorkerType, 'month') !== false || stripos($dayWorkerType, 'ماہانہ') !== false || stripos($dayWorkerType, 'salary') !== false);
+
+                        if ($isDayDaily) {
+                            $dayTotalLabour = $dayRate;
+                        } elseif ($isDayMonthly) {
+                            $dayTotalLabour = 0.00;
+                        } else {
+                            $dayTotalLabour = round($dayPieces * $dayRate, 2);
+                        }
                         $minsTotal = round($dayPieces * $dayMins, 2);
                         $ins = $db->prepare("INSERT INTO production_entries 
                             (entry_number, entry_date, lot_id, operation_id, worker_id, shift, color_id, size_id, qty_received, good_qty, rate, minutes_per_piece, worker_minute_rate, total_minutes, labour_amount, notes, created_by)
@@ -192,17 +235,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     // Day Operator Ledger Update
-                    if ($dayTotalLabour > 0 && $firstDayId) {
+                    if ($dayTotalLabour > 0 && $firstDayId && $dayWorkerId > 0) {
                         $wStmt = $db->prepare("SELECT COALESCE((SELECT running_balance FROM worker_ledger WHERE worker_id = ? ORDER BY id DESC LIMIT 1), (SELECT opening_balance FROM workers WHERE id = ?))");
                         $wStmt->execute([$dayWorkerId, $dayWorkerId]);
                         $lastBal = (float)$wStmt->fetchColumn();
                         $newBal = $lastBal + $dayTotalLabour;
+
+                        $dayLedgerDesc = ($isDayDaily ?? false)
+                            ? "Day Operator daily shift on Lot #$lotNum ($dayTotalPcs pcs @ Rs. " . number_format($dayRate, 2) . "/day Daily Wage)"
+                            : "Day Operator initial batch on Lot #$lotNum ($dayTotalPcs pcs @ Rs. " . number_format($dayRate, 2) . ")";
+
                         $db->prepare("INSERT INTO worker_ledger (worker_id, transaction_date, transaction_type, reference_type, reference_id, lot_id, operation_id, debit, credit, running_balance, description, created_by)
                                       VALUES (?, ?, 'Labour', 'PRODUCTION_ENTRY', ?, ?, ?, 0.00, ?, ?, ?, ?)")
-                           ->execute([$dayWorkerId, $entryDate, $firstDayId, $lotId, $operationId, $dayTotalLabour, $newBal, "Day Operator initial batch on Lot #$lotNum ($dayTotalPcs pcs @ Rs. $dayRate)", $_SESSION['user_id'] ?? null]);
+                           ->execute([$dayWorkerId, $entryDate, $firstDayId, $lotId, $operationId, $dayTotalLabour, $newBal, $dayLedgerDesc, $_SESSION['user_id'] ?? null]);
                     }
 
-                    // 2. Night Operator Entries (if Double Shift)
+                    // 2. Night Operator Entries (if Double Shift & Night Worker selected)
                     $nightTotalPcs = 0;
                     if ($shiftType === 'Double Shift' && $nightWorkerId > 0) {
                         $nightTotalLabour = 0.00;
@@ -218,7 +266,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $effectiveNightRate = ($nightTotalPcs > 0) ? round($nightTotalLabour / $nightTotalPcs, 2) : $nightRate;
                             $effectiveNightMins = ($nightTotalPcs > 0) ? round($nightMinsTotal / $nightTotalPcs, 2) : $nightMins;
 
-                            $entryNum = $baseDocNum . '-N';
+                            $entryNum = ensure_unique_doc_number($db, 'production_entries', 'entry_number', $baseDocNum . '-N');
                             $ins = $db->prepare("INSERT INTO production_entries 
                                 (entry_number, entry_date, lot_id, operation_id, worker_id, shift, color_id, size_id, qty_received, good_qty, rate, minutes_per_piece, worker_minute_rate, total_minutes, labour_amount, notes, created_by)
                                 VALUES (?, ?, ?, ?, ?, 'Night Shift', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
@@ -229,7 +277,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             foreach ($nightSizes as $sId => $sQty) {
                                 $sQty = (int)$sQty;
                                 if ($sQty <= 0) continue;
-                                $entryNum = $baseDocNum . '-N' . $seq++;
+                                $entryNum = ensure_unique_doc_number($db, 'production_entries', 'entry_number', $baseDocNum . '-N' . ($seq++));
                                 $labour = round($sQty * $nightRate, 2);
                                 $minsTotal = round($sQty * $nightMins, 2);
                                 $ins = $db->prepare("INSERT INTO production_entries 
@@ -241,10 +289,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $nightTotalPcs += $sQty;
                                 $nightTotalLabour += $labour;
                             }
-                        } else {
-                            $entryNum = $baseDocNum . '-N';
+                        } elseif ($nightPieces > 0 || empty($elementsData)) {
+                            $entryNum = ensure_unique_doc_number($db, 'production_entries', 'entry_number', $baseDocNum . '-N');
                             $nightTotalPcs = $nightPieces;
-                            $nightTotalLabour = round($nightPieces * $nightRate, 2);
+
+                            // Check Night Worker Wage Type
+                            $nightWTypeStmt = $db->prepare("SELECT worker_type FROM workers WHERE id = ?");
+                            $nightWTypeStmt->execute([$nightWorkerId]);
+                            $nightWorkerType = (string)($nightWTypeStmt->fetchColumn() ?: 'Minute Rate');
+                            $isNightDaily = (stripos($nightWorkerType, 'daily') !== false || stripos($nightWorkerType, 'یومیہ') !== false);
+                            $isNightMonthly = (stripos($nightWorkerType, 'month') !== false || stripos($nightWorkerType, 'ماہانہ') !== false || stripos($nightWorkerType, 'salary') !== false);
+
+                            if ($isNightDaily) {
+                                $nightTotalLabour = $nightRate;
+                            } elseif ($isNightMonthly) {
+                                $nightTotalLabour = 0.00;
+                            } else {
+                                $nightTotalLabour = round($nightPieces * $nightRate, 2);
+                            }
+
                             $minsTotal = round($nightPieces * $nightMins, 2);
                             $ins = $db->prepare("INSERT INTO production_entries 
                                 (entry_number, entry_date, lot_id, operation_id, worker_id, shift, color_id, size_id, qty_received, good_qty, rate, minutes_per_piece, worker_minute_rate, total_minutes, labour_amount, notes, created_by)
@@ -254,14 +317,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
 
                         // Night Operator Ledger Update
-                        if ($nightTotalLabour > 0 && $firstNightId) {
+                        if ($nightTotalLabour > 0 && $firstNightId && $nightWorkerId > 0) {
                             $wStmt = $db->prepare("SELECT COALESCE((SELECT running_balance FROM worker_ledger WHERE worker_id = ? ORDER BY id DESC LIMIT 1), (SELECT opening_balance FROM workers WHERE id = ?))");
                             $wStmt->execute([$nightWorkerId, $nightWorkerId]);
                             $lastBal = (float)$wStmt->fetchColumn();
                             $newBal = $lastBal + $nightTotalLabour;
+
+                            $nightLedgerDesc = ($isNightDaily ?? false)
+                                ? "Night Operator daily shift on Lot #$lotNum ($nightTotalPcs pcs @ Rs. " . number_format($nightRate, 2) . "/day Daily Wage)"
+                                : "Night Operator initial batch on Lot #$lotNum ($nightTotalPcs pcs @ Rs. " . number_format($nightRate, 2) . ")";
+
                             $db->prepare("INSERT INTO worker_ledger (worker_id, transaction_date, transaction_type, reference_type, reference_id, lot_id, operation_id, debit, credit, running_balance, description, created_by)
                                           VALUES (?, ?, 'Labour', 'PRODUCTION_ENTRY', ?, ?, ?, 0.00, ?, ?, ?, ?)")
-                               ->execute([$nightWorkerId, $entryDate, $firstNightId, $lotId, $operationId, $nightTotalLabour, $newBal, "Night Operator initial batch on Lot #$lotNum ($nightTotalPcs pcs @ Rs. $nightRate)", $_SESSION['user_id'] ?? null]);
+                               ->execute([$nightWorkerId, $entryDate, $firstNightId, $lotId, $operationId, $nightTotalLabour, $newBal, $nightLedgerDesc, $_SESSION['user_id'] ?? null]);
                         }
                     }
 
@@ -272,7 +340,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                            ->execute([$lotId, $_SESSION['user_id'] ?? null]);
                     }
 
-                    // Sync lot_operator_element_entries (Cumulative additions)
+                    // Sync lot_operator_element_entries (Cumulative additions preserving element-specific operators)
                     if (!empty($elementsData)) {
                         foreach ($elementsData as $elId => $vals) {
                             $elId = (int)$elId;
@@ -282,7 +350,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $sam = max(0, (float)($vals['sam_minutes'] ?? 0));
                             $spentMins = round(($p1 + $p2) * $sam, 2);
 
-                            $chkEl = $db->prepare("SELECT id, operator1_pieces, operator2_pieces, total_pieces, minutes_spent FROM lot_operator_element_entries WHERE lot_id = ? AND element_id = ?");
+                            $chkEl = $db->prepare("SELECT id, operator1_id, operator1_pieces, operator2_id, operator2_pieces, total_pieces, minutes_spent FROM lot_operator_element_entries WHERE lot_id = ? AND element_id = ?");
                             $chkEl->execute([$lotId, $elId]);
                             $existingEl = $chkEl->fetch();
 
@@ -292,6 +360,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $newTot = $newP1 + $newP2;
                                 if ($newTot > $req) $newTot = $req;
                                 $newSpentMins = (float)$existingEl['minutes_spent'] + $spentMins;
+
+                                // Preserve existing operator IDs if no pieces entered in this run for that shift
+                                $saveOp1Id = ($p1 > 0 && $dayWorkerId > 0) ? $dayWorkerId : ($existingEl['operator1_id'] ?: ($dayWorkerId ?: null));
+                                $saveOp2Id = ($p2 > 0 && $nightWorkerId > 0) ? $nightWorkerId : ($existingEl['operator2_id'] ?: ($nightWorkerId ?: null));
 
                                 $db->prepare("UPDATE lot_operator_element_entries 
                                               SET entry_date = ?, 
@@ -303,14 +375,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                                   required_pieces = ?,
                                                   minutes_spent = ?
                                               WHERE id = ?")
-                                   ->execute([$entryDate, $dayWorkerId, $newP1, $nightWorkerId, $newP2, $newTot, $req, $newSpentMins, $existingEl['id']]);
+                                   ->execute([$entryDate, $saveOp1Id, $newP1, $saveOp2Id, $newP2, $newTot, $req, $newSpentMins, $existingEl['id']]);
                             } else {
                                 $newTot = $p1 + $p2;
                                 if ($newTot > $req) $newTot = $req;
+                                $saveOp1Id = ($dayWorkerId > 0) ? $dayWorkerId : null;
+                                $saveOp2Id = ($nightWorkerId > 0) ? $nightWorkerId : null;
                                 $db->prepare("INSERT INTO lot_operator_element_entries 
                                               (lot_id, element_id, entry_date, operator1_id, operator1_pieces, operator2_id, operator2_pieces, total_pieces, required_pieces, minutes_spent, created_by) 
                                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-                                   ->execute([$lotId, $elId, $entryDate, $dayWorkerId, $p1, $nightWorkerId, $p2, $newTot, $req, $spentMins, $_SESSION['user_id'] ?? null]);
+                                   ->execute([$lotId, $elId, $entryDate, $saveOp1Id, $p1, $saveOp2Id, $p2, $newTot, $req, $spentMins, $_SESSION['user_id'] ?? null]);
                             }
                         }
                     } else {
@@ -323,7 +397,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $p1 = $m * $dayTotalPcs;
                             $p2 = $m * $nightTotalPcs;
 
-                            $chkEl = $db->prepare("SELECT id, operator1_pieces, operator2_pieces, total_pieces FROM lot_operator_element_entries WHERE lot_id = ? AND element_id = ?");
+                            $chkEl = $db->prepare("SELECT id, operator1_id, operator1_pieces, operator2_id, operator2_pieces, total_pieces FROM lot_operator_element_entries WHERE lot_id = ? AND element_id = ?");
                             $chkEl->execute([$lotId, $elId]);
                             $existingEl = $chkEl->fetch();
 
@@ -332,17 +406,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $newP2 = (int)$existingEl['operator2_pieces'] + $p2;
                                 $newTot = $newP1 + $newP2;
                                 if ($newTot > $req) $newTot = $req;
+                                $saveOp1Id = ($p1 > 0 && $dayWorkerId > 0) ? $dayWorkerId : ($existingEl['operator1_id'] ?: ($dayWorkerId ?: null));
+                                $saveOp2Id = ($p2 > 0 && $nightWorkerId > 0) ? $nightWorkerId : ($existingEl['operator2_id'] ?: ($nightWorkerId ?: null));
+
                                 $db->prepare("UPDATE lot_operator_element_entries 
                                               SET entry_date = ?, operator1_id = ?, operator1_pieces = ?, operator2_id = ?, operator2_pieces = ?, total_pieces = ?, required_pieces = ? 
                                               WHERE id = ?")
-                                   ->execute([$entryDate, $dayWorkerId, $newP1, $nightWorkerId, $newP2, $newTot, $req, $existingEl['id']]);
+                                   ->execute([$entryDate, $saveOp1Id, $newP1, $saveOp2Id, $newP2, $newTot, $req, $existingEl['id']]);
                             } else {
                                 $newTot = $p1 + $p2;
                                 if ($newTot > $req) $newTot = $req;
+                                $saveOp1Id = ($dayWorkerId > 0) ? $dayWorkerId : null;
+                                $saveOp2Id = ($nightWorkerId > 0) ? $nightWorkerId : null;
                                 $db->prepare("INSERT INTO lot_operator_element_entries 
                                               (lot_id, element_id, entry_date, operator1_id, operator1_pieces, operator2_id, operator2_pieces, total_pieces, required_pieces, created_by) 
                                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-                                   ->execute([$lotId, $elId, $entryDate, $dayWorkerId, $p1, $nightWorkerId, $p2, $newTot, $req, $_SESSION['user_id'] ?? null]);
+                                   ->execute([$lotId, $elId, $entryDate, $saveOp1Id, $p1, $saveOp2Id, $p2, $newTot, $req, $_SESSION['user_id'] ?? null]);
                             }
                         }
                     }
@@ -358,18 +437,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $db->prepare("UPDATE lot_workflow_steps SET status = ? WHERE lot_id = ? AND operation_id = ?")
                        ->execute([$stepStatus, $lotId, $operationId]);
 
-
                     $db->commit();
-                    $msg = "Operator Initial Production recorded: Day Operator ($dayTotalPcs pcs)";
-                    if ($shiftType === 'Double Shift') {
-                        $msg .= " + Night Operator ($nightTotalPcs pcs) = Total " . ($dayTotalPcs + $nightTotalPcs) . " pcs!";
+                    $msgParts = [];
+                    if ($dayTotalPcs > 0 && $dayWorkerId > 0) {
+                        $wName1 = (string)($db->query("SELECT name FROM workers WHERE id = $dayWorkerId")->fetchColumn() ?: 'Day Operator');
+                        $msgParts[] = "$wName1 (Day: $dayTotalPcs pcs)";
                     }
+                    if ($nightTotalPcs > 0 && $nightWorkerId > 0) {
+                        $wName2 = (string)($db->query("SELECT name FROM workers WHERE id = $nightWorkerId")->fetchColumn() ?: 'Night Operator');
+                        $msgParts[] = "$wName2 (Night: $nightTotalPcs pcs)";
+                    }
+                    $msg = "Operator Production recorded: " . (!empty($msgParts) ? implode(' + ', $msgParts) : "Pieces saved");
 
-                    // Auto-advance to next workflow step
-                    redirect_next_production_step($lotId, $operationId, $msg, 'cutting');
+                    if ($stepStatus === 'Completed') {
+                        $msg .= " — تمام اعضاء مکمل ہو گئے! اگلا مرحلہ (کٹنگ) لوڈ ہو گیا۔";
+                        redirect_next_production_step($lotId, $operationId, $msg, 'cutting');
+                    } else {
+                        $msg .= " — جزوی انٹری محفوظ ہو گئی (ابھی $incompleteCount حصے باقی ہیں)";
+                        redirect("modules/production/index.php?lot_id=$lotId&operation_id=$operationId&mode=operator_initial", $msg);
+                    }
                 } catch (Exception $e) {
                     $db->rollBack();
-                    $error = 'Error saving operator entry: ' . $e->getMessage();
+                    // Auto-heal MySQL 3105 generated column error if total_pieces is a generated column
+                    if (strpos($e->getMessage(), '3105') !== false || stripos($e->getMessage(), 'generated column') !== false) {
+                        try {
+                            $db->exec("ALTER TABLE lot_operator_element_entries MODIFY COLUMN total_pieces INT NOT NULL DEFAULT 0");
+                            $error = 'ڈیٹابیس کا کالم (total_pieces) خودکار طور پر اپڈیٹ کر دیا گیا ہے۔ براہ کرم "Save" بٹن پر دوبارہ کلک کریں۔ (Database column auto-repaired. Please click Save again.)';
+                        } catch (Exception $eFix) {
+                            $error = 'Error saving operator entry: ' . $e->getMessage();
+                        }
+                    } else {
+                        $error = 'Error saving operator entry: ' . $e->getMessage();
+                    }
                 }
             }
         }
@@ -541,7 +640,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $received = $good + $rej + $rew;
                                 $cellLabour = round($good * $rate, 2);
                                 $minsTotal = round($good * $cutMins, 2);
-                                $entryNum = $baseDocNum . '-' . $seq++;
+                                $entryNum = ensure_unique_doc_number($db, 'production_entries', 'entry_number', $baseDocNum . '-' . ($seq++));
 
                                 $insPE = $db->prepare("INSERT INTO production_entries 
                                     (entry_number, entry_date, lot_id, operation_id, worker_id, shift, color_id, size_id, qty_received, good_qty, rejected_qty, rework_qty, rate, minutes_per_piece, worker_minute_rate, total_minutes, labour_amount, notes, created_by)
@@ -578,16 +677,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                         }
 
-                        if ($matrixSavedCount > 0) {
-                            $wholePieces = $matrixTotalGood;
-                            $labourAmount = $matrixTotalLabour;
+                        // Check worker wage type for Cutting
+                        $cutWTypeStmt = $db->prepare("SELECT worker_type FROM workers WHERE id = ?");
+                        $cutWTypeStmt->execute([$workerId]);
+                        $cutWorkerWageType = (string)($cutWTypeStmt->fetchColumn() ?: 'Piece Rate');
+                        $isCutDaily = (stripos($cutWorkerWageType, 'daily') !== false || stripos($cutWorkerWageType, 'یومیہ') !== false);
+                        $isCutMonthly = (stripos($cutWorkerWageType, 'month') !== false || stripos($cutWorkerWageType, 'ماہانہ') !== false || stripos($cutWorkerWageType, 'salary') !== false);
+
+                        if ($isCutDaily) {
+                            $labourAmount = $rate;
+                            if ($matrixSavedCount > 0 && $lastPeId) {
+                                // For daily wage, total credit is the daily wage rate
+                                $db->prepare("UPDATE production_entries SET labour_amount = 0.00 WHERE lot_id = ? AND operation_id = ? AND worker_id = ? AND entry_date = ? AND entry_number LIKE 'PE-CUT-%'")
+                                   ->execute([$lotId, $operationId, $workerId, $entryDate]);
+                                $db->prepare("UPDATE production_entries SET labour_amount = ? WHERE id = ?")
+                                   ->execute([$labourAmount, $lastPeId]);
+                            }
+                        } elseif ($isCutMonthly) {
+                            $labourAmount = 0.00;
+                            if ($matrixSavedCount > 0) {
+                                $db->prepare("UPDATE production_entries SET labour_amount = 0.00 WHERE lot_id = ? AND operation_id = ? AND worker_id = ? AND entry_date = ? AND entry_number LIKE 'PE-CUT-%'")
+                                   ->execute([$lotId, $operationId, $workerId, $entryDate]);
+                            }
+                        } else {
+                            if ($matrixSavedCount > 0) {
+                                $wholePieces = $matrixTotalGood;
+                                $labourAmount = $matrixTotalLabour;
+                            }
                         }
                     }
 
                     // Fallback single whole pieces entry if matrix was empty
                     if ($matrixSavedCount === 0 && $wholePieces > 0) {
-                        $labourAmount = round($wholePieces * $rate, 2);
-                        $entryNum = generate_doc_number('PE-CUT-', 'production_entries', 'entry_number');
+                        if ($isCutDaily) {
+                            $labourAmount = $rate;
+                        } elseif ($isCutMonthly) {
+                            $labourAmount = 0.00;
+                        } else {
+                            $labourAmount = round($wholePieces * $rate, 2);
+                        }
+                        $entryNum = ensure_unique_doc_number($db, 'production_entries', 'entry_number', generate_doc_number('PE-CUT-', 'production_entries', 'entry_number'));
 
                         $insPE = $db->prepare("INSERT INTO production_entries 
                             (entry_number, entry_date, lot_id, operation_id, worker_id, shift, color_id, size_id, qty_received, good_qty, rate, minutes_per_piece, worker_minute_rate, total_minutes, labour_amount, notes, created_by)
@@ -603,9 +732,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $lastBal = (float)$wStmt->fetchColumn();
                         $newBal = $lastBal + $labourAmount;
 
+                        $cutLedgerDesc = $isCutDaily
+                            ? "Cutting master daily shift on Lot #{$lotRow['lot_number']} ($wholePieces pcs @ Rs. " . number_format($rate, 2) . "/day Daily Wage)"
+                            : "Cutting master batch on Lot #{$lotRow['lot_number']} ($wholePieces pcs @ Rs. " . number_format($rate, 2) . "/pc)";
+
                         $db->prepare("INSERT INTO worker_ledger (worker_id, transaction_date, transaction_type, reference_type, reference_id, lot_id, operation_id, debit, credit, running_balance, description, created_by)
                                       VALUES (?, ?, 'Labour', 'PRODUCTION_ENTRY', ?, ?, ?, 0.00, ?, ?, ?, ?)")
-                           ->execute([$workerId, $entryDate, $lastPeId, $lotId, $operationId, $labourAmount, $newBal, "Cutting master batch on Lot #{$lotRow['lot_number']} ($wholePieces pcs @ Rs. $rate)", $_SESSION['user_id'] ?? null]);
+                           ->execute([$workerId, $entryDate, $lastPeId, $lotId, $operationId, $labourAmount, $newBal, $cutLedgerDesc, $_SESSION['user_id'] ?? null]);
                     }
 
                     if ($lotRow['status'] === 'Draft') {
@@ -627,25 +760,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    // =========================================================================
+    // 2. DOWNSTREAM MODES (FAST MATRIX BATCH & SINGLE ITEM ENTRY)
+    // =========================================================================
+    elseif ($entryMode === 'matrix' || $entryMode === 'single') {
+        $entryDate = trim($_POST['entry_date'] ?? date('Y-m-d'));
+        $lotId = (int)($_POST['lot_id'] ?? 0);
+        $operationId = (int)($_POST['operation_id'] ?? 0);
+        $workerId = (int)($_POST['worker_id'] ?? 0);
+        $minutesPerPiece = (float)($_POST['minutes_per_piece'] ?? 0.00);
+        $workerMinuteRate = (float)($_POST['worker_minute_rate'] ?? 2.50);
+        $rate = (float)($_POST['rate'] ?? 0.00);
 
-    $entryDate = trim($_POST['entry_date'] ?? date('Y-m-d'));
-    $lotId = (int)($_POST['lot_id'] ?? 0);
-    $operationId = (int)($_POST['operation_id'] ?? 0);
-    $workerId = (int)($_POST['worker_id'] ?? 0);
-    $minutesPerPiece = (float)($_POST['minutes_per_piece'] ?? 0.00);
-    $workerMinuteRate = (float)($_POST['worker_minute_rate'] ?? 2.50);
-    $rate = (float)($_POST['rate'] ?? 0.00);
+        // Fallback: If rate was 0 but minutes & worker minute rate were provided, calculate rate
+        if ($rate <= 0 && $minutesPerPiece > 0 && $workerMinuteRate > 0) {
+            $rate = round($minutesPerPiece * $workerMinuteRate, 2);
+        }
 
-    // Fallback: If rate was 0 but minutes & worker minute rate were provided, calculate rate
-    if ($rate <= 0 && $minutesPerPiece > 0 && $workerMinuteRate > 0) {
-        $rate = round($minutesPerPiece * $workerMinuteRate, 2);
-    }
-
-    if ($lotId <= 0 || $operationId <= 0 || $workerId <= 0) {
-        $error = 'Please fill all required fields: Lot, Operation, and Worker.';
-    } elseif ($rate < 0) {
-        $error = 'Piece rate cannot be negative.';
-    } elseif ($entryMode === 'matrix') {
+        if ($lotId <= 0 || $operationId <= 0 || $workerId <= 0) {
+            $error = 'Please fill all required fields: Lot, Operation, and Worker.';
+        } elseif ($rate < 0) {
+            $error = 'Piece rate cannot be negative.';
+        } elseif ($entryMode === 'matrix') {
         // =====================================================================
         // FAST BATCH MATRIX ENTRY MODE
         // =====================================================================
@@ -795,14 +931,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (empty($error)) {
                 $db->beginTransaction();
                     try {
-                        // Fetch operation and worker names
+                        // Fetch operation and worker names & wage type
                         $opQuery = $db->prepare("SELECT name FROM operations WHERE id = ?");
                         $opQuery->execute([$operationId]);
                         $opName = $opQuery->fetchColumn();
 
-                        $wQuery = $db->prepare("SELECT name FROM workers WHERE id = ?");
+                        $wQuery = $db->prepare("SELECT name, worker_type FROM workers WHERE id = ?");
                         $wQuery->execute([$workerId]);
-                        $workerName = $wQuery->fetchColumn();
+                        $workerRow = $wQuery->fetch();
+                        $workerName = $workerRow['name'] ?? '';
+                        $workerWageType = (string)($workerRow['worker_type'] ?? 'Piece Rate');
+                        $isMatDaily = (stripos($workerWageType, 'daily') !== false || stripos($workerWageType, 'یومیہ') !== false);
+                        $isMatMonthly = (stripos($workerWageType, 'month') !== false || stripos($workerWageType, 'ماہانہ') !== false || stripos($workerWageType, 'salary') !== false);
+
+                        if ($isMatDaily) {
+                            $totalLabour = $rate;
+                        } elseif ($isMatMonthly) {
+                            $totalLabour = 0.00;
+                        }
 
                         // Prepare production entries insert
                         $insertStmt = $db->prepare("INSERT INTO production_entries 
@@ -824,9 +970,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $docSeq = isset($m[0]) ? (int)$m[0] : 101;
 
                     $firstEntryId = null;
-                    foreach ($entriesToSave as $entry) {
-                        $entryNum = 'PE-' . str_pad((string)$docSeq++, 4, '0', STR_PAD_LEFT);
+                    foreach ($entriesToSave as $entryIdx => $entry) {
+                        $candidateEntry = 'PE-' . str_pad((string)$docSeq++, 4, '0', STR_PAD_LEFT);
+                        $entryNum = ensure_unique_doc_number($db, 'production_entries', 'entry_number', $candidateEntry);
                         $entryTotalMinutes = round($entry['good_qty'] * $minutesPerPiece, 2);
+                        $entryLabour = $entry['labour_amount'];
+                        if ($isMatDaily) {
+                            $entryLabour = ($entryIdx === 0) ? $rate : 0.00;
+                        } elseif ($isMatMonthly) {
+                            $entryLabour = 0.00;
+                        }
                         $insertStmt->execute([
                             $entryNum,
                             $entryDate,
@@ -843,7 +996,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $minutesPerPiece,
                             $workerMinuteRate,
                             $entryTotalMinutes,
-                            $entry['labour_amount'],
+                            $entryLabour,
                             $notes,
                             $_SESSION['user_id'] ?? null
                         ]);
@@ -880,11 +1033,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         // If this operation is Packing (Unified Workflow Packing), automatically record into packing_entries & finished goods stock
                         if ($isPackingOp && $entry['good_qty'] > 0) {
-                            $packNum = generate_doc_number('PKG-', 'packing_entries', 'packing_number');
+                            $selectedWhId = !empty($_POST['packing_warehouse_id']) ? (int)$_POST['packing_warehouse_id'] : get_default_warehouse_id('finished');
+                            $packNum = ensure_unique_doc_number($db, 'packing_entries', 'packing_number', generate_doc_number('PKG-', 'packing_entries', 'packing_number'));
                             $packageNo = 'SET-LOT' . $lotId . '-' . $entry['color_id'] . '-' . $entry['size_id'];
                             $pkStmt = $db->prepare("INSERT INTO packing_entries 
                                 (packing_number, packing_date, lot_id, product_id, design_id, color_id, size_id, packed_qty, packing_worker_id, packing_rate, labour_amount, package_type, package_no, remarks, warehouse_id, created_by) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Master Set', ?, ?, 1, ?)");
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Master Set', ?, ?, ?, ?)");
                             $pkStmt->execute([
                                 $packNum,
                                 $entryDate,
@@ -899,14 +1053,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $entry['labour_amount'],
                                 $packageNo,
                                 'Workflow Packing Matrix Operation',
+                                $selectedWhId,
                                 $_SESSION['user_id'] ?? null
                             ]);
                             $packingId = (int)$db->lastInsertId();
 
-                            // Update Finished Goods Stock
-                            $finWhId = get_default_warehouse_id('finished');
-                            $stkCheck = $db->prepare("SELECT id FROM finished_goods_stock WHERE lot_id = ? AND color_id = ? AND size_id = ? AND (warehouse_id = ? OR (warehouse_id IS NULL AND ? IS NULL)) LIMIT 1");
-                            $stkCheck->execute([$lotId, $entry['color_id'], $entry['size_id'], $finWhId, $finWhId]);
+                            // Update Finished Goods Stock in selected destination warehouse
+                            $finWhId = $selectedWhId;
+                            $stkCheck = $db->prepare("SELECT id FROM finished_goods_stock WHERE lot_id = ? AND color_id = ? AND size_id = ? AND warehouse_id = ? LIMIT 1");
+                            $stkCheck->execute([$lotId, $entry['color_id'], $entry['size_id'], $finWhId]);
                             $existingStkId = $stkCheck->fetchColumn();
                             if ($existingStkId) {
                                 $db->prepare("UPDATE finished_goods_stock SET current_stock = current_stock + ?, updated_at = NOW() WHERE id = ?")
@@ -976,10 +1131,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         $newBal = $lastBal + $totalLabour;
                         $varCount = count($entriesToSave);
-                        $ledgerDesc = "Batch labour on Lot #$lotNum - $opName ($totalGood good pcs";
-                        if ($totalRejected > 0) $ledgerDesc .= ", $totalRejected rej";
-                        if ($totalRework > 0) $ledgerDesc .= ", $totalRework rew";
-                        $ledgerDesc .= " across $varCount variants @ Rs. " . number_format($rate, 2) . ")";
+                        if ($isMatDaily) {
+                            $ledgerDesc = "Batch daily shift labour on Lot #$lotNum - $opName ($totalGood good pcs @ Rs. " . number_format($rate, 2) . "/day Daily Wage)";
+                        } else {
+                            $ledgerDesc = "Batch labour on Lot #$lotNum - $opName ($totalGood good pcs";
+                            if ($totalRejected > 0) $ledgerDesc .= ", $totalRejected rej";
+                            if ($totalRework > 0) $ledgerDesc .= ", $totalRework rew";
+                            $ledgerDesc .= " across $varCount variants @ Rs. " . number_format($rate, 2) . "/pc)";
+                        }
 
                         $ledgStmt = $db->prepare("INSERT INTO worker_ledger 
                             (worker_id, transaction_date, transaction_type, reference_type, reference_id, lot_id, operation_id, debit, credit, running_balance, description, created_by) 
@@ -1115,14 +1274,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $qtyReceived = $goodQty + $rejectedQty + $reworkQty;
                 }
 
-                $labourAmount = round($goodQty * $rate, 2);
+                // Check worker wage type for Single Mode
+                $wTypeStmt = $db->prepare("SELECT worker_type FROM workers WHERE id = ?");
+                $wTypeStmt->execute([$workerId]);
+                $singleWorkerWageType = (string)($wTypeStmt->fetchColumn() ?: 'Piece Rate');
+                $isSingleDaily = (stripos($singleWorkerWageType, 'daily') !== false || stripos($singleWorkerWageType, 'یومیہ') !== false);
+                $isSingleMonthly = (stripos($singleWorkerWageType, 'month') !== false || stripos($singleWorkerWageType, 'ماہانہ') !== false || stripos($singleWorkerWageType, 'salary') !== false);
+
+                if ($isSingleDaily) {
+                    $labourAmount = $rate;
+                } elseif ($isSingleMonthly) {
+                    $labourAmount = 0.00;
+                } else {
+                    $labourAmount = round($goodQty * $rate, 2);
+                }
                 $cumulativeGood = $previouslyDone + $goodQty;
 
                 $db->beginTransaction();
                 try {
 
                 // Generate entry number
-                $entryNumber = generate_doc_number('PE-', 'production_entries', 'entry_number');
+                $entryNumber = ensure_unique_doc_number($db, 'production_entries', 'entry_number', generate_doc_number('PE-', 'production_entries', 'entry_number'));
 
                 // 1. Insert Production Entry
                 $stmt = $db->prepare("INSERT INTO production_entries 
@@ -1165,11 +1337,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // If operation is Packing, create packing record and deposit into finished goods stock
                 if ($isPackingOp && $goodQty > 0) {
-                    $packNum = generate_doc_number('PKG-', 'packing_entries', 'packing_number');
+                    $selectedWhId = !empty($_POST['packing_warehouse_id']) ? (int)$_POST['packing_warehouse_id'] : get_default_warehouse_id('finished');
+                    $packNum = ensure_unique_doc_number($db, 'packing_entries', 'packing_number', generate_doc_number('PKG-', 'packing_entries', 'packing_number'));
                     $packageNo = 'SET-LOT' . $lotId . '-' . $colorId . '-' . $sizeId;
                     $pkStmt = $db->prepare("INSERT INTO packing_entries 
                         (packing_number, packing_date, lot_id, product_id, design_id, color_id, size_id, packed_qty, packing_worker_id, packing_rate, labour_amount, package_type, package_no, remarks, warehouse_id, created_by) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Master Set', ?, ?, 1, ?)");
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Master Set', ?, ?, ?, ?)");
                     $pkStmt->execute([
                         $packNum,
                         $entryDate,
@@ -1184,14 +1357,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $labourAmount,
                         $packageNo,
                         'Workflow Packing Single Variant Operation',
+                        $selectedWhId,
                         $_SESSION['user_id'] ?? null
                     ]);
                     $packingId = (int)$db->lastInsertId();
 
-                    // Update Finished Goods Stock
-                    $finWhId = get_default_warehouse_id('finished');
-                    $stkCheck = $db->prepare("SELECT id FROM finished_goods_stock WHERE lot_id = ? AND color_id = ? AND size_id = ? AND (warehouse_id = ? OR (warehouse_id IS NULL AND ? IS NULL)) LIMIT 1");
-                    $stkCheck->execute([$lotId, $colorId, $sizeId, $finWhId, $finWhId]);
+                    // Update Finished Goods Stock in selected warehouse
+                    $finWhId = $selectedWhId;
+                    $stkCheck = $db->prepare("SELECT id FROM finished_goods_stock WHERE lot_id = ? AND color_id = ? AND size_id = ? AND warehouse_id = ? LIMIT 1");
+                    $stkCheck->execute([$lotId, $colorId, $sizeId, $finWhId]);
                     $existingStkId = $stkCheck->fetchColumn();
                     if ($existingStkId) {
                         $db->prepare("UPDATE finished_goods_stock SET current_stock = current_stock + ?, updated_at = NOW() WHERE id = ?")
@@ -1269,7 +1443,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $wQuery->execute([$workerId]);
                 $workerName = $wQuery->fetchColumn();
 
-                $ledgerDesc = "Labour earned on Lot #$lotNum - $opName ($goodQty pcs @ Rs. $rate)";
+                $ledgerDesc = $isSingleDaily
+                    ? "Labour earned on Lot #$lotNum - $opName ($goodQty pcs @ Rs. " . number_format($rate, 2) . "/day Daily Wage)"
+                    : "Labour earned on Lot #$lotNum - $opName ($goodQty pcs @ Rs. " . number_format($rate, 2) . "/pc)";
                 $ledgStmt = $db->prepare("INSERT INTO worker_ledger 
                     (worker_id, transaction_date, transaction_type, reference_type, reference_id, lot_id, operation_id, debit, credit, running_balance, description, created_by) 
                     VALUES (?, ?, 'Labour', 'PRODUCTION_ENTRY', ?, ?, ?, 0.00, ?, ?, ?, ?)");
@@ -1326,6 +1502,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 }
+}
 
 // Fetch active lots for dropdown
 $lots = $db->query("SELECT l.id, l.lot_number, l.total_pieces, p.name AS product_name, d.design_number 
@@ -1354,17 +1531,8 @@ if (empty($cuttingWorkers)) {
     $cuttingWorkers = $workers;
 }
 
-// Fetch cutting-specific workers for cutting master selector
-$cuttingWorkers = $db->query("SELECT w.*, dep.name AS department_name 
-                              FROM workers w 
-                              LEFT JOIN departments dep ON w.department_id = dep.id 
-                              WHERE w.is_active = 1 
-                                AND (dep.name LIKE '%Cut%' OR w.name LIKE '%Cut%' OR w.code LIKE '%CUT%' 
-                                     OR w.id IN (SELECT worker_id FROM worker_operations wo JOIN operations o ON wo.operation_id = o.id WHERE o.name LIKE '%Cut%'))
-                              ORDER BY w.name ASC")->fetchAll();
-if (empty($cuttingWorkers)) {
-    $cuttingWorkers = $workers;
-}
+// Fetch active warehouses for packing stage
+$finishedWarehouses = $db->query("SELECT id, name, location FROM warehouses WHERE is_active = 1 ORDER BY id ASC")->fetchAll();
 
 // Active/Preselected lot for recent entries panel
 $activePanelLotId = $preselectedLotId ?: (int)($_POST['lot_id'] ?? 0);
@@ -1608,9 +1776,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                         $wPiece = (float)($w['default_rate'] ?? 0.00);
                                                         $wType = $w['worker_type'] ?? 'Minute Rate';
                                                         $wBasis = $w['rate_basis'] ?? 'element_wise';
-                                                        $rateTxt = ($wType === 'Minute Rate') ? ('— Rs. ' . number_format($wMin, 2) . '/m (Minute Rate)') : ($wPiece > 0 ? ('— Rs. ' . number_format($wPiece, 2) . '/pc (Piece Rate)') : '');
+                                                        $rateTxt = format_worker_wage_label($w);
                                                     ?>
-                                                        <option value="<?= $w['id'] ?>" data-minrate="<?= $wMin ?>" data-piecerate="<?= $wPiece ?>" data-workertype="<?= clean($wType) ?>" data-ratebasis="<?= clean($wBasis) ?>"><?= clean($w['name']) ?> (<?= clean($w['code']) ?>) <?= $rateTxt ?></option>
+                                                        <option value="<?= $w['id'] ?>" data-minrate="<?= $wMin ?>" data-min-rate="<?= $wMin ?>" data-piecerate="<?= $wPiece ?>" data-piece-rate="<?= $wPiece ?>" data-dailyrate="<?= $wPiece ?>" data-daily-rate="<?= $wPiece ?>" data-rate="<?= $wPiece ?>" data-workertype="<?= clean($wType) ?>" data-worker-type="<?= clean($wType) ?>" data-ratebasis="<?= clean($wBasis) ?>" data-rate-basis="<?= clean($wBasis) ?>"><?= clean($w['name']) ?> (<?= clean($w['code']) ?>) <?= $rateTxt ?></option>
                                                     <?php endforeach; ?>
                                                 </select>
                                                 <div class="text-muted small mt-1">
@@ -1657,9 +1825,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                                 $wPiece = (float)($w['default_rate'] ?? 0.00);
                                                                 $wType = $w['worker_type'] ?? 'Minute Rate';
                                                                 $wBasis = $w['rate_basis'] ?? 'element_wise';
-                                                                $rateTxt = ($wType === 'Minute Rate') ? ('— Rs. ' . number_format($wMin, 2) . '/m (Minute Rate)') : ($wPiece > 0 ? ('— Rs. ' . number_format($wPiece, 2) . '/pc (Piece Rate)') : '');
+                                                                $rateTxt = format_worker_wage_label($w);
                                                             ?>
-                                                                <option value="<?= $w['id'] ?>" data-minrate="<?= $wMin ?>" data-piecerate="<?= $wPiece ?>" data-workertype="<?= clean($wType) ?>" data-ratebasis="<?= clean($wBasis) ?>"><?= clean($w['name']) ?> (<?= clean($w['code']) ?>) <?= $rateTxt ?></option>
+                                                                <option value="<?= $w['id'] ?>" data-minrate="<?= $wMin ?>" data-min-rate="<?= $wMin ?>" data-piecerate="<?= $wPiece ?>" data-piece-rate="<?= $wPiece ?>" data-dailyrate="<?= $wPiece ?>" data-daily-rate="<?= $wPiece ?>" data-rate="<?= $wPiece ?>" data-workertype="<?= clean($wType) ?>" data-worker-type="<?= clean($wType) ?>" data-ratebasis="<?= clean($wBasis) ?>" data-rate-basis="<?= clean($wBasis) ?>"><?= clean($w['name']) ?> (<?= clean($w['code']) ?>) <?= $rateTxt ?></option>
                                                             <?php endforeach; ?>
                                                         </select>
                                                     </div>
@@ -1690,9 +1858,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                                 $wPiece = (float)($w['default_rate'] ?? 0.00);
                                                                 $wType = $w['worker_type'] ?? 'Minute Rate';
                                                                 $wBasis = $w['rate_basis'] ?? 'element_wise';
-                                                                $rateTxt = ($wType === 'Minute Rate') ? ('— Rs. ' . number_format($wMin, 2) . '/m (Minute Rate)') : ($wPiece > 0 ? ('— Rs. ' . number_format($wPiece, 2) . '/pc (Piece Rate)') : '');
+                                                                $rateTxt = format_worker_wage_label($w);
                                                             ?>
-                                                                <option value="<?= $w['id'] ?>" data-minrate="<?= $wMin ?>" data-piecerate="<?= $wPiece ?>" data-workertype="<?= clean($wType) ?>" data-ratebasis="<?= clean($wBasis) ?>"><?= clean($w['name']) ?> (<?= clean($w['code']) ?>) <?= $rateTxt ?></option>
+                                                                <option value="<?= $w['id'] ?>" data-minrate="<?= $wMin ?>" data-min-rate="<?= $wMin ?>" data-piecerate="<?= $wPiece ?>" data-piece-rate="<?= $wPiece ?>" data-dailyrate="<?= $wPiece ?>" data-daily-rate="<?= $wPiece ?>" data-rate="<?= $wPiece ?>" data-workertype="<?= clean($wType) ?>" data-worker-type="<?= clean($wType) ?>" data-ratebasis="<?= clean($wBasis) ?>" data-rate-basis="<?= clean($wBasis) ?>"><?= clean($w['name']) ?> (<?= clean($w['code']) ?>) <?= $rateTxt ?></option>
                                                             <?php endforeach; ?>
                                                         </select>
                                                     </div>
@@ -1819,9 +1987,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                     $cMinRate = (float)($w['rate_per_minute'] ?? 2.50);
                                                     $cType = $w['worker_type'] ?? 'Piece Rate';
                                                     $cBasis = $w['rate_basis'] ?? 'whole_sweater';
-                                                    $rateTxt = ($cType === 'Minute Rate') ? ('— Rs. ' . number_format($cMinRate, 2) . '/m (Minute Rate)') : ($cPieceRate > 0 ? ('— Rs. ' . number_format($cPieceRate, 2) . '/pc (Piece Rate)') : '');
+                                                    $rateTxt = format_worker_wage_label($w);
                                                 ?>
-                                                    <option value="<?= $w['id'] ?>" data-minrate="<?= $cMinRate ?>" data-piecerate="<?= $cPieceRate ?>" data-workertype="<?= clean($cType) ?>" data-ratebasis="<?= clean($cBasis) ?>" <?= (stripos($w['name'], 'Cut') !== false ? 'selected' : '') ?>>
+                                                    <option value="<?= $w['id'] ?>" data-minrate="<?= $cMinRate ?>" data-min-rate="<?= $cMinRate ?>" data-piecerate="<?= $cPieceRate ?>" data-piece-rate="<?= $cPieceRate ?>" data-dailyrate="<?= $cPieceRate ?>" data-daily-rate="<?= $cPieceRate ?>" data-rate="<?= $cPieceRate ?>" data-workertype="<?= clean($cType) ?>" data-worker-type="<?= clean($cType) ?>" data-ratebasis="<?= clean($cBasis) ?>" data-rate-basis="<?= clean($cBasis) ?>" <?= (stripos($w['name'], 'Cut') !== false ? 'selected' : '') ?>>
                                                         <?= clean($w['name']) ?> (<?= clean($w['code']) ?>) <?= $rateTxt ?>
                                                     </option>
                                                 <?php endforeach; ?>
@@ -1847,40 +2015,40 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         </div>
                                     </div>
 
-                                    <!-- Real-time SAM Minutes & Rate Calculation Scheme for Cutting -->
+                                    <!-- Real-time Rate & Wage Calculation Scheme for Cutting -->
                                     <div class="p-3 bg-white border rounded-2 mb-3 shadow-sm" id="cuttingRateSchemeBox">
                                         <div class="d-flex justify-content-between align-items-center mb-2">
                                             <label class="form-label small fw-bold text-dark mb-0">
-                                                <i class="bi bi-calculator text-primary me-1"></i> Rate & Time Scheme for Specific Lot (ریئل ٹائم ریٹ و وقت کا تعین)
+                                                <i class="bi bi-calculator text-primary me-1"></i> Rate & Wage Scheme for Specific Lot (ریئل ٹائم ریٹ و اجرت کا تعین)
                                             </label>
                                             <span class="badge bg-light text-muted border small" id="lblCutFormula">Minutes × Rate/min = Piece Rate</span>
                                         </div>
-                                        <div class="row g-3">
-                                            <div class="col-12 col-md-4">
+                                        <div class="row g-3" id="cuttingRateRow">
+                                            <div class="col-12 col-md-4" id="grpCutMinutes">
                                                 <label class="form-label small fw-semibold text-muted mb-1">وقت فی پیس (SAM Minutes)</label>
                                                 <div class="input-group input-group-sm">
-                                                    <input type="number" name="cutting_minutes" id="cut_minutes" class="form-control fw-bold text-center text-primary" step="0.1" min="0" value="2.0">
+                                                    <input type="number" name="cutting_minutes" id="cut_minutes" class="form-control fw-bold text-center text-primary" step="any" min="0" value="2.0">
                                                     <span class="input-group-text px-2 small text-muted">min</span>
                                                 </div>
                                                 <div class="form-text small" style="font-size: 10px;">لاٹ کٹنگ کا معیاری وقت</div>
                                             </div>
-                                            <div class="col-12 col-md-4">
+                                            <div class="col-12 col-md-4" id="grpCutMinRate">
                                                 <label class="form-label small fw-semibold text-muted mb-1">کاریگر ریٹ فی منٹ (Rs/min)</label>
                                                 <div class="input-group input-group-sm">
                                                     <span class="input-group-text px-2 small text-muted">Rs</span>
-                                                    <input type="number" name="cutting_min_rate" id="cut_min_rate" class="form-control fw-bold text-center text-success" step="0.05" min="0" value="2.50">
+                                                    <input type="number" name="cutting_min_rate" id="cut_min_rate" class="form-control fw-bold text-center text-success" step="any" min="0" value="2.50">
                                                     <span class="input-group-text px-2 small text-muted">/m</span>
                                                 </div>
                                                 <div class="form-text small" style="font-size: 10px;">ماسٹر پروفائل ریٹ فی منٹ</div>
                                             </div>
-                                            <div class="col-12 col-md-4">
-                                                <label class="form-label small fw-semibold text-muted mb-1">فائنل پیس ریٹ (Piece Rate)</label>
+                                            <div class="col-12 col-md-4" id="grpCutFinalRate">
+                                                <label class="form-label small fw-semibold text-muted mb-1" id="lblCutRate">فائنل ریٹ (Rate)</label>
                                                 <div class="input-group input-group-sm">
                                                     <span class="input-group-text px-2 small text-muted">Rs</span>
-                                                    <input type="number" name="rate" id="cut_rate" class="form-control fw-bold text-end text-dark" step="0.25" min="0" value="5.00">
-                                                    <span class="input-group-text px-2 small text-muted">/pc</span>
+                                                    <input type="number" name="rate" id="cut_rate" class="form-control fw-bold text-end text-dark" step="any" min="0" value="5.00">
+                                                    <span class="input-group-text px-2 small text-muted" id="unitCutRate">/pc</span>
                                                 </div>
-                                                <div class="form-text small" style="font-size: 10px;">ریئل ٹائم خودکار حساب</div>
+                                                <div class="form-text small" id="hintCutRate" style="font-size: 10px;">ریئل ٹائم ریٹ (آپ تبدیل کر سکتے ہیں)</div>
                                             </div>
                                         </div>
                                     </div>
@@ -1959,7 +2127,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <!-- ================================================================= -->
                             <div id="downstreamCommonFields" class="row g-3 d-none">
                                 <!-- Worker & Piece Rate Scheme -->
-                                <div class="col-12 col-md-5">
+                                <div class="col-12 col-md-5" id="grpDownstreamWorkerCol">
                                     <div class="d-flex justify-content-between align-items-center mb-1">
                                         <label class="form-label fw-semibold mb-0">Worker / Operator *</label>
                                         <span id="workerCountBadge" class="badge bg-light text-secondary border small d-none">0 matching</span>
@@ -1968,9 +2136,27 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <option value="">-- Select Operation First --</option>
                                     </select>
                                 </div>
-                                <div class="col-12 col-md-7">
+
+                                <!-- Destination Warehouse (Shown dynamically when operation is Packing) -->
+                                <div class="col-12 col-md-3 d-none" id="grpPackingWarehouse">
                                     <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <label class="form-label fw-semibold mb-0">Rate Calculation Scheme (منٹ ریٹ کا حساب)</label>
+                                        <label class="form-label fw-bold text-success mb-0">
+                                            <i class="bi bi-building me-1"></i> Deposit Warehouse *
+                                        </label>
+                                    </div>
+                                    <select name="packing_warehouse_id" id="pe_packing_wh_id" class="form-select fw-semibold border-success">
+                                        <?php foreach ($finishedWarehouses as $wh): ?>
+                                            <option value="<?= $wh['id'] ?>" <?= (stripos($wh['name'], 'Main') !== false ? 'selected' : '') ?>>
+                                                📦 <?= clean($wh['name']) ?> <?= !empty($wh['location']) ? ' (' . clean($wh['location']) . ')' : '' ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <div class="form-text small text-success" style="font-size: 10px;">فنش گودام جہاں اسٹاک جمع ہوگا</div>
+                                </div>
+
+                                <div class="col-12 col-md-7" id="grpDownstreamRateSchemeCol">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <label class="form-label fw-semibold mb-0">Rate Calculation Scheme (ریٹ کا حساب)</label>
                                         <span class="text-success small fw-bold" id="lblFormulaBadge">
                                             <i class="bi bi-calculator me-1"></i>Minutes × Rate/min = Piece Rate
                                         </span>
@@ -1978,7 +2164,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <div class="row g-2">
                                         <div class="col-4" id="grpDownstreamMinutes">
                                             <div class="input-group">
-                                                <input type="number" name="minutes_per_piece" id="pe_minutes" class="form-control fw-bold text-center text-primary" step="0.1" min="0" value="0.0" placeholder="SAM Min" title="Operation Standard Time (SAM Minutes per piece)">
+                                                <input type="number" name="minutes_per_piece" id="pe_minutes" class="form-control fw-bold text-center text-primary" step="any" min="0" value="0.0" placeholder="SAM Min" title="Operation Standard Time (SAM Minutes per piece)">
                                                 <span class="input-group-text px-1 small text-muted">min</span>
                                             </div>
                                             <div class="form-text text-center small" style="font-size: 10px;">وقت فی پیس</div>
@@ -1986,7 +2172,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <div class="col-4" id="grpDownstreamMinRate">
                                             <div class="input-group">
                                                 <span class="input-group-text px-1 small text-muted">Rs</span>
-                                                <input type="number" name="worker_minute_rate" id="pe_min_rate" class="form-control fw-bold text-center text-success" step="0.05" min="0" value="2.50" placeholder="Rs/min" title="Worker's agreed rate per minute">
+                                                <input type="number" name="worker_minute_rate" id="pe_min_rate" class="form-control fw-bold text-center text-success" step="any" min="0" value="2.50" placeholder="Rs/min" title="Worker's agreed rate per minute">
                                                 <span class="input-group-text px-1 small text-muted">/m</span>
                                             </div>
                                             <div class="form-text text-center small" style="font-size: 10px;">ریٹ فی منٹ</div>
@@ -1994,10 +2180,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <div class="col-4" id="grpDownstreamRate">
                                             <div class="input-group">
                                                 <span class="input-group-text px-1 small text-muted">Rs</span>
-                                                <input type="number" name="rate" id="pe_rate" class="form-control fw-bold text-end text-dark" step="0.25" min="0" value="0.00" title="Final Piece Rate">
-                                                <span class="input-group-text px-1 small text-muted">/pc</span>
+                                                <input type="number" name="rate" id="pe_rate" class="form-control fw-bold text-end text-dark" step="any" min="0" value="0.00" title="Final Rate">
+                                                <span class="input-group-text px-1 small text-muted" id="unitDownstreamRate">/pc</span>
                                             </div>
-                                            <div class="form-text text-center small" style="font-size: 10px;">پیس ریٹ</div>
+                                            <div class="form-text text-center small" id="lblDownstreamRateType" style="font-size: 10px;">ریٹ (Rate)</div>
                                         </div>
                                     </div>
                                 </div>
@@ -2293,6 +2479,48 @@ document.addEventListener('DOMContentLoaded', function() {
     const cutElementsTbody = document.getElementById('cutElementsTbody');
     const opElementsTbody = document.getElementById('opElementsTbody');
 
+    function getWorkerWageInfo(opt) {
+        if (!opt || !opt.value) {
+            return {
+                workerType: 'Piece Rate',
+                minRate: 2.50,
+                pieceRate: 0.00,
+                dailyRate: 0.00,
+                rateBasis: 'whole_sweater',
+                rate: 0.00,
+                isDaily: false,
+                isMonthly: false,
+                isMinute: false,
+                isPiece: true
+            };
+        }
+        const rawType = (opt.dataset.workerType || opt.dataset.workertype || opt.getAttribute('data-worker-type') || opt.getAttribute('data-workertype') || 'Piece Rate').trim();
+        const minR = parseFloat(opt.dataset.minRate || opt.dataset.minrate || opt.getAttribute('data-min-rate') || opt.getAttribute('data-minrate')) || 2.50;
+        const pieceR = parseFloat(opt.dataset.pieceRate || opt.dataset.piecerate || opt.getAttribute('data-piece-rate') || opt.getAttribute('data-piecerate')) || 0.00;
+        const dailyR = parseFloat(opt.dataset.dailyRate || opt.dataset.dailyrate || opt.getAttribute('data-daily-rate') || opt.getAttribute('data-dailyrate')) || pieceR || 0.00;
+        const rBasis = opt.dataset.rateBasis || opt.dataset.ratebasis || opt.getAttribute('data-rate-basis') || opt.getAttribute('data-ratebasis') || 'whole_sweater';
+        const effR = parseFloat(opt.dataset.rate || opt.getAttribute('data-rate')) || 0.00;
+
+        const lower = rawType.toLowerCase();
+        const isDaily = lower.includes('daily') || lower.includes('یومیہ') || lower.includes('day');
+        const isMonthly = lower.includes('month') || lower.includes('ماہانہ') || lower.includes('salary');
+        const isMinute = lower.includes('minute') || lower.includes('منٹ');
+        const isPiece = !isDaily && !isMonthly && !isMinute;
+
+        return {
+            workerType: rawType,
+            minRate: minR,
+            pieceRate: pieceR,
+            dailyRate: dailyR,
+            rateBasis: rBasis,
+            rate: effR,
+            isDaily,
+            isMonthly,
+            isMinute,
+            isPiece
+        };
+    }
+
     function getMaxWholeReadyToCut() {
         if (!currentOpLotData || !currentOpLotData.elements || currentOpLotData.elements.length === 0) {
             return (currentOpLotData && currentOpLotData.max_whole_ready_to_cut !== undefined)
@@ -2522,7 +2750,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     `}
                     <td style="width: 110px;">
                         <div class="input-group input-group-sm">
-                            <input type="number" name="elements[${el.id}][sam_minutes]" class="form-control form-control-sm text-center fw-bold text-primary op-el-sam" value="${sam.toFixed(1)}" step="0.1" min="0">
+                            <input type="number" name="elements[${el.id}][sam_minutes]" class="form-control form-control-sm text-center fw-bold text-primary op-el-sam" value="${sam.toFixed(1)}" step="any" min="0">
                             <span class="input-group-text px-1 small text-muted">m</span>
                         </div>
                     </td>
@@ -2532,7 +2760,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td style="width: 115px;">
                         <div class="input-group input-group-sm">
                             <span class="input-group-text px-1 small text-muted">Rs</span>
-                            <input type="number" name="elements[${el.id}][rate]" class="form-control form-control-sm text-center fw-bold text-dark op-el-rate" value="${pieceRate.toFixed(2)}" step="0.25" min="0">
+                            <input type="number" name="elements[${el.id}][rate]" class="form-control form-control-sm text-center fw-bold text-dark op-el-rate" value="${pieceRate.toFixed(2)}" step="any" min="0">
                         </div>
                     </td>
                     <td class="text-end fw-bold text-success op-el-labour">
@@ -2817,29 +3045,96 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateCuttingRate(fromDirectRate = false) {
         const opt = (cutWorker && cutWorker.selectedIndex >= 0) ? cutWorker.options[cutWorker.selectedIndex] : null;
         const schemeBox = document.getElementById('cuttingRateSchemeBox');
-        const workerType = opt ? (opt.dataset.workertype || 'Piece Rate') : 'Piece Rate';
-        const workerMinRate = opt ? (parseFloat(opt.dataset.minrate) || 2.50) : 2.50;
-        const workerPieceRate = opt ? (parseFloat(opt.dataset.piecerate) || 0) : 0;
+        const wInfo = getWorkerWageInfo(opt);
 
-        if (workerType === 'Piece Rate') {
-            // HIDE minute rate scheme for Piece Rate workers
-            if (schemeBox) schemeBox.classList.add('d-none');
+        const grpMinutes = document.getElementById('grpCutMinutes');
+        const grpMinRate = document.getElementById('grpCutMinRate');
+        const grpFinalRate = document.getElementById('grpCutFinalRate');
+        const lblCutRate = document.getElementById('lblCutRate');
+        const unitCutRate = document.getElementById('unitCutRate');
+        const hintCutRate = document.getElementById('hintCutRate');
+        const lblFormula = document.getElementById('lblCutFormula');
+
+        // Always show scheme box so user can view & edit rates in real-time
+        if (schemeBox) schemeBox.classList.remove('d-none');
+
+        const whole = parseInt(cutWholePcs ? cutWholePcs.value : 0) || 0;
+
+        if (wInfo.isDaily) {
+            if (grpMinutes) grpMinutes.classList.add('d-none');
+            if (grpMinRate) grpMinRate.classList.add('d-none');
+            if (grpFinalRate) grpFinalRate.className = 'col-12 col-md-6';
+            if (lblCutRate) lblCutRate.textContent = 'Daily Wage Rate (یومیہ اجرت فی دن / شفٹ) *';
+            if (unitCutRate) unitCutRate.textContent = '/day';
+            if (hintCutRate) hintCutRate.textContent = 'ورکر پروفائل کی طے شدہ یومیہ اجرت، آپ ریل ٹائم میں تبدیل کر سکتے ہیں۔';
+            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-calendar-check me-1"></i>Daily Wage Scheme (یومیہ اجرت - فکسڈ فی شفٹ)';
+
             if (!fromDirectRate && cutRateInput) {
-                cutRateInput.value = (workerPieceRate > 0 ? workerPieceRate : 5.00).toFixed(2);
+                cutRateInput.value = (wInfo.dailyRate > 0 ? wInfo.dailyRate : 300.00).toFixed(2);
             }
-            const currentRate = parseFloat(cutRateInput ? cutRateInput.value : 0) || (workerPieceRate > 0 ? workerPieceRate : 5.00);
+            const currentRate = parseFloat(cutRateInput ? cutRateInput.value : 0) || (wInfo.dailyRate > 0 ? wInfo.dailyRate : 300.00);
+            if (cutRateBadge) {
+                cutRateBadge.className = 'badge bg-info-subtle text-info-emphasis border';
+                cutRateBadge.innerHTML = `<i class="bi bi-calendar-check me-1"></i>Rate: Rs. ${currentRate.toFixed(2)}/day (Daily Wage — یومیہ اجرت)`;
+            }
+            if (lblCutLabour) {
+                lblCutLabour.textContent = 'Rs. ' + currentRate.toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
+        } else if (wInfo.isPiece) {
+            if (grpMinutes) grpMinutes.classList.add('d-none');
+            if (grpMinRate) grpMinRate.classList.add('d-none');
+            if (grpFinalRate) grpFinalRate.className = 'col-12 col-md-6';
+            if (lblCutRate) lblCutRate.textContent = 'Piece Rate (ریٹ فی پیس) *';
+            if (unitCutRate) unitCutRate.textContent = '/pc';
+            if (hintCutRate) hintCutRate.textContent = 'ورکر پروفائل سے طے شدہ ریٹ، آپ ریل ٹائم میں تبدیل کر سکتے ہیں۔';
+            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-tag-fill me-1"></i>Piece Rate Scheme (طے شدہ فی پیس ریٹ)';
+
+            if (!fromDirectRate && cutRateInput) {
+                cutRateInput.value = (wInfo.pieceRate > 0 ? wInfo.pieceRate : (wInfo.rate > 0 ? wInfo.rate : 5.00)).toFixed(2);
+            }
+            const currentRate = parseFloat(cutRateInput ? cutRateInput.value : 0) || (wInfo.pieceRate > 0 ? wInfo.pieceRate : 5.00);
             if (cutRateBadge) {
                 cutRateBadge.className = 'badge bg-primary-subtle text-primary border';
                 cutRateBadge.innerHTML = `<i class="bi bi-tag-fill me-1"></i>Rate: Rs. ${currentRate.toFixed(2)}/pc (Piece Rate — پر پیس ریٹ)`;
             }
+            if (lblCutLabour) {
+                lblCutLabour.textContent = 'Rs. ' + (whole * currentRate).toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
+        } else if (wInfo.isMonthly) {
+            if (grpMinutes) grpMinutes.classList.add('d-none');
+            if (grpMinRate) grpMinRate.classList.add('d-none');
+            if (grpFinalRate) grpFinalRate.className = 'col-12 col-md-6';
+            if (lblCutRate) lblCutRate.textContent = 'Monthly Fixed Salary (ماہانہ تنخواہ) *';
+            if (unitCutRate) unitCutRate.textContent = '/mo';
+            if (hintCutRate) hintCutRate.textContent = 'ماہانہ فکسڈ بنیادی تنخواہ۔';
+            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-briefcase me-1"></i>Monthly Salary (ماہانہ تنخواہ)';
+
+            if (!fromDirectRate && cutRateInput) {
+                cutRateInput.value = (wInfo.pieceRate > 0 ? wInfo.pieceRate : 0.00).toFixed(2);
+            }
+            const currentRate = parseFloat(cutRateInput ? cutRateInput.value : 0);
+            if (cutRateBadge) {
+                cutRateBadge.className = 'badge bg-secondary-subtle text-secondary border';
+                cutRateBadge.innerHTML = `<i class="bi bi-briefcase me-1"></i>Salary: Rs. ${currentRate.toFixed(2)}/mo (Monthly Salary)`;
+            }
+            if (lblCutLabour) {
+                lblCutLabour.textContent = 'Rs. 0.00 (Fixed Monthly Salary)';
+            }
         } else {
-            // SHOW minute rate scheme for Minute Rate workers
-            if (schemeBox) schemeBox.classList.remove('d-none');
+            // Minute Rate
+            if (grpMinutes) grpMinutes.classList.remove('d-none');
+            if (grpMinRate) grpMinRate.classList.remove('d-none');
+            if (grpFinalRate) grpFinalRate.className = 'col-12 col-md-4';
+            if (lblCutRate) lblCutRate.textContent = 'فائنل پیس ریٹ (Piece Rate) *';
+            if (unitCutRate) unitCutRate.textContent = '/pc';
+            if (hintCutRate) hintCutRate.textContent = 'ریئل ٹائم خودکار حساب (SAM × Rate/min)';
+            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-calculator me-1"></i>Minutes × Rate/min = Piece Rate';
+
             if (cutMinRateInput && !cutMinRateInput.dataset.userEdited) {
-                cutMinRateInput.value = workerMinRate.toFixed(2);
+                cutMinRateInput.value = wInfo.minRate.toFixed(2);
             }
             const mins = parseFloat(cutMinutesInput ? cutMinutesInput.value : 0) || 2.0;
-            const minRate = parseFloat(cutMinRateInput ? cutMinRateInput.value : 0) || workerMinRate;
+            const minRate = parseFloat(cutMinRateInput ? cutMinRateInput.value : 0) || wInfo.minRate;
 
             if (!fromDirectRate && cutRateInput) {
                 cutRateInput.value = (mins * minRate).toFixed(2);
@@ -2849,12 +3144,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 cutRateBadge.className = 'badge bg-success-subtle text-success border';
                 cutRateBadge.innerHTML = `<i class="bi bi-stopwatch me-1"></i>Rate: Rs. ${currentRate.toFixed(2)}/pc (${mins.toFixed(1)}m @ Rs. ${minRate.toFixed(2)}/m — منٹ ریٹ)`;
             }
-        }
-
-        const currentRate = parseFloat(cutRateInput ? cutRateInput.value : 0) || 0;
-        const whole = parseInt(cutWholePcs ? cutWholePcs.value : 0) || 0;
-        if (lblCutLabour) {
-            lblCutLabour.textContent = 'Rs. ' + (whole * currentRate).toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            if (lblCutLabour) {
+                lblCutLabour.textContent = 'Rs. ' + (whole * currentRate).toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
         }
     }
 
@@ -3103,10 +3395,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (cutWholePcs) {
             cutWholePcs.value = grandGood;
             cutWholePcs.dataset.userEdited = '1';
-            const rate = parseFloat(cutRateInput ? cutRateInput.value : 0) || 5.00;
-            if (lblCutLabour) {
-                lblCutLabour.textContent = 'Rs. ' + (grandGood * rate).toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            }
+            updateCuttingRate(true);
         }
 
         // Sync Garment Elements Cutting Progress
@@ -3150,37 +3439,88 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function updateRateCalculation(fromDirectRate = false) {
         const opt = (workerSelect && workerSelect.selectedIndex >= 0) ? workerSelect.options[workerSelect.selectedIndex] : null;
-        const workerType = opt ? (opt.dataset.workerType || 'Piece Rate') : 'Piece Rate';
+        const wInfo = getWorkerWageInfo(opt);
         const mins = parseFloat(minInput ? minInput.value : 0) || 0;
-        const minRate = parseFloat(minRateInput ? minRateInput.value : 0) || 2.50;
+        const minRate = parseFloat(minRateInput ? minRateInput.value : 0) || wInfo.minRate;
 
         const grpMin = document.getElementById('grpDownstreamMinutes');
         const grpMinRate = document.getElementById('grpDownstreamMinRate');
         const grpRate = document.getElementById('grpDownstreamRate');
         const lblFormula = document.getElementById('lblFormulaBadge');
+        const unitRate = document.getElementById('unitDownstreamRate');
+        const lblRateType = document.getElementById('lblDownstreamRateType');
+        const rateBreakdownContainer = document.getElementById('rateBreakdownText');
 
-        if (workerType === 'Piece Rate') {
+        // Always allow editing rate in real time!
+        if (rateInput) rateInput.readOnly = false;
+
+        if (wInfo.isDaily) {
             if (grpMin) grpMin.classList.add('d-none');
             if (grpMinRate) grpMinRate.classList.add('d-none');
             if (grpRate) grpRate.className = 'col-12';
-            if (rateInput) rateInput.readOnly = true;
+            if (unitRate) unitRate.textContent = '/day';
+            if (lblRateType) lblRateType.textContent = 'یومیہ اجرت (Daily Wage)';
+            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-calendar-check me-1"></i>Daily Wage Scheme (یومیہ اجرت فی دن)';
+
+            if (!fromDirectRate && rateInput) {
+                rateInput.value = (wInfo.dailyRate > 0 ? wInfo.dailyRate : 300.00).toFixed(2);
+            }
+            const currentRate = parseFloat(rateInput ? rateInput.value : 0) || (wInfo.dailyRate > 0 ? wInfo.dailyRate : 300.00);
+
+            if (rateBreakdownContainer) {
+                rateBreakdownContainer.innerHTML = `<span class="badge bg-info-subtle text-info-emphasis px-2 py-1"><i class="bi bi-calendar-check me-1"></i>یومیہ اجرت: Rs. ${currentRate.toFixed(2)} / دن (Daily Wage) — آپ ریل ٹائم میں تبدیل کر سکتے ہیں</span>`;
+            }
+        } else if (wInfo.isPiece) {
+            if (grpMin) grpMin.classList.add('d-none');
+            if (grpMinRate) grpMinRate.classList.add('d-none');
+            if (grpRate) grpRate.className = 'col-12';
+            if (unitRate) unitRate.textContent = '/pc';
+            if (lblRateType) lblRateType.textContent = 'پیس ریٹ (Piece Rate)';
             if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-tag-fill me-1"></i>Piece Rate Scheme (طے شدہ پیس ریٹ)';
 
-            const pieceRate = opt ? (parseFloat(opt.dataset.pieceRate) || 0) : 0;
-            const effRate = opt ? (parseFloat(opt.dataset.rate) || 0) : 0;
             if (!fromDirectRate && rateInput) {
-                rateInput.value = (pieceRate > 0 ? pieceRate : (effRate > 0 ? effRate : 5.00)).toFixed(2);
+                rateInput.value = (wInfo.pieceRate > 0 ? wInfo.pieceRate : (wInfo.rate > 0 ? wInfo.rate : 5.00)).toFixed(2);
+            }
+            const currentRate = parseFloat(rateInput ? rateInput.value : 0) || (wInfo.pieceRate > 0 ? wInfo.pieceRate : 5.00);
+
+            if (rateBreakdownContainer) {
+                rateBreakdownContainer.innerHTML = `<span class="badge bg-primary px-2 py-1"><i class="bi bi-tag-fill me-1"></i>طے شدہ پیس ریٹ: Rs. ${currentRate.toFixed(2)} / پیس (Piece Rate) — آپ ریل ٹائم میں تبدیل کر سکتے ہیں</span>`;
+            }
+        } else if (wInfo.isMonthly) {
+            if (grpMin) grpMin.classList.add('d-none');
+            if (grpMinRate) grpMinRate.classList.add('d-none');
+            if (grpRate) grpRate.className = 'col-12';
+            if (unitRate) unitRate.textContent = '/mo';
+            if (lblRateType) lblRateType.textContent = 'ماہانہ تنخواہ (Fixed Salary)';
+            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-briefcase me-1"></i>Monthly Salary (ماہانہ تنخواہ)';
+
+            if (!fromDirectRate && rateInput) {
+                rateInput.value = (wInfo.pieceRate > 0 ? wInfo.pieceRate : 0.00).toFixed(2);
+            }
+            const currentRate = parseFloat(rateInput ? rateInput.value : 0);
+            if (rateBreakdownContainer) {
+                rateBreakdownContainer.innerHTML = `<span class="badge bg-secondary-subtle text-secondary px-2 py-1"><i class="bi bi-briefcase me-1"></i>ماہانہ تنخواہ: Rs. ${currentRate.toFixed(2)} / ماہ (Monthly Fixed Salary)</span>`;
             }
         } else {
+            // Minute Rate
             if (grpMin) grpMin.classList.remove('d-none');
             if (grpMinRate) grpMinRate.classList.remove('d-none');
             if (grpRate) grpRate.className = 'col-4';
-            if (rateInput) rateInput.readOnly = false;
+            if (unitRate) unitRate.textContent = '/pc';
+            if (lblRateType) lblRateType.textContent = 'پیس ریٹ (Piece Rate)';
             if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-calculator me-1"></i>Minutes × Rate/min = Piece Rate';
 
             if (!fromDirectRate && rateInput) {
                 if (mins > 0 && minRate > 0) {
                     rateInput.value = (mins * minRate).toFixed(2);
+                }
+            }
+            const currentRate = parseFloat(rateInput ? rateInput.value : 0) || (mins * minRate);
+            if (rateBreakdownContainer) {
+                if (mins > 0) {
+                    rateBreakdownContainer.innerHTML = `<span class="fw-bold text-primary">${mins.toFixed(1)}</span> منٹ فی پیس &times; <span class="fw-bold text-success">Rs. ${minRate.toFixed(2)}</span> فی منٹ = <strong class="text-dark fs-6">Rs. ${currentRate.toFixed(2)}</strong> فی پیس (Minute Rate)`;
+                } else {
+                    rateBreakdownContainer.innerHTML = `<span class="badge bg-primary px-2 py-1"><i class="bi bi-tag-fill me-1"></i>طے شدہ ریٹ: Rs. ${currentRate.toFixed(2)} / پیس</span>`;
                 }
             }
         }
@@ -3189,15 +3529,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (lblSamMins) lblSamMins.textContent = mins.toFixed(1);
         if (lblWorkerMinRate) lblWorkerMinRate.textContent = 'Rs. ' + minRate.toFixed(2);
         if (lblCalculatedPieceRate) lblCalculatedPieceRate.textContent = currentRate.toFixed(2);
-
-        const rateBreakdownContainer = document.getElementById('rateBreakdownText');
-        if (rateBreakdownContainer) {
-            if (workerType === 'Minute Rate' && mins > 0) {
-                rateBreakdownContainer.innerHTML = `<span class="fw-bold text-primary">${mins.toFixed(1)}</span> منٹ فی پیس &times; <span class="fw-bold text-success">Rs. ${minRate.toFixed(2)}</span> فی منٹ = <strong class="text-dark fs-6">Rs. ${currentRate.toFixed(2)}</strong> فی پیس (Minute Rate)`;
-            } else {
-                rateBreakdownContainer.innerHTML = `<span class="badge bg-primary px-2 py-1"><i class="bi bi-tag-fill me-1"></i>طے شدہ پیس ریٹ: Rs. ${currentRate.toFixed(2)} / پیس (Piece Rate — پر پیس ریٹ)</span>`;
-            }
-        }
 
         calculateSingleLabour();
         recalculateMatrixTotals();
@@ -3218,9 +3549,17 @@ document.addEventListener('DOMContentLoaded', function() {
             goodInput.value = Math.max(0, rec - rej - rew);
         }
 
+        const opt = (workerSelect && workerSelect.selectedIndex >= 0) ? workerSelect.options[workerSelect.selectedIndex] : null;
+        const wInfo = getWorkerWageInfo(opt);
         const good = parseInt(goodInput.value) || 0;
         const rate = parseFloat(rateInput.value) || 0;
-        const total = good * rate;
+
+        let total = good * rate;
+        if (wInfo.isDaily) {
+            total = rate;
+        } else if (wInfo.isMonthly) {
+            total = 0.00;
+        }
         labourDisplay.textContent = 'Rs. ' + total.toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
         if (!recInput.value || parseInt(recInput.value) === 0) {
@@ -3368,6 +3707,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         const opt = document.createElement('option');
                         opt.value = op.operation_id;
                         opt.dataset.rate = op.default_rate;
+                        opt.dataset.rateUnit = op.rate_unit || 'Per piece';
+                        opt.dataset.description = op.description || '';
                         opt.dataset.minutes = op.estimated_minutes || 0;
                         opt.dataset.mins = op.estimated_minutes || 0;
                         opt.dataset.goodDone = op.good_done || 0;
@@ -3377,7 +3718,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         const isSub = op.parent_id ? true : false;
                         const prefix = isSub ? '  ↳ ' : '';
                         const minInfo = (parseFloat(op.estimated_minutes) > 0 ? ' (' + parseFloat(op.estimated_minutes) + ' min)' : '');
-                        opt.textContent = prefix + op.sequence + '. ' + op.op_name + minInfo + ' [' + op.dept_name + '] - Rs. ' + parseFloat(op.default_rate).toFixed(2) + 
+                        const descInfo = op.description ? ' (' + op.description + ')' : '';
+                        const unitInfo = op.rate_unit ? ' / ' + op.rate_unit : '';
+                        opt.textContent = prefix + op.sequence + '. ' + op.op_name + descInfo + minInfo + ' [' + (op.dept_name || 'General') + '] - Rs. ' + parseFloat(op.default_rate).toFixed(2) + unitInfo + 
                                           (isCompleted ? ' [✓ Completed: ' + goodDone + '/' + lotTotal + ']' : ' [' + goodDone + '/' + lotTotal + ' pcs]');
                         opSelect.appendChild(opt);
                     });
@@ -3568,9 +3911,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         opt.value = w.id;
                         opt.dataset.rate = w.effective_rate || '';
                         opt.dataset.minRate = w.rate_per_minute || 2.50;
+                        opt.dataset.minrate = w.rate_per_minute || 2.50;
                         opt.dataset.pieceRate = w.default_rate || w.piece_rate || 0;
+                        opt.dataset.piecerate = w.default_rate || w.piece_rate || 0;
+                        opt.dataset.dailyRate = w.default_rate || 0;
+                        opt.dataset.dailyrate = w.default_rate || 0;
                         opt.dataset.workerType = w.worker_type || 'Piece Rate';
+                        opt.dataset.workertype = w.worker_type || 'Piece Rate';
                         opt.dataset.rateBasis = w.rate_basis || 'whole_sweater';
+                        opt.dataset.ratebasis = w.rate_basis || 'whole_sweater';
 
                         const minRateTxt = parseFloat(w.rate_per_minute || 2.50).toFixed(2);
                         const pieceRate = parseFloat(w.default_rate || w.piece_rate || 0);
@@ -3578,8 +3927,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         const isMinuteRate = (w.worker_type === 'Minute Rate');
 
                         let rateLabel = '';
-                        if (isMinuteRate) {
+                        if (w.worker_type === 'Daily Wage') {
+                            rateLabel = ' — Rs. ' + pieceRate.toFixed(2) + '/day (Daily Wage)';
+                        } else if (isMinuteRate) {
                             rateLabel = ' — Rs. ' + minRateTxt + '/m (Minute Rate)';
+                        } else if (w.worker_type === 'Monthly Salary') {
+                            rateLabel = ' — Rs. ' + pieceRate.toFixed(2) + '/mo (Monthly Salary)';
+                        } else if (w.worker_type === 'Contractor' || w.worker_type === 'Contract') {
+                            rateLabel = ' — Rs. ' + pieceRate.toFixed(2) + '/pc (Contractor)';
                         } else if (pieceRate > 0) {
                             rateLabel = ' — Rs. ' + pieceRate.toFixed(2) + '/pc (Piece Rate)';
                         } else if (parseFloat(w.effective_rate) > 0) {
@@ -3608,35 +3963,41 @@ document.addEventListener('DOMContentLoaded', function() {
     workerSelect.addEventListener('change', function() {
         const opt = this.options[this.selectedIndex];
         if (opt && opt.value) {
-            const basis = opt.dataset.rateBasis || 'whole_sweater';
-            const workerType = opt.dataset.workerType || 'Piece Rate';
-            const pieceRate = parseFloat(opt.dataset.pieceRate) || 0;
-            const effectiveRate = parseFloat(opt.dataset.rate) || 0;
-            const minRate = parseFloat(opt.dataset.minRate) || 2.50;
+            const wInfo = getWorkerWageInfo(opt);
 
             if (workerBadge) {
-                if (workerType === 'Minute Rate') {
-                    workerBadge.innerHTML = `<i class="bi bi-stopwatch me-1"></i>Minute Rate (Rs. ${minRate.toFixed(2)}/m)`;
-                    workerBadge.className = 'badge bg-success-subtle text-success border small';
-                } else if (basis === 'element_wise') {
-                    workerBadge.innerHTML = '<i class="bi bi-puzzle me-1"></i>Piece Rate [اعضاء]';
+                if (wInfo.isDaily) {
+                    workerBadge.innerHTML = `<i class="bi bi-calendar-check me-1"></i>Daily Wage (Rs. ${wInfo.dailyRate.toFixed(2)}/day)`;
+                    workerBadge.className = 'badge bg-info-subtle text-info-emphasis border small';
+                } else if (wInfo.isMonthly) {
+                    workerBadge.innerHTML = `<i class="bi bi-briefcase me-1"></i>Monthly Salary (Rs. ${wInfo.pieceRate.toFixed(2)}/mo)`;
+                    workerBadge.className = 'badge bg-secondary-subtle text-secondary border small';
+                } else if (wInfo.isPiece) {
+                    const basisBadge = (wInfo.rateBasis === 'element_wise') ? ' [اعضاء]' : ' [سویٹر]';
+                    workerBadge.innerHTML = `<i class="bi bi-tag-fill me-1"></i>Piece Rate ${basisBadge} (Rs. ${wInfo.pieceRate.toFixed(2)}/pc)`;
                     workerBadge.className = 'badge bg-primary-subtle text-primary border small';
                 } else {
-                    workerBadge.innerHTML = '<i class="bi bi-layers me-1"></i>Piece Rate [سویٹر]';
-                    workerBadge.className = 'badge bg-primary-subtle text-primary border small';
+                    workerBadge.innerHTML = `<i class="bi bi-stopwatch me-1"></i>Minute Rate (Rs. ${wInfo.minRate.toFixed(2)}/m)`;
+                    workerBadge.className = 'badge bg-success-subtle text-success border small';
                 }
                 workerBadge.classList.remove('d-none');
             }
             if (minRateInput) {
-                minRateInput.value = minRate.toFixed(2);
+                minRateInput.value = wInfo.minRate.toFixed(2);
             }
             
-            if (workerType === 'Piece Rate') {
-                if (pieceRate > 0) {
-                    rateInput.value = pieceRate.toFixed(2);
-                } else if (effectiveRate > 0) {
-                    rateInput.value = effectiveRate.toFixed(2);
+            if (wInfo.isDaily) {
+                rateInput.value = (wInfo.dailyRate > 0 ? wInfo.dailyRate : 300.00).toFixed(2);
+                updateRateCalculation(true);
+            } else if (wInfo.isPiece) {
+                if (wInfo.pieceRate > 0) {
+                    rateInput.value = wInfo.pieceRate.toFixed(2);
+                } else if (wInfo.rate > 0) {
+                    rateInput.value = wInfo.rate.toFixed(2);
                 }
+                updateRateCalculation(true);
+            } else if (wInfo.isMonthly) {
+                rateInput.value = wInfo.pieceRate.toFixed(2);
                 updateRateCalculation(true);
             } else {
                 updateRateCalculation(false);
@@ -3647,6 +4008,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // When operation changes, update SAM minutes, load workers, and load matrix grid!
     opSelect.addEventListener('change', function() {
         const selectedText = this.options[this.selectedIndex] ? this.options[this.selectedIndex].textContent.toLowerCase() : '';
+        const grpPackingWh = document.getElementById('grpPackingWarehouse');
+        const grpWorkerCol = document.getElementById('grpDownstreamWorkerCol');
+        const grpSchemeCol = document.getElementById('grpDownstreamRateSchemeCol');
+        if (selectedText.includes('pack')) {
+            if (grpPackingWh) grpPackingWh.classList.remove('d-none');
+            if (grpWorkerCol) grpWorkerCol.className = 'col-12 col-md-4';
+            if (grpSchemeCol) grpSchemeCol.className = 'col-12 col-md-5';
+        } else {
+            if (grpPackingWh) grpPackingWh.classList.add('d-none');
+            if (grpWorkerCol) grpWorkerCol.className = 'col-12 col-md-5';
+            if (grpSchemeCol) grpSchemeCol.className = 'col-12 col-md-7';
+        }
+
         if (selectedText.includes('cut')) {
             switchMode('cutting');
         } else if (selectedText.includes('operator') || selectedText.includes('knitt')) {
@@ -4233,8 +4607,15 @@ document.addEventListener('DOMContentLoaded', function() {
             qualityDetailsCard.classList.remove('d-none');
         }
 
-        // Worker Labour is calculated ONLY on good pieces
-        const batchLabour = grandGood * rate;
+        // Worker Labour is calculated based on wage type
+        const mOpt = (workerSelect && workerSelect.selectedIndex >= 0) ? workerSelect.options[workerSelect.selectedIndex] : null;
+        const mWInfo = getWorkerWageInfo(mOpt);
+        let batchLabour = grandGood * rate;
+        if (mWInfo.isDaily) {
+            batchLabour = rate;
+        } else if (mWInfo.isMonthly) {
+            batchLabour = 0.00;
+        }
         const labourDisplay = document.getElementById('lblBatchTotalLabour');
         if (labourDisplay) {
             labourDisplay.textContent = 'Rs. ' + batchLabour.toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -4390,22 +4771,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 opSingleWorker.value = lot.operator_id;
             }
             const workerOpt = opSingleWorker ? opSingleWorker.selectedOptions[0] : null;
-            const workerType = workerOpt ? (workerOpt.dataset.workertype || 'Minute Rate') : 'Minute Rate';
-            const workerMinRate = workerOpt ? (parseFloat(workerOpt.dataset.minrate) || 2.50) : 2.50;
-            const workerPieceRate = workerOpt ? (parseFloat(workerOpt.dataset.piecerate) || 0) : 0;
-            const pieceRate = (workerType === 'Piece Rate' && workerPieceRate > 0)
-                ? workerPieceRate 
-                : (finalMins > 0 ? (finalMins * workerMinRate) : opDefRate);
+            const wInfo = getWorkerWageInfo(workerOpt);
+            let pieceRate = opDefRate;
+            if (wInfo.isDaily) {
+                pieceRate = wInfo.dailyRate > 0 ? wInfo.dailyRate : 300.00;
+            } else if (wInfo.isPiece && wInfo.pieceRate > 0) {
+                pieceRate = wInfo.pieceRate;
+            } else if (finalMins > 0) {
+                pieceRate = finalMins * wInfo.minRate;
+            }
 
             if (opSingleMinutes && !opSingleMinutes.dataset.userEdited) opSingleMinutes.value = finalMins > 0 ? finalMins.toFixed(1) : (opMins > 0 ? opMins.toFixed(1) : '0.0');
-            if (opSingleMinRate && !opSingleMinRate.dataset.userEdited) opSingleMinRate.value = workerMinRate.toFixed(2);
+            if (opSingleMinRate && !opSingleMinRate.dataset.userEdited) opSingleMinRate.value = wInfo.minRate.toFixed(2);
             if (opSingleRate && !opSingleRate.dataset.userEdited) opSingleRate.value = pieceRate.toFixed(2);
 
             if (opSingleRateBadge) {
                 const curR = parseFloat(opSingleRate ? opSingleRate.value : pieceRate) || 0;
                 const curM = parseFloat(opSingleMinutes ? opSingleMinutes.value : finalMins) || 0;
-                const curMR = parseFloat(opSingleMinRate ? opSingleMinRate.value : workerMinRate) || 0;
-                if (workerType === 'Piece Rate') {
+                const curMR = parseFloat(opSingleMinRate ? opSingleMinRate.value : wInfo.minRate) || 0;
+                if (wInfo.isDaily) {
+                    opSingleRateBadge.className = 'badge bg-info-subtle text-info-emphasis border';
+                    opSingleRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/day (Daily Wage — یومیہ اجرت)`;
+                } else if (wInfo.isPiece) {
                     opSingleRateBadge.className = 'badge bg-primary-subtle text-primary border';
                     opSingleRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/pc (Piece Rate — پر پیس ریٹ)`;
                 } else {
@@ -4415,10 +4802,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             if (document.getElementById('lblSingleMinRateBadge')) {
-                if (workerType === 'Piece Rate') {
+                if (wInfo.isDaily) {
+                    document.getElementById('lblSingleMinRateBadge').textContent = `Rs. ${pieceRate.toFixed(2)}/day (Daily Wage)`;
+                } else if (wInfo.isPiece) {
                     document.getElementById('lblSingleMinRateBadge').textContent = `Rs. ${pieceRate.toFixed(2)}/pc (Piece Rate)`;
                 } else {
-                    document.getElementById('lblSingleMinRateBadge').textContent = `Rs. ${workerMinRate.toFixed(2)}/m`;
+                    document.getElementById('lblSingleMinRateBadge').textContent = `Rs. ${wInfo.minRate.toFixed(2)}/m`;
                 }
             }
 
@@ -4442,43 +4831,77 @@ document.addEventListener('DOMContentLoaded', function() {
             if (lot.night_operator_id && opDoubleNightWorker && !opDoubleNightWorker.value) opDoubleNightWorker.value = lot.night_operator_id;
 
             const dayWorkerOpt = opDoubleDayWorker ? opDoubleDayWorker.selectedOptions[0] : null;
-            const dayType = dayWorkerOpt ? (dayWorkerOpt.dataset.workertype || 'Minute Rate') : 'Minute Rate';
-            const dayMinRate = dayWorkerOpt ? (parseFloat(dayWorkerOpt.dataset.minrate) || 2.50) : 2.50;
-            const dayPiece = dayWorkerOpt ? (parseFloat(dayWorkerOpt.dataset.piecerate) || 0) : 0;
-            const dayPieceRate = (dayType === 'Piece Rate' && dayPiece > 0) ? dayPiece : (finalMins > 0 ? (finalMins * dayMinRate) : opDefRate);
+            const dayInfo = getWorkerWageInfo(dayWorkerOpt);
+            let dayPieceRate = opDefRate;
+            if (dayInfo.isDaily) {
+                dayPieceRate = dayInfo.dailyRate > 0 ? dayInfo.dailyRate : 300.00;
+            } else if (dayInfo.isPiece && dayInfo.pieceRate > 0) {
+                dayPieceRate = dayInfo.pieceRate;
+            } else if (finalMins > 0) {
+                dayPieceRate = finalMins * dayInfo.minRate;
+            }
 
             const nightWorkerOpt = opDoubleNightWorker ? opDoubleNightWorker.selectedOptions[0] : null;
-            const nightType = nightWorkerOpt ? (nightWorkerOpt.dataset.workertype || 'Minute Rate') : 'Minute Rate';
-            const nightMinRate = nightWorkerOpt ? (parseFloat(nightWorkerOpt.dataset.minrate) || 2.50) : 2.50;
-            const nightPiece = nightWorkerOpt ? (parseFloat(nightWorkerOpt.dataset.piecerate) || 0) : 0;
-            const nightPieceRate = (nightType === 'Piece Rate' && nightPiece > 0) ? nightPiece : (finalMins > 0 ? (finalMins * nightMinRate) : opDefRate);
+            const nightInfo = getWorkerWageInfo(nightWorkerOpt);
+            let nightPieceRate = opDefRate;
+            if (nightInfo.isDaily) {
+                nightPieceRate = nightInfo.dailyRate > 0 ? nightInfo.dailyRate : 300.00;
+            } else if (nightInfo.isPiece && nightInfo.pieceRate > 0) {
+                nightPieceRate = nightInfo.pieceRate;
+            } else if (finalMins > 0) {
+                nightPieceRate = finalMins * nightInfo.minRate;
+            }
 
             if (document.getElementById('lblDoubleDayMinRateBadge')) {
-                document.getElementById('lblDoubleDayMinRateBadge').textContent = (dayType === 'Piece Rate') ? `Rs. ${dayPieceRate.toFixed(2)}/pc (Piece Rate)` : `Rs. ${dayMinRate.toFixed(2)}/m`;
+                if (dayInfo.isDaily) {
+                    document.getElementById('lblDoubleDayMinRateBadge').textContent = `Rs. ${dayPieceRate.toFixed(2)}/day (Daily Wage)`;
+                } else if (dayInfo.isPiece) {
+                    document.getElementById('lblDoubleDayMinRateBadge').textContent = `Rs. ${dayPieceRate.toFixed(2)}/pc (Piece Rate)`;
+                } else {
+                    document.getElementById('lblDoubleDayMinRateBadge').textContent = `Rs. ${dayInfo.minRate.toFixed(2)}/m`;
+                }
             }
             if (document.getElementById('lblDoubleNightMinRateBadge')) {
-                document.getElementById('lblDoubleNightMinRateBadge').textContent = (nightType === 'Piece Rate') ? `Rs. ${nightPieceRate.toFixed(2)}/pc (Piece Rate)` : `Rs. ${nightMinRate.toFixed(2)}/m`;
+                if (nightInfo.isDaily) {
+                    document.getElementById('lblDoubleNightMinRateBadge').textContent = `Rs. ${nightPieceRate.toFixed(2)}/day (Daily Wage)`;
+                } else if (nightInfo.isPiece) {
+                    document.getElementById('lblDoubleNightMinRateBadge').textContent = `Rs. ${nightPieceRate.toFixed(2)}/pc (Piece Rate)`;
+                } else {
+                    document.getElementById('lblDoubleNightMinRateBadge').textContent = `Rs. ${nightInfo.minRate.toFixed(2)}/m`;
+                }
             }
 
             if (opDoubleDayMinutes && !opDoubleDayMinutes.dataset.userEdited) opDoubleDayMinutes.value = finalMins > 0 ? finalMins.toFixed(1) : (opMins > 0 ? opMins.toFixed(1) : '0.0');
-            if (opDoubleDayMinRate && !opDoubleDayMinRate.dataset.userEdited) opDoubleDayMinRate.value = dayMinRate.toFixed(2);
+            if (opDoubleDayMinRate && !opDoubleDayMinRate.dataset.userEdited) opDoubleDayMinRate.value = dayInfo.minRate.toFixed(2);
             if (opDoubleDayRate && !opDoubleDayRate.dataset.userEdited) opDoubleDayRate.value = dayPieceRate.toFixed(2);
 
             if (opDoubleNightMinutes && !opDoubleNightMinutes.dataset.userEdited) opDoubleNightMinutes.value = finalMins > 0 ? finalMins.toFixed(1) : (opMins > 0 ? opMins.toFixed(1) : '0.0');
-            if (opDoubleNightMinRate && !opDoubleNightMinRate.dataset.userEdited) opDoubleNightMinRate.value = nightMinRate.toFixed(2);
+            if (opDoubleNightMinRate && !opDoubleNightMinRate.dataset.userEdited) opDoubleNightMinRate.value = nightInfo.minRate.toFixed(2);
             if (opDoubleNightRate && !opDoubleNightRate.dataset.userEdited) opDoubleNightRate.value = nightPieceRate.toFixed(2);
 
             if (opDoubleDayRateBadge) {
                 const curR = parseFloat(opDoubleDayRate ? opDoubleDayRate.value : dayPieceRate) || 0;
                 const curM = parseFloat(opDoubleDayMinutes ? opDoubleDayMinutes.value : finalMins) || 0;
-                const curMR = parseFloat(opDoubleDayMinRate ? opDoubleDayMinRate.value : dayMinRate) || 0;
-                opDoubleDayRateBadge.textContent = (dayType === 'Piece Rate') ? `Rs. ${curR.toFixed(2)}/pc (Piece Rate)` : (curM > 0 ? `Rs. ${curR.toFixed(2)}/pc (${curM}m @ ${curMR.toFixed(2)}/m)` : `Rs. ${curR.toFixed(2)}/pc`);
+                const curMR = parseFloat(opDoubleDayMinRate ? opDoubleDayMinRate.value : dayInfo.minRate) || 0;
+                if (dayInfo.isDaily) {
+                    opDoubleDayRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/day (Daily Wage)`;
+                } else if (dayInfo.isPiece) {
+                    opDoubleDayRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/pc (Piece Rate)`;
+                } else {
+                    opDoubleDayRateBadge.textContent = curM > 0 ? `Rate: Rs. ${curR.toFixed(2)}/pc (${curM}m @ ${curMR.toFixed(2)}/m)` : `Rs. ${curR.toFixed(2)}/pc`;
+                }
             }
             if (opDoubleNightRateBadge) {
                 const curR = parseFloat(opDoubleNightRate ? opDoubleNightRate.value : nightPieceRate) || 0;
                 const curM = parseFloat(opDoubleNightMinutes ? opDoubleNightMinutes.value : finalMins) || 0;
-                const curMR = parseFloat(opDoubleNightMinRate ? opDoubleNightMinRate.value : nightMinRate) || 0;
-                opDoubleNightRateBadge.textContent = (nightType === 'Piece Rate') ? `Rs. ${curR.toFixed(2)}/pc (Piece Rate)` : (curM > 0 ? `Rs. ${curR.toFixed(2)}/pc (${curM}m @ ${curMR.toFixed(2)}/m)` : `Rs. ${curR.toFixed(2)}/pc`);
+                const curMR = parseFloat(opDoubleNightMinRate ? opDoubleNightMinRate.value : nightInfo.minRate) || 0;
+                if (nightInfo.isDaily) {
+                    opDoubleNightRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/day (Daily Wage)`;
+                } else if (nightInfo.isPiece) {
+                    opDoubleNightRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/pc (Piece Rate)`;
+                } else {
+                    opDoubleNightRateBadge.textContent = curM > 0 ? `Rate: Rs. ${curR.toFixed(2)}/pc (${curM}m @ ${curMR.toFixed(2)}/m)` : `Rs. ${curR.toFixed(2)}/pc`;
+                }
             }
 
             // Auto-balance default (e.g. 50/50 of remaining pieces)
@@ -4630,16 +5053,25 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!isDouble) {
             const dayPcs = parseInt(opSinglePieces.value, 10) || 0;
             const rate = parseFloat(opSingleRate ? opSingleRate.value : 0) || 0;
-            if (lblSingleDayLabour) lblSingleDayLabour.textContent = `Rs. ${(dayPcs * rate).toFixed(2)}`;
+            const wOpt = opSingleWorker ? opSingleWorker.selectedOptions[0] : null;
+            const wInfo = getWorkerWageInfo(wOpt);
+            const dayLabour = wInfo.isDaily ? rate : (wInfo.isMonthly ? 0.00 : (dayPcs * rate));
+            if (lblSingleDayLabour) lblSingleDayLabour.textContent = `Rs. ${dayLabour.toFixed(2)}`;
             totalEntered = dayPcs;
         } else {
             const dayPcs = parseInt(opDoubleDayPieces.value, 10) || 0;
             const dayRate = parseFloat(opDoubleDayRate ? opDoubleDayRate.value : 0) || 0;
-            if (lblDoubleDayLabour) lblDoubleDayLabour.textContent = `Rs. ${(dayPcs * dayRate).toFixed(2)}`;
+            const dOpt = opDoubleDayWorker ? opDoubleDayWorker.selectedOptions[0] : null;
+            const dInfo = getWorkerWageInfo(dOpt);
+            const dayLabour = dInfo.isDaily ? dayRate : (dInfo.isMonthly ? 0.00 : (dayPcs * dayRate));
+            if (lblDoubleDayLabour) lblDoubleDayLabour.textContent = `Rs. ${dayLabour.toFixed(2)}`;
 
             const nightPcs = parseInt(opDoubleNightPieces.value, 10) || 0;
             const nightRate = parseFloat(opDoubleNightRate ? opDoubleNightRate.value : 0) || 0;
-            if (lblDoubleNightLabour) lblDoubleNightLabour.textContent = `Rs. ${(nightPcs * nightRate).toFixed(2)}`;
+            const nOpt = opDoubleNightWorker ? opDoubleNightWorker.selectedOptions[0] : null;
+            const nInfo = getWorkerWageInfo(nOpt);
+            const nightLabour = nInfo.isDaily ? nightRate : (nInfo.isMonthly ? 0.00 : (nightPcs * nightRate));
+            if (lblDoubleNightLabour) lblDoubleNightLabour.textContent = `Rs. ${nightLabour.toFixed(2)}`;
 
             totalEntered = dayPcs + nightPcs;
         }
@@ -4816,20 +5248,56 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             const shiftType = document.getElementById('op_shift_type').value;
+
+            // Calculate pieces entered across elements
+            let totalDayPcs = 0;
+            let totalNightPcs = 0;
+            if (opElementsTbody) {
+                opElementsTbody.querySelectorAll('tr[data-elid]').forEach(tr => {
+                    const dInp = tr.querySelector('.op-el-day');
+                    const nInp = tr.querySelector('.op-el-night');
+                    if (dInp) totalDayPcs += parseInt(dInp.value, 10) || 0;
+                    if (nInp) totalNightPcs += parseInt(nInp.value, 10) || 0;
+                });
+            }
+
             if (shiftType === 'Double Shift') {
-                const dayW = opDoubleDayWorker.value;
-                const nightW = opDoubleNightWorker.value;
-                if (!dayW || !nightW) {
+                const dayW = opDoubleDayWorker ? opDoubleDayWorker.value : '';
+                const nightW = opDoubleNightWorker ? opDoubleNightWorker.value : '';
+                const dPcs = parseInt(opDoubleDayPieces ? opDoubleDayPieces.value : 0, 10) || 0;
+                const nPcs = parseInt(opDoubleNightPieces ? opDoubleNightPieces.value : 0, 10) || 0;
+                const dayHasPcs = (totalDayPcs > 0 || dPcs > 0);
+                const nightHasPcs = (totalNightPcs > 0 || nPcs > 0);
+
+                if (!dayW && !nightW) {
                     e.preventDefault();
-                    alert('Please select both Day Operator and Night Operator for Double Shift lot.');
+                    alert('Please select at least one Operator (Day or Night). کم از کم ایک آپریٹر منتخب کریں۔');
+                    if (opDoubleDayWorker) opDoubleDayWorker.focus();
+                    return;
+                }
+                if (dayHasPcs && !dayW) {
+                    e.preventDefault();
+                    alert('Please select Day Operator for the day pieces entered.');
+                    if (opDoubleDayWorker) opDoubleDayWorker.focus();
+                    return;
+                }
+                if (nightHasPcs && !nightW) {
+                    e.preventDefault();
+                    alert('Please select Night Operator for the night pieces entered.');
+                    if (opDoubleNightWorker) opDoubleNightWorker.focus();
+                    return;
+                }
+                if (!dayHasPcs && !nightHasPcs) {
+                    e.preventDefault();
+                    alert('Please enter produced pieces for at least one element or shift. کم از کم ایک حصے کے پیسز درج کریں۔');
                     return;
                 }
             } else {
-                const dayW = opSingleWorker.value;
+                const dayW = opSingleWorker ? opSingleWorker.value : '';
                 if (!dayW) {
                     e.preventDefault();
                     alert('Please select Day Operator.');
-                    opSingleWorker.focus();
+                    if (opSingleWorker) opSingleWorker.focus();
                     return;
                 }
             }

@@ -281,8 +281,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ]);
                     $lotId = (int)$db->lastInsertId();
 
+                    // Purge any stale/orphaned variants for this lot ID
+                    $db->prepare("DELETE FROM lot_variants WHERE lot_id = ?")->execute([$lotId]);
+
                     // Insert Lot Variants with Color Code
-                    $vStmt = $db->prepare("INSERT INTO lot_variants (lot_id, color_id, color_code, size_id, quantity) VALUES (?, ?, ?, ?, ?)");
+                    $vStmt = $db->prepare("INSERT INTO lot_variants (lot_id, color_id, color_code, size_id, quantity) 
+                                           VALUES (?, ?, ?, ?, ?) 
+                                           ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity), color_code = VALUES(color_code)");
                     foreach ($validVariants as $var) {
                         // resolve color_code if blank
                         $cCode = $var['color_code'];
@@ -317,16 +322,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stepQuery->execute([$templateId]);
                     $templateSteps = $stepQuery->fetchAll();
 
+                    // Purge any pre-existing or orphaned workflow steps for this lot ID
+                    $db->prepare("DELETE FROM lot_workflow_steps WHERE lot_id = ?")->execute([$lotId]);
+
+                    $insertStep = $db->prepare("INSERT INTO lot_workflow_steps (lot_id, operation_id, sequence, is_mandatory, status) 
+                                                VALUES (?, ?, ?, ?, 'Pending') 
+                                                ON DUPLICATE KEY UPDATE sequence = VALUES(sequence), is_mandatory = VALUES(is_mandatory)");
+                    $insertedOps = [];
+
                     if (empty($templateSteps)) {
                         $allOps = $db->query("SELECT id, sequence, is_mandatory FROM operations ORDER BY sequence ASC")->fetchAll();
-                        $insertStep = $db->prepare("INSERT INTO lot_workflow_steps (lot_id, operation_id, sequence, is_mandatory, status) VALUES (?, ?, ?, ?, 'Pending')");
                         foreach ($allOps as $op) {
-                            $insertStep->execute([$lotId, $op['id'], $op['sequence'], $op['is_mandatory']]);
+                            $opId = (int)$op['id'];
+                            if (isset($insertedOps[$opId])) continue;
+                            $insertedOps[$opId] = true;
+                            $insertStep->execute([$lotId, $opId, $op['sequence'], $op['is_mandatory']]);
                         }
                     } else {
-                        $insertStep = $db->prepare("INSERT INTO lot_workflow_steps (lot_id, operation_id, sequence, is_mandatory, status) VALUES (?, ?, ?, ?, 'Pending')");
                         foreach ($templateSteps as $step) {
-                            $insertStep->execute([$lotId, $step['operation_id'], $step['sequence'], $step['is_mandatory']]);
+                            $opId = (int)$step['operation_id'];
+                            if (isset($insertedOps[$opId])) continue;
+                            $insertedOps[$opId] = true;
+                            $insertStep->execute([$lotId, $opId, $step['sequence'], $step['is_mandatory']]);
                         }
                     }
 
@@ -388,6 +405,27 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <span class="fw-semibold"><?= clean($error) ?></span>
             </div>
         <?php endif; ?>
+
+        <!-- Draft Auto-Recovery Alert Banner -->
+        <div id="draftRestoreBanner" class="alert alert-primary border-primary d-none align-items-center justify-content-between p-3 mb-4 shadow-sm rounded-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="rounded-circle bg-primary-subtle p-2 text-primary d-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                    <i class="bi bi-clock-history fs-4"></i>
+                </div>
+                <div>
+                    <strong class="text-dark d-block">Unsaved Lot Draft Found (پچھلا غیر محفوظ شدہ ڈرافٹ موجود ہے)!</strong>
+                    <span class="small text-muted" id="draftInfoText">A previous in-progress lot entry was auto-saved.</span>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-primary btn-sm fw-semibold shadow-xs" id="btnRestoreDraft">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Continue Draft (ڈرافٹ بحال کریں)
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnDiscardDraft">
+                    <i class="bi bi-trash me-1"></i> Discard (نیا شروع کریں)
+                </button>
+            </div>
+        </div>
 
         <form method="POST" action="" id="lotForm">
             <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
@@ -672,7 +710,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             </button>
                                         </div>
                                     </th>
-                                    <th style="min-width: 180px;" class="fw-bold text-dark">Size (سائز منتخب کریں) *</th>
+                                    <th style="min-width: 220px;">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span class="fw-bold text-dark">Size (سائز منتخب کریں) *</span>
+                                            <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" id="btnQuickAddSize" style="font-size: 11px;" title="Add New Size (نیا سائز شامل کریں)">
+                                                <i class="bi bi-plus-lg"></i> New Size
+                                            </button>
+                                        </div>
+                                    </th>
                                     <th class="text-center" style="width: 150px;" class="fw-bold text-dark">Available Yarn Stock</th>
                                     <th class="text-center" style="width: 190px;" class="fw-bold text-dark">
                                         Planned Pieces (تعداد) *
@@ -819,6 +864,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <div>Total Planned Pieces: <strong id="summaryPieces" class="text-primary fs-5">0</strong></div>
                 </div>
                 <div class="d-flex align-items-center gap-2">
+                    <span id="draftSaveStatus" class="small text-muted d-inline-flex align-items-center me-2">
+                        <i class="bi bi-shield-check text-success me-1"></i> Auto-Draft Active
+                    </span>
+                    <button type="button" class="btn btn-outline-primary fw-semibold" id="btnManualSaveDraft" title="Save entered values as draft so you can navigate away and continue later">
+                        <i class="bi bi-save me-1"></i> Save Draft (ڈرافٹ محفوظ کریں)
+                    </button>
                     <a href="<?= BASE_URL ?>modules/lots/index.php" class="btn btn-outline-secondary">Cancel</a>
                     <button type="submit" class="btn btn-primary px-4 fw-semibold shadow-sm" id="btnSubmitLot">
                         <i class="bi bi-check2-circle me-1"></i> Save & Launch Lot
@@ -828,6 +879,93 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
         </form>
     </div> <!-- end app-content -->
+
+<!-- Quick Add Size Modal (Real-time in Lot Form) -->
+<div class="modal fade" id="quickAddSizeModal" tabindex="-1" aria-labelledby="quickAddSizeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow border-0">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold" id="quickAddSizeModalLabel">
+                    <i class="bi bi-rulers me-2"></i>Add New Size in Real-Time (نیا سائز شامل کریں)
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="alert alert-light border small text-muted mb-3">
+                    <i class="bi bi-info-circle me-1 text-primary"></i> Adding a size here will immediately add it to your size options without page refresh or losing any typed data.
+                </div>
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Size Name * (e.g. Free Size, 2X-Large, 38)</label>
+                        <input type="text" id="quick_size_name" class="form-control" placeholder="e.g. Free Size (FS) or 40" required>
+                    </div>
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label fw-semibold">Short Code * (e.g. FS, 2XL, 40)</label>
+                        <input type="text" id="quick_size_code" class="form-control text-uppercase" placeholder="e.g. FS" required>
+                    </div>
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label fw-semibold">Sort Order (Optional)</label>
+                        <input type="number" id="quick_size_sort" class="form-control" min="1" placeholder="Next in line">
+                    </div>
+                </div>
+                <div id="quickSizeFeedback" class="small mt-2 text-danger d-none"></div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary fw-semibold" id="btnSaveQuickSize">
+                    <i class="bi bi-check-lg me-1"></i> Save & Insert Size
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Add Color Modal (Real-time in Lot Form) -->
+<div class="modal fade" id="quickAddColorModal" tabindex="-1" aria-labelledby="quickAddColorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow border-0">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold" id="quickAddColorModalLabel">
+                    <i class="bi bi-palette me-2"></i>Add New Color Code in Real-Time (نیا کلر شامل کریں)
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="alert alert-light border small text-muted mb-3">
+                    <i class="bi bi-info-circle me-1 text-primary"></i> Adding a color shade here will immediately make it selectable in the rows below without losing your work.
+                </div>
+                <div class="row g-3">
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label fw-semibold">Color / Yarn Code * (e.g. 910, 823, BLK)</label>
+                        <input type="text" id="quick_color_code" class="form-control text-uppercase font-monospace" placeholder="e.g. 910" required>
+                    </div>
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label fw-semibold">Color Name *</label>
+                        <input type="text" id="quick_color_name" class="form-control" placeholder="e.g. Bottle Green" required>
+                    </div>
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label fw-semibold">Shade Hex Color</label>
+                        <div class="input-group">
+                            <input type="color" id="quick_color_hex" class="form-control form-control-color" value="#4f46e5">
+                            <input type="text" id="quick_color_hex_txt" class="form-control font-monospace" value="#4f46e5" readonly>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label fw-semibold">Initial Yarn Stock (KG)</label>
+                        <input type="number" id="quick_color_yarn" class="form-control text-end fw-bold" step="0.01" min="0" value="50.00">
+                    </div>
+                </div>
+                <div id="quickColorFeedback" class="small mt-2 text-danger d-none"></div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary fw-semibold" id="btnSaveQuickColor">
+                    <i class="bi bi-check-lg me-1"></i> Save & Insert Color
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -1078,64 +1216,90 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnAddItemRow = document.getElementById('btnAddItemRow');
     const lotItemsTbody = document.getElementById('lotItemsTbody');
 
+    function createRow(colorId = '', sizeId = '', qty = '', colorCode = '') {
+        const rows = lotItemsTbody.querySelectorAll('.lot-item-row');
+        const newIdx = rows.length;
+
+        // Default size to previous row's selected size if not specified
+        let defaultSizeId = sizeId;
+        if (!defaultSizeId && rows.length > 0) {
+            const lastRow = rows[rows.length - 1];
+            const sSel = lastRow.querySelector('.item-size-select');
+            if (sSel && sSel.value) defaultSizeId = sSel.value;
+        }
+        if (!defaultSizeId && sizesList.length > 0) {
+            defaultSizeId = sizesList[0].id;
+        }
+
+        const tr = document.createElement('tr');
+        tr.className = 'lot-item-row';
+        tr.dataset.rowIndex = newIdx;
+        tr.innerHTML = `
+            <td class="text-center fw-bold text-muted row-num">${newIdx + 1}</td>
+            <td>
+                <select name="items[${newIdx}][color_id]" class="form-select fw-semibold item-color-select" required>
+                    ${buildColorOptionsHtml(colorId)}
+                </select>
+                <input type="hidden" name="items[${newIdx}][color_code]" class="item-color-code" value="${escapeHtml(colorCode)}">
+            </td>
+            <td>
+                <select name="items[${newIdx}][size_id]" class="form-select fw-semibold item-size-select" required>
+                    ${buildSizeOptionsHtml(defaultSizeId)}
+                </select>
+            </td>
+            <td class="text-center">
+                <div class="item-yarn-badge d-inline-flex align-items-center gap-2 px-2 py-1 bg-light border rounded">
+                    <span class="item-color-dot rounded-circle border" style="width: 14px; height: 14px; background-color: #ccc;"></span>
+                    <span class="item-yarn-text fw-semibold small text-dark">—</span>
+                </div>
+            </td>
+            <td>
+                <div class="input-group">
+                    <input type="number" name="items[${newIdx}][quantity]" class="form-control text-center fw-bold item-qty-input fs-5" min="1" placeholder="0" value="${escapeHtml(qty)}" required>
+                    <span class="input-group-text small text-muted">pcs</span>
+                </div>
+            </td>
+            <td class="text-center">
+                <button type="button" class="btn btn-outline-danger btn-sm btn-remove-item-row" title="Remove Row">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        `;
+        lotItemsTbody.appendChild(tr);
+
+        // Update color dot & yarn badge for this row if color selected
+        const cSel = tr.querySelector('.item-color-select');
+        if (cSel && cSel.value) {
+            const opt = cSel.options[cSel.selectedIndex];
+            if (opt) {
+                const hex = opt.dataset.hex || '#ccc';
+                const yarn = opt.dataset.yarn || '0';
+                const cCodeVal = opt.dataset.code || '';
+                const dot = tr.querySelector('.item-color-dot');
+                if (dot) dot.style.backgroundColor = hex;
+                const yt = tr.querySelector('.item-yarn-text');
+                if (yt) yt.textContent = `${yarn} KG`;
+                if (!colorCode && cCodeVal) {
+                    const ci = tr.querySelector('.item-color-code');
+                    if (ci) ci.value = cCodeVal;
+                }
+            }
+        }
+
+        renumberRows();
+        return tr;
+    }
+
     if (btnAddItemRow && lotItemsTbody) {
         btnAddItemRow.addEventListener('click', function() {
-            const rows = lotItemsTbody.querySelectorAll('.lot-item-row');
-            const newIdx = rows.length;
-
-            // Default size to previous row's selected size
-            let defaultSizeId = '';
-            if (rows.length > 0) {
-                const lastRow = rows[rows.length - 1];
-                const sSel = lastRow.querySelector('.item-size-select');
-                if (sSel && sSel.value) defaultSizeId = sSel.value;
-            }
-            if (!defaultSizeId && sizesList.length > 0) {
-                defaultSizeId = sizesList[0].id;
-            }
-
-            const tr = document.createElement('tr');
-            tr.className = 'lot-item-row';
-            tr.dataset.rowIndex = newIdx;
-            tr.innerHTML = `
-                <td class="text-center fw-bold text-muted row-num">${newIdx + 1}</td>
-                <td>
-                    <select name="items[${newIdx}][color_id]" class="form-select fw-semibold item-color-select" required>
-                        ${buildColorOptionsHtml('')}
-                    </select>
-                    <input type="hidden" name="items[${newIdx}][color_code]" class="item-color-code" value="">
-                </td>
-                <td>
-                    <select name="items[${newIdx}][size_id]" class="form-select fw-semibold item-size-select" required>
-                        ${buildSizeOptionsHtml(defaultSizeId)}
-                    </select>
-                </td>
-                <td class="text-center">
-                    <div class="item-yarn-badge d-inline-flex align-items-center gap-2 px-2 py-1 bg-light border rounded">
-                        <span class="item-color-dot rounded-circle border" style="width: 14px; height: 14px; background-color: #ccc;"></span>
-                        <span class="item-yarn-text fw-semibold small text-dark">—</span>
-                    </div>
-                </td>
-                <td>
-                    <div class="input-group">
-                        <input type="number" name="items[${newIdx}][quantity]" class="form-control text-center fw-bold item-qty-input fs-5" min="1" placeholder="0" required>
-                        <span class="input-group-text small text-muted">pcs</span>
-                    </div>
-                </td>
-                <td class="text-center">
-                    <button type="button" class="btn btn-outline-danger btn-sm btn-remove-item-row" title="Remove Row">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </td>
-            `;
-            lotItemsTbody.appendChild(tr);
-            renumberRows();
+            const tr = createRow();
             tr.querySelector('.item-color-select').focus();
             if (hasAnatomySwitch.checked && (parseInt(withSleevesInput.value, 10) + parseInt(sleevelessInput.value, 10)) > 0) {
                 autoDistributeAnatomyToColorRows();
             } else {
                 recalcAll();
             }
+            triggerAutoSave();
         });
 
         // Dynamic Row Removal
@@ -1220,19 +1384,166 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Register New Color Code On the Fly
-    const btnQuickAddCustomColor = document.getElementById('btnQuickAddCustomColor');
-    if (btnQuickAddCustomColor) {
-        btnQuickAddCustomColor.addEventListener('click', function() {
-            const code = prompt('Enter New Yarn / Color Code (e.g. 910 or 823):');
-            if (!code || !code.trim()) return;
-            const cleanCode = code.trim();
-            const name = prompt('Enter Color Name:', 'Shade ' + cleanCode);
+    // Real-Time Quick Add Size (Modal & AJAX)
+    const btnQuickAddSize = document.getElementById('btnQuickAddSize');
+    const quickAddSizeModalEl = document.getElementById('quickAddSizeModal');
+    const btnSaveQuickSize = document.getElementById('btnSaveQuickSize');
+    let quickAddSizeModal = null;
+    if (quickAddSizeModalEl) {
+        quickAddSizeModal = new bootstrap.Modal(quickAddSizeModalEl);
+    }
+
+    if (btnQuickAddSize && quickAddSizeModal) {
+        btnQuickAddSize.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.getElementById('quick_size_name').value = '';
+            document.getElementById('quick_size_code').value = '';
+            document.getElementById('quick_size_sort').value = '';
+            const fb = document.getElementById('quickSizeFeedback');
+            if (fb) fb.classList.add('d-none');
+            quickAddSizeModal.show();
+        });
+    }
+
+    if (btnSaveQuickSize) {
+        btnSaveQuickSize.addEventListener('click', function() {
+            const name = document.getElementById('quick_size_name').value.trim();
+            const code = document.getElementById('quick_size_code').value.trim();
+            const sort = document.getElementById('quick_size_sort').value.trim();
+            const fb = document.getElementById('quickSizeFeedback');
+
+            if (!name) {
+                if (fb) {
+                    fb.textContent = 'Please enter a size name (e.g. 2X-Large or 40).';
+                    fb.classList.remove('d-none');
+                }
+                return;
+            }
+
+            btnSaveQuickSize.disabled = true;
+            btnSaveQuickSize.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
 
             const formData = new FormData();
-            formData.append('color_code', cleanCode);
-            formData.append('name', name ? name.trim() : ('Shade ' + cleanCode));
-            formData.append('yarn_stock_kg', '100.00');
+            formData.append('name', name);
+            formData.append('code', code || name.substring(0, 5).toUpperCase());
+            if (sort) formData.append('sort_order', sort);
+
+            fetch(`<?= BASE_URL ?>modules/lots/ajax.php?action=quick_add_size`, {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(res => {
+                btnSaveQuickSize.disabled = false;
+                btnSaveQuickSize.innerHTML = '<i class="bi bi-check-lg me-1"></i> Save & Insert Size';
+
+                if (res.status === 'success' && res.size) {
+                    const s = res.size;
+                    // Add to sizesList
+                    if (!sizesList.some(item => item.id == s.id)) {
+                        sizesList.push(s);
+                    }
+
+                    // Add option to ALL existing .item-size-select dropdowns
+                    document.querySelectorAll('.item-size-select').forEach(sel => {
+                        let exists = false;
+                        for (let i = 0; i < sel.options.length; i++) {
+                            if (sel.options[i].value == s.id) { exists = true; break; }
+                        }
+                        if (!exists) {
+                            const opt = document.createElement('option');
+                            opt.value = s.id;
+                            opt.textContent = `${s.name} (${s.code})`;
+                            sel.appendChild(opt);
+                        }
+                    });
+
+                    // Select in the last row or active row
+                    const rows = document.querySelectorAll('#lotItemsTbody .lot-item-row');
+                    if (rows.length > 0) {
+                        const lastRow = rows[rows.length - 1];
+                        const sel = lastRow.querySelector('.item-size-select');
+                        if (sel) {
+                            sel.value = s.id;
+                            sel.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    }
+
+                    quickAddSizeModal.hide();
+                    recalcAll();
+                    triggerAutoSave();
+                } else {
+                    if (fb) {
+                        fb.textContent = res.message || 'Error saving size.';
+                        fb.classList.remove('d-none');
+                    } else {
+                        alert(res.message || 'Error saving size.');
+                    }
+                }
+            })
+            .catch(err => {
+                btnSaveQuickSize.disabled = false;
+                btnSaveQuickSize.innerHTML = '<i class="bi bi-check-lg me-1"></i> Save & Insert Size';
+                alert('Network error while creating size.');
+            });
+        });
+    }
+
+    // Real-Time Quick Add Color (Modal & AJAX)
+    const btnQuickAddCustomColor = document.getElementById('btnQuickAddCustomColor');
+    const quickAddColorModalEl = document.getElementById('quickAddColorModal');
+    const btnSaveQuickColor = document.getElementById('btnSaveQuickColor');
+    let quickAddColorModal = null;
+    if (quickAddColorModalEl) {
+        quickAddColorModal = new bootstrap.Modal(quickAddColorModalEl);
+    }
+
+    if (btnQuickAddCustomColor && quickAddColorModal) {
+        btnQuickAddCustomColor.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.getElementById('quick_color_code').value = '';
+            document.getElementById('quick_color_name').value = '';
+            document.getElementById('quick_color_hex').value = '#4f46e5';
+            document.getElementById('quick_color_hex_txt').value = '#4f46e5';
+            document.getElementById('quick_color_yarn').value = '50.00';
+            const fb = document.getElementById('quickColorFeedback');
+            if (fb) fb.classList.add('d-none');
+            quickAddColorModal.show();
+        });
+    }
+
+    const quickColorHex = document.getElementById('quick_color_hex');
+    const quickColorHexTxt = document.getElementById('quick_color_hex_txt');
+    if (quickColorHex && quickColorHexTxt) {
+        quickColorHex.addEventListener('input', function() {
+            quickColorHexTxt.value = this.value;
+        });
+    }
+
+    if (btnSaveQuickColor) {
+        btnSaveQuickColor.addEventListener('click', function() {
+            const code = document.getElementById('quick_color_code').value.trim();
+            const name = document.getElementById('quick_color_name').value.trim();
+            const hex = document.getElementById('quick_color_hex').value;
+            const yarn = document.getElementById('quick_color_yarn').value;
+            const fb = document.getElementById('quickColorFeedback');
+
+            if (!code) {
+                if (fb) {
+                    fb.textContent = 'Please enter a color / yarn code (e.g. 910 or BLK).';
+                    fb.classList.remove('d-none');
+                }
+                return;
+            }
+
+            btnSaveQuickColor.disabled = true;
+            btnSaveQuickColor.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+
+            const formData = new FormData();
+            formData.append('color_code', code);
+            formData.append('name', name || ('Shade ' + code));
+            formData.append('hex_code', hex);
+            formData.append('yarn_stock_kg', yarn || '50.00');
 
             fetch(`<?= BASE_URL ?>modules/lots/ajax.php?action=quick_add_color`, {
                 method: 'POST',
@@ -1240,11 +1551,14 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(r => r.json())
             .then(res => {
+                btnSaveQuickColor.disabled = false;
+                btnSaveQuickColor.innerHTML = '<i class="bi bi-check-lg me-1"></i> Save & Insert Color';
+
                 if (res.status === 'success' && res.color) {
                     const c = res.color;
                     colorsList.unshift(c);
 
-                    // Add option to all existing dropdowns
+                    // Add option to ALL existing .item-color-select dropdowns
                     document.querySelectorAll('.item-color-select').forEach(sel => {
                         const opt = document.createElement('option');
                         opt.value = c.id;
@@ -1255,19 +1569,34 @@ document.addEventListener('DOMContentLoaded', function() {
                         sel.add(opt, 1);
                     });
 
-                    // Select it in the last row
+                    // Select in the last row or active row
                     const rows = document.querySelectorAll('#lotItemsTbody .lot-item-row');
                     if (rows.length > 0) {
                         const lastRow = rows[rows.length - 1];
                         const sel = lastRow.querySelector('.item-color-select');
-                        sel.value = c.id;
-                        sel.dispatchEvent(new Event('change', { bubbles: true }));
+                        if (sel) {
+                            sel.value = c.id;
+                            sel.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
                     }
+
+                    quickAddColorModal.hide();
+                    recalcAll();
+                    triggerAutoSave();
                 } else {
-                    alert(res.message || 'Error creating color code');
+                    if (fb) {
+                        fb.textContent = res.message || 'Error saving color.';
+                        fb.classList.remove('d-none');
+                    } else {
+                        alert(res.message || 'Error saving color.');
+                    }
                 }
             })
-            .catch(() => alert('Network error while registering color.'));
+            .catch(err => {
+                btnSaveQuickColor.disabled = false;
+                btnSaveQuickColor.innerHTML = '<i class="bi bi-check-lg me-1"></i> Save & Insert Color';
+                alert('Network error while registering color.');
+            });
         });
     }
 
@@ -1367,6 +1696,262 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     recalcAll();
+
+    // =========================================================================
+    // 9. AUTOMATIC LOT DRAFT SYSTEM (Client-Side Persistence via localStorage)
+    // =========================================================================
+    const DRAFT_KEY = 'garment_lot_create_draft_v1';
+    let draftDebounceTimer = null;
+
+    function getLotFormData() {
+        const items = [];
+        document.querySelectorAll('#lotItemsTbody tr.lot-item-row').forEach(tr => {
+            const cSel = tr.querySelector('.item-color-select');
+            const cCode = tr.querySelector('.item-color-code');
+            const sSel = tr.querySelector('.item-size-select');
+            const qInp = tr.querySelector('.item-qty-input');
+            items.push({
+                color_id: cSel ? cSel.value : '',
+                color_code: cCode ? cCode.value : '',
+                size_id: sSel ? sSel.value : '',
+                quantity: qInp ? qInp.value : ''
+            });
+        });
+
+        const supervisorInp = document.querySelector('input[name="supervisor_name"]');
+        const machineInp = document.querySelector('input[name="machine_name"]');
+        const dateInp = document.querySelector('input[name="lot_date"]');
+        const expDateInp = document.querySelector('input[name="expected_date"]');
+        const instInp = document.querySelector('textarea[name="instructions"]');
+        const designNumInp = document.getElementById('design_number');
+        const designIdInp = document.getElementById('design_id');
+        const opSelect = document.querySelector('select[name="operator_id"]');
+        const nightOpSelect = document.querySelector('select[name="night_operator_id"]');
+        const notesInp = document.querySelector('input[name="anatomy_notes"]');
+
+        return {
+            lot_number: lotNumberInput ? lotNumberInput.value : '',
+            lot_date: dateInp ? dateInp.value : '',
+            product_id: productSelect ? productSelect.value : '',
+            design_number: designNumInp ? designNumInp.value : '',
+            design_id: designIdInp ? designIdInp.value : '',
+            shift_type: shiftDouble && shiftDouble.checked ? 'Double Shift' : 'Single Shift',
+            operator_id: opSelect ? opSelect.value : '',
+            night_operator_id: nightOpSelect ? nightOpSelect.value : '',
+            machine_name: machineInp ? machineInp.value : '',
+            supervisor_name: supervisorInp ? supervisorInp.value : '',
+            expected_date: expDateInp ? expDateInp.value : '',
+            instructions: instInp ? instInp.value : '',
+            has_anatomy_variants: hasAnatomySwitch && hasAnatomySwitch.checked ? 1 : 0,
+            with_sleeves_qty: withSleevesInput ? withSleevesInput.value : 0,
+            sleeveless_qty: sleevelessInput ? sleevelessInput.value : 0,
+            anatomy_notes: notesInp ? notesInp.value : '',
+            items: items,
+            saved_at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            saved_date: new Date().toLocaleDateString()
+        };
+    }
+
+    function saveDraft() {
+        try {
+            const data = getLotFormData();
+            // Only save if user has entered at least a product or item quantities or custom lot number
+            const hasContent = data.product_id || data.items.some(it => it.quantity > 0 || it.color_id);
+            if (!hasContent) return;
+
+            localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
+            const statusBadge = document.getElementById('draftSaveStatus');
+            if (statusBadge) {
+                statusBadge.innerHTML = `<i class="bi bi-cloud-check text-success me-1"></i> Draft saved at ${data.saved_at}`;
+            }
+        } catch (e) {
+            console.warn('Error saving draft:', e);
+        }
+    }
+
+    function triggerAutoSave() {
+        clearTimeout(draftDebounceTimer);
+        draftDebounceTimer = setTimeout(saveDraft, 400);
+    }
+
+    // Attach auto-save listeners to the entire form
+    const lotForm = document.getElementById('lotForm');
+    if (lotForm) {
+        lotForm.addEventListener('input', triggerAutoSave);
+        lotForm.addEventListener('change', triggerAutoSave);
+        // Clear draft when form is successfully submitted
+        lotForm.addEventListener('submit', function() {
+            localStorage.removeItem(DRAFT_KEY);
+        });
+    }
+
+    window.addEventListener('beforeunload', function() {
+        saveDraft();
+    });
+
+    // Check for existing draft on load
+    function checkExistingDraft() {
+        try {
+            const raw = localStorage.getItem(DRAFT_KEY);
+            if (!raw) return;
+            const draft = JSON.parse(raw);
+            if (!draft || (!draft.product_id && (!draft.items || draft.items.length === 0))) return;
+
+            const banner = document.getElementById('draftRestoreBanner');
+            const infoText = document.getElementById('draftInfoText');
+            if (banner && infoText) {
+                const rowCount = draft.items ? draft.items.length : 0;
+                infoText.innerHTML = `Auto-saved at <strong>${escapeHtml(draft.saved_at)} (${escapeHtml(draft.saved_date)})</strong> with <strong>${rowCount} batch row(s)</strong> and entered fields.`;
+                banner.classList.remove('d-none');
+                banner.classList.add('d-flex');
+            }
+        } catch (e) {
+            console.warn('Error checking draft:', e);
+        }
+    }
+
+    // Restore Draft Handler
+    const btnRestoreDraft = document.getElementById('btnRestoreDraft');
+    if (btnRestoreDraft) {
+        btnRestoreDraft.addEventListener('click', function() {
+            try {
+                const raw = localStorage.getItem(DRAFT_KEY);
+                if (!raw) return;
+                const draft = JSON.parse(raw);
+                if (!draft) return;
+
+                // 1. Restore scalar fields
+                if (draft.lot_number && lotNumberInput) {
+                    lotNumberInput.value = draft.lot_number;
+                    lotNumberInput.dispatchEvent(new Event('input'));
+                }
+                if (draft.lot_date) {
+                    const d = document.querySelector('input[name="lot_date"]');
+                    if (d) d.value = draft.lot_date;
+                }
+                if (draft.design_number) {
+                    const dn = document.getElementById('design_number');
+                    if (dn) dn.value = draft.design_number;
+                }
+                if (draft.design_id) {
+                    const di = document.getElementById('design_id');
+                    if (di) di.value = draft.design_id;
+                }
+                if (draft.machine_name) {
+                    const m = document.querySelector('input[name="machine_name"]');
+                    if (m) m.value = draft.machine_name;
+                }
+                if (draft.supervisor_name) {
+                    const s = document.querySelector('input[name="supervisor_name"]');
+                    if (s) s.value = draft.supervisor_name;
+                }
+                if (draft.expected_date) {
+                    const ed = document.querySelector('input[name="expected_date"]');
+                    if (ed) ed.value = draft.expected_date;
+                }
+                if (draft.instructions) {
+                    const ins = document.querySelector('textarea[name="instructions"]');
+                    if (ins) ins.value = draft.instructions;
+                }
+
+                // Shift & Operators
+                if (draft.shift_type === 'Double Shift') {
+                    if (shiftDouble) shiftDouble.checked = true;
+                } else {
+                    if (shiftSingle) shiftSingle.checked = true;
+                }
+                updateShiftView();
+
+                if (draft.operator_id) {
+                    const op = document.querySelector('select[name="operator_id"]');
+                    if (op) op.value = draft.operator_id;
+                }
+                if (draft.night_operator_id) {
+                    const nop = document.querySelector('select[name="night_operator_id"]');
+                    if (nop) nop.value = draft.night_operator_id;
+                }
+
+                // Anatomy Breakdown
+                if (hasAnatomySwitch) {
+                    hasAnatomySwitch.checked = (draft.has_anatomy_variants == 1);
+                    hasAnatomySwitch.dispatchEvent(new Event('change'));
+                }
+                if (draft.with_sleeves_qty && withSleevesInput) withSleevesInput.value = draft.with_sleeves_qty;
+                if (draft.sleeveless_qty && sleevelessInput) sleevelessInput.value = draft.sleeveless_qty;
+                if (draft.anatomy_notes) {
+                    const an = document.querySelector('input[name="anatomy_notes"]');
+                    if (an) an.value = draft.anatomy_notes;
+                }
+
+                // 2. Restore Product
+                if (draft.product_id && productSelect) {
+                    productSelect.value = draft.product_id;
+                    productSelect.dispatchEvent(new Event('change'));
+                }
+
+                // 3. Restore Items Rows
+                if (draft.items && draft.items.length > 0) {
+                    lotItemsTbody.innerHTML = '';
+                    draft.items.forEach(it => {
+                        createRow(it.color_id, it.size_id, it.quantity, it.color_code);
+                    });
+                }
+
+                recalcAll();
+
+                // Hide banner
+                const banner = document.getElementById('draftRestoreBanner');
+                if (banner) {
+                    banner.classList.add('d-none');
+                    banner.classList.remove('d-flex');
+                }
+
+                const statusBadge = document.getElementById('draftSaveStatus');
+                if (statusBadge) {
+                    statusBadge.innerHTML = `<i class="bi bi-check-circle text-primary me-1"></i> Draft restored (${draft.saved_at})`;
+                }
+            } catch (err) {
+                console.error('Failed to restore draft:', err);
+                alert('Could not fully restore draft.');
+            }
+        });
+    }
+
+    // Discard Draft Handler
+    const btnDiscardDraft = document.getElementById('btnDiscardDraft');
+    if (btnDiscardDraft) {
+        btnDiscardDraft.addEventListener('click', function() {
+            if (confirm('Are you sure you want to discard this saved draft and start fresh? (کیا آپ اس ڈرافٹ کو ختم کرنا چاہتے ہیں؟)')) {
+                localStorage.removeItem(DRAFT_KEY);
+                const banner = document.getElementById('draftRestoreBanner');
+                if (banner) {
+                    banner.classList.add('d-none');
+                    banner.classList.remove('d-flex');
+                }
+                const statusBadge = document.getElementById('draftSaveStatus');
+                if (statusBadge) {
+                    statusBadge.innerHTML = `<i class="bi bi-shield-check text-success me-1"></i> Auto-Draft Active`;
+                }
+            }
+        });
+    }
+
+    // Manual Save Draft Button Handler
+    const btnManualSaveDraft = document.getElementById('btnManualSaveDraft');
+    if (btnManualSaveDraft) {
+        btnManualSaveDraft.addEventListener('click', function() {
+            saveDraft();
+            const statusBadge = document.getElementById('draftSaveStatus');
+            const data = getLotFormData();
+            if (statusBadge) {
+                statusBadge.innerHTML = `<i class="bi bi-cloud-check-fill text-success me-1"></i> Draft saved at ${data.saved_at}`;
+            }
+            alert('✓ Draft saved successfully! (ڈرافٹ محفوظ ہو گیا ہے)\n\nYou can now navigate anywhere or close your page. All entered details and rows will be restored when you return.');
+        });
+    }
+
+    // Run check on load
+    checkExistingDraft();
 });
 </script>
 

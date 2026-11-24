@@ -206,4 +206,44 @@ if ($action === 'quick_add_color') {
     json_response(['status' => 'success', 'color' => $newColor, 'is_new' => true]);
 }
 
+if ($action === 'quick_add_size') {
+    $name = trim($_POST['name'] ?? '');
+    $code = trim($_POST['code'] ?? '');
+    $sort = isset($_POST['sort_order']) && $_POST['sort_order'] !== '' ? (int)$_POST['sort_order'] : 0;
+
+    if (empty($name)) {
+        json_response(['status' => 'error', 'message' => 'Size name is required.'], 400);
+    }
+    if (empty($code)) {
+        $code = strtoupper(substr($name, 0, 5));
+    }
+
+    // Check if code or name already exists
+    $chk = $db->prepare("SELECT * FROM sizes WHERE LOWER(name) = LOWER(?) OR (LOWER(code) = LOWER(?) AND code != '') LIMIT 1");
+    $chk->execute([$name, $code]);
+    $existing = $chk->fetch();
+
+    if ($existing) {
+        json_response(['status' => 'success', 'size' => $existing, 'is_new' => false]);
+    }
+
+    if ($sort <= 0) {
+        $maxSort = (int)$db->query("SELECT COALESCE(MAX(sort_order), 0) FROM sizes")->fetchColumn();
+        $sort = $maxSort + 1;
+    }
+
+    $stmt = $db->prepare("INSERT INTO sizes (name, code, sort_order) VALUES (?, ?, ?)");
+    $stmt->execute([$name, $code, $sort]);
+    $newId = (int)$db->lastInsertId();
+
+    $newSize = [
+        'id' => $newId,
+        'name' => $name,
+        'code' => $code,
+        'sort_order' => $sort
+    ];
+
+    json_response(['status' => 'success', 'size' => $newSize, 'is_new' => true]);
+}
+
 json_response(['status' => 'error', 'message' => 'Unknown action'], 400);

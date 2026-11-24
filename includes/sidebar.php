@@ -57,6 +57,10 @@ $activeNav = $activeNav ?? 'dashboard';
             <i class="bi bi-people-fill"></i>
             <span>Workers & Ledgers</span>
         </a>
+        <a href="<?= BASE_URL ?>modules/payments/weekly.php" class="nav-link <?= $activeNav === 'weekly_payments' ? 'active' : '' ?>">
+            <i class="bi bi-calendar2-week-fill text-warning"></i>
+            <span>Weekly Payments (ویکلی پیمنٹس)</span>
+        </a>
         <a href="<?= BASE_URL ?>modules/payments/index.php" class="nav-link <?= $activeNav === 'payments' ? 'active' : '' ?>">
             <i class="bi bi-cash-stack"></i>
             <span>Labour Payments</span>
@@ -91,6 +95,10 @@ $activeNav = $activeNav ?? 'dashboard';
         <a href="<?= BASE_URL ?>modules/inventory/index.php" class="nav-link <?= $activeNav === 'finished_goods' ? 'active' : '' ?>">
             <i class="bi bi-tags-fill"></i>
             <span>Finished Goods Stock</span>
+        </a>
+        <a href="<?= BASE_URL ?>modules/inventory/transfer.php" class="nav-link <?= $activeNav === 'stock_transfer' ? 'active' : '' ?>">
+            <i class="bi bi-arrow-left-right text-primary"></i>
+            <span>Warehouse Transfers</span>
         </a>
 
         <!-- Dispatch & Sales -->
@@ -136,6 +144,10 @@ $activeNav = $activeNav ?? 'dashboard';
 
         <!-- Settings -->
         <div class="nav-section-title">Administration</div>
+        <a href="<?= BASE_URL ?>modules/settings/warehouses.php" class="nav-link <?= $activeNav === 'settings_wh' ? 'active' : '' ?>">
+            <i class="bi bi-building"></i>
+            <span>Warehouses (گودام)</span>
+        </a>
         <a href="<?= BASE_URL ?>modules/settings/operations.php" class="nav-link <?= $activeNav === 'settings_ops' ? 'active' : '' ?>">
             <i class="bi bi-gear-wide-connected"></i>
             <span>Operations & Rates</span>

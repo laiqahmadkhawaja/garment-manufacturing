@@ -63,6 +63,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize System-Wide Searchable Select Boxes (Lots & Key Entities)
     initSearchableSelects();
+
+    // Initialize System-Wide Two-Way Synchronization between Payment Method and Accounts
+    initPaymentAccountSync();
+
+    // Hook to dynamically initialize modals when opened
+    document.addEventListener('shown.bs.modal', function(e) {
+        if (e.target) initPaymentAccountSync(e.target);
+    });
 });
 
 /**
@@ -643,5 +651,188 @@ function showToast(message, type = 'success') {
         const bsToast = new bootstrap.Toast(toastEl);
         bsToast.show();
         toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+    }
+}
+
+/**
+ * Universal Two-Way Synchronization between Payment Method and Cash/Bank Accounts
+ * Criteria:
+ * 1. If user selects "Cash" in Payment Method: ONLY Cash accounts are shown in Accounts dropdown.
+ * 2. If user selects "Bank Transfer", "Cheque", or "Online": ONLY Bank accounts are shown in Accounts dropdown.
+ * 3. If user selects a Cash account first: Payment Method automatically becomes "Cash".
+ * 4. If user selects a Bank account first: Payment Method automatically becomes "Bank Transfer" (or keeps "Cheque" if already set).
+ */
+function initPaymentAccountSync(container = document) {
+    const explicitPairs = [
+        ['#global_payment_method', '#global_account_id'],
+        ['#m_payment_method', '#m_account_id'],
+        ['#bulk_payment_method', '#bulk_account_id'],
+        ['#dispPaymentMethod', '#dispAccountId'],
+        ['#purPaymentMethod', '#purAccountId'],
+        ['select[name="payment_method"]', 'select[name="account_id"]']
+    ];
+
+    const boundElements = new Set();
+
+    // Check specific pairs
+    explicitPairs.forEach(([mSel, aSel]) => {
+        const mEls = container.querySelectorAll(mSel);
+        const aEls = container.querySelectorAll(aSel);
+        if (mEls.length === 1 && aEls.length === 1) {
+            const mEl = mEls[0];
+            const aEl = aEls[0];
+            if (!boundElements.has(mEl) && !boundElements.has(aEl)) {
+                bindPaymentAccountPair(mEl, aEl);
+                boundElements.add(mEl);
+                boundElements.add(aEl);
+            }
+        }
+    });
+
+    // Check forms, modals, or card blocks containing both
+    const scopes = container.querySelectorAll ? container.querySelectorAll('form, .modal, .card, .card-modern') : [];
+    scopes.forEach(scope => {
+        const mEls = scope.querySelectorAll('select[name="payment_method"]');
+        const aEls = scope.querySelectorAll('select[name="account_id"]');
+        if (mEls.length === 1 && aEls.length === 1) {
+            const mEl = mEls[0];
+            const aEl = aEls[0];
+            if (!boundElements.has(mEl) && !boundElements.has(aEl)) {
+                bindPaymentAccountPair(mEl, aEl);
+                boundElements.add(mEl);
+                boundElements.add(aEl);
+            }
+        }
+    });
+}
+
+function bindPaymentAccountPair(methodSelect, accountSelect) {
+    if (!methodSelect || !accountSelect || methodSelect._syncBound) return;
+    methodSelect._syncBound = true;
+    accountSelect._syncBound = true;
+
+    function getOptionType(opt) {
+        if (!opt) return 'placeholder';
+        if (opt.dataset && opt.dataset.type) return opt.dataset.type.toLowerCase();
+        const val = String(opt.value || '').trim();
+        const txt = (opt.textContent || '').toLowerCase();
+        if (txt.includes('cash') || txt.includes('drawer') || txt.includes('petty') || txt.includes('روکڑ') || txt.includes('کیش') || txt.includes('register')) {
+            return 'cash';
+        }
+        if (val === '' || val === '0') {
+            if (txt.includes('direct') || txt.includes('drawer') || txt.includes('cash')) return 'cash';
+            return 'placeholder';
+        }
+        return 'bank';
+    }
+
+    function getMethodType(val) {
+        const str = String(val || '').toLowerCase();
+        if (str.includes('cash') || str.includes('نقد') || str.includes('کیش')) {
+            return 'cash';
+        }
+        if (str.includes('bank') || str.includes('بینک') || str.includes('transfer') || str.includes('online') || str.includes('cheque') || str.includes('چیک') || str.includes('mobile') || str.includes('draft') || str.includes('jazz') || str.includes('easy')) {
+            return 'bank';
+        }
+        return 'cash';
+    }
+
+    // Cache original options from accountSelect
+    const cachedOptions = Array.from(accountSelect.options).map(opt => ({
+        value: opt.value,
+        text: opt.textContent,
+        type: getOptionType(opt),
+        disabled: opt.disabled,
+        selected: opt.selected
+    }));
+
+    let isUpdating = false;
+
+    function filterAccountDropdown(targetType, preserveCurrent = true) {
+        const currentVal = accountSelect.value;
+        accountSelect.innerHTML = '';
+
+        let foundCurrent = false;
+        let firstTypeMatch = null;
+
+        cachedOptions.forEach(optData => {
+            if (optData.type === 'placeholder' || optData.type === targetType) {
+                const opt = document.createElement('option');
+                opt.value = optData.value;
+                opt.textContent = optData.text;
+                opt.dataset.type = optData.type;
+                opt.disabled = optData.disabled;
+
+                if (preserveCurrent && optData.value === currentVal) {
+                    opt.selected = true;
+                    foundCurrent = true;
+                }
+                if (!firstTypeMatch && optData.type === targetType && (optData.value !== '' || optData.type === 'cash')) {
+                    firstTypeMatch = opt;
+                }
+                accountSelect.appendChild(opt);
+            }
+        });
+
+        if (!foundCurrent && firstTypeMatch) {
+            firstTypeMatch.selected = true;
+        }
+    }
+
+    // Event 1: Payment Method changed by user
+    methodSelect.addEventListener('change', function() {
+        if (isUpdating) return;
+        isUpdating = true;
+        try {
+            const mType = getMethodType(this.value);
+            filterAccountDropdown(mType, false);
+        } finally {
+            isUpdating = false;
+        }
+    });
+
+    // Event 2: Account changed by user
+    accountSelect.addEventListener('change', function() {
+        if (isUpdating) return;
+        isUpdating = true;
+        try {
+            const selectedOpt = this.selectedOptions[0];
+            const accType = getOptionType(selectedOpt);
+
+            if (accType === 'cash') {
+                for (let i = 0; i < methodSelect.options.length; i++) {
+                    if (getMethodType(methodSelect.options[i].value) === 'cash') {
+                        methodSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+                filterAccountDropdown('cash', true);
+            } else if (accType === 'bank') {
+                const curM = String(methodSelect.value || '').toLowerCase();
+                // Keep Cheque if already Cheque
+                if (!curM.includes('cheque') && !curM.includes('چیک')) {
+                    for (let i = 0; i < methodSelect.options.length; i++) {
+                        const val = methodSelect.options[i].value.toLowerCase();
+                        if (val.includes('bank transfer') || val.includes('bank') || val.includes('online')) {
+                            methodSelect.selectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+                filterAccountDropdown('bank', true);
+            }
+        } finally {
+            isUpdating = false;
+        }
+    });
+
+    // Initial Sync
+    const currentOpt = accountSelect.selectedOptions[0];
+    const initialAccType = getOptionType(currentOpt);
+    if (accountSelect.value && (initialAccType === 'cash' || initialAccType === 'bank')) {
+        accountSelect.dispatchEvent(new Event('change'));
+    } else {
+        const initialMType = getMethodType(methodSelect.value);
+        filterAccountDropdown(initialMType, true);
     }
 }

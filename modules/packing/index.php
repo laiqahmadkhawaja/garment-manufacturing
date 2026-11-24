@@ -78,6 +78,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <i class="bi bi-box-seam-fill"></i>
                     <span>⚡ Record Workflow Packing</span>
                 </a>
+                <a href="<?= BASE_URL ?>modules/inventory/transfer.php" class="btn btn-outline-primary btn-sm d-flex align-items-center gap-1">
+                    <i class="bi bi-arrow-left-right"></i>
+                    <span>Warehouse Transfers</span>
+                </a>
                 <a href="<?= BASE_URL ?>modules/inventory/index.php" class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1">
                     <i class="bi bi-tags-fill"></i>
                     <span>Finished Stock</span>

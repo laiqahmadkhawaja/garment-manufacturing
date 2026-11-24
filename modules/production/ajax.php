@@ -36,7 +36,7 @@ if ($action === 'get_lot_operations_and_variants') {
     $opStmt = $db->prepare("SELECT o.id AS operation_id, 
                             COALESCE(lws.sequence, o.sequence) AS sequence,
                             COALESCE(lws.sequence, (COALESCE(p_op.sequence, 10) + (o.sequence / 100))) AS effective_seq,
-                            o.name AS op_name, o.code AS op_code, o.default_rate, o.estimated_minutes,
+                            o.name AS op_name, o.code AS op_code, o.description, o.default_rate, o.rate_unit, o.estimated_minutes,
                             o.parent_id, p_op.name AS parent_op_name, dep.name AS dept_name,
                             (SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = ? AND operation_id = o.id) AS good_done
                             FROM operations o
@@ -343,7 +343,7 @@ if ($action === 'get_operation_workers') {
     $opId = (int)($_GET['operation_id'] ?? 0);
 
     // Fetch operation details
-    $opStmt = $db->prepare("SELECT id, name, parent_id, department_id, default_rate, estimated_minutes FROM operations WHERE id = ?");
+    $opStmt = $db->prepare("SELECT id, name, code, description, parent_id, department_id, default_rate, rate_unit, estimated_minutes FROM operations WHERE id = ?");
     $opStmt->execute([$opId]);
     $operation = $opStmt->fetch();
 

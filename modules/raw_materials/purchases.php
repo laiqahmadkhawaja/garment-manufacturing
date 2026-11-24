@@ -478,9 +478,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <div class="col-12 col-md-3" id="payAccountWrapper">
                                         <label class="form-label small fw-semibold text-muted mb-1">Paid From (اکاؤنٹ / کیش رجسٹر)</label>
                                         <select name="account_id" id="purAccountId" class="form-select form-select-sm fw-semibold">
-                                            <option value="">-- Direct Factory Cash Drawer --</option>
-                                            <?php foreach ($accounts as $acc): ?>
-                                                <option value="<?= $acc['id'] ?>">
+                                            <option value="" data-type="cash">-- Direct Factory Cash Drawer --</option>
+                                            <?php foreach ($accounts as $acc): 
+                                                $isCash = (stripos($acc['account_name'], 'cash') !== false || stripos($acc['bank_name'] ?? '', 'cash') !== false || stripos($acc['bank_name'] ?? '', 'drawer') !== false);
+                                                $accType = $isCash ? 'cash' : 'bank';
+                                            ?>
+                                                <option value="<?= $acc['id'] ?>" data-type="<?= $accType ?>">
                                                     <?= clean($acc['account_name']) ?> (Bal: Rs. <?= number_format((float)$acc['current_balance'], 2) ?>)
                                                 </option>
                                             <?php endforeach; ?>

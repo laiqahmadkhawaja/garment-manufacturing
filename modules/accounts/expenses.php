@@ -508,9 +508,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <div class="col-12 col-sm-6">
                             <label class="form-label fw-semibold">Paid From Account *</label>
                             <select name="account_id" class="form-select fw-bold text-primary" required>
-                                <option value="">-- Choose Account --</option>
-                                <?php foreach ($accounts as $acc): ?>
-                                    <option value="<?= $acc['id'] ?>">
+                                <option value="" data-type="placeholder">-- Choose Account --</option>
+                                <?php foreach ($accounts as $acc): 
+                                    $isCash = (stripos($acc['account_name'], 'cash') !== false || stripos($acc['bank_name'] ?? '', 'cash') !== false || stripos($acc['bank_name'] ?? '', 'drawer') !== false);
+                                    $accType = $isCash ? 'cash' : 'bank';
+                                ?>
+                                    <option value="<?= $acc['id'] ?>" data-type="<?= $accType ?>">
                                         <?= clean($acc['account_name']) ?> (<?= format_currency($acc['current_balance']) ?>)
                                     </option>
                                 <?php endforeach; ?>

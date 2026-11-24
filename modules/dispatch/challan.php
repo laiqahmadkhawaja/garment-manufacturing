@@ -44,12 +44,12 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Delivery Challan - <?= clean($dispatch['challan_no']) ?></title>
+    <title>Delivery Challan & Gate Pass - <?= clean($dispatch['challan_no']) ?></title>
     <link rel="stylesheet" href="<?= BASE_URL ?>assets/css/bootstrap.min.css">
     <link rel="stylesheet" href="<?= BASE_URL ?>assets/css/bootstrap-icons.css">
     <style>
         body { background: #fff !important; color: #000; font-size: 13px; }
-        .challan-box { border: 2px solid #000; padding: 25px; max-width: 800px; margin: 0 auto; }
+        .challan-box { border: 2px solid #000; padding: 25px; max-width: 850px; margin: 0 auto; }
         .table-bordered th, .table-bordered td { border: 1px solid #000 !important; }
         @media print {
             .no-print { display: none !important; }
@@ -58,13 +58,13 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
     </style>
 </head>
 <body class="p-4">
-    <div class="no-print d-flex justify-content-between align-items-center mb-4 p-3 bg-light border rounded" style="max-width: 800px; margin: 0 auto;">
+    <div class="no-print d-flex justify-content-between align-items-center mb-4 p-3 bg-light border rounded" style="max-width: 850px; margin: 0 auto;">
         <div>
-            <h5 class="mb-0 fw-bold">Customer Delivery Challan (Bilty / Gate Pass)</h5>
-            <small class="text-muted">Outward stock movement documentation</small>
+            <h5 class="mb-0 fw-bold">Customer Delivery Challan & Gate Pass (ڈیلیوری چالان و گیٹ پاس)</h5>
+            <small class="text-muted">Outward multi-lot stock movement & gate clearance documentation</small>
         </div>
         <div class="d-flex gap-2">
-            <button type="button" onclick="window.print()" class="btn btn-primary fw-bold"><i class="bi bi-printer me-1"></i> Print Challan</button>
+            <button type="button" onclick="window.print()" class="btn btn-primary fw-bold"><i class="bi bi-printer me-1"></i> Print Challan & Gate Pass</button>
             <button type="button" onclick="closePrintView('<?= BASE_URL ?>modules/dispatch/index.php')" class="btn btn-outline-secondary">
                 <i class="bi bi-x-circle me-1"></i> Close
             </button>
@@ -79,7 +79,8 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
                 <div class="small text-muted"><?= clean($companyAddress) ?> · Tel: <?= clean($companyPhone) ?></div>
             </div>
             <div class="text-end">
-                <div class="badge bg-dark text-white fs-6 px-3 py-2">DELIVERY CHALLAN</div>
+                <div class="badge bg-dark text-white fs-6 px-3 py-2 mb-1">DELIVERY CHALLAN & GATE PASS</div>
+                <div class="small text-muted fw-bold">(ڈیلیوری چالان و گیٹ پاس)</div>
                 <div class="fw-bold fs-6 mt-1 text-primary"><?= clean($dispatch['challan_no']) ?></div>
                 <div class="small text-muted">Dispatch #: <?= clean($dispatch['dispatch_number']) ?></div>
                 <div class="small text-dark fw-semibold">Date: <?= format_date($dispatch['dispatch_date']) ?></div>
@@ -90,13 +91,13 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
         <table class="table table-bordered mb-4">
             <tbody>
                 <tr>
-                    <th class="bg-light" style="width: 20%;">Delivered To:</th>
+                    <th class="bg-light" style="width: 20%;">Delivered To (کسٹمر / پارٹی):</th>
                     <td style="width: 40%;" class="fw-bold fs-6">
                         <?= clean($dispatch['customer_name']) ?>
                         <div class="small text-muted fw-normal"><?= clean($dispatch['address'] ?: 'City Market') ?>, <?= clean($dispatch['city']) ?></div>
                         <div class="small text-muted fw-normal">Attn: <?= clean($dispatch['contact_person'] ?: 'Store Manager') ?> · Tel: <?= clean($dispatch['phone']) ?></div>
                     </td>
-                    <th class="bg-light" style="width: 15%;">Transport:</th>
+                    <th class="bg-light" style="width: 15%;">Transport & Gate:</th>
                     <td style="width: 25%;">
                         <div class="fw-semibold"><?= clean($dispatch['vehicle_details'] ?: 'Direct Factory Pickup') ?></div>
                         <div class="small text-muted">From: <?= clean($dispatch['warehouse_name']) ?></div>
@@ -104,7 +105,7 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
                 </tr>
                 <?php if ($dispatch['notes']): ?>
                 <tr>
-                    <th class="bg-light">Special Notes:</th>
+                    <th class="bg-light">Special Notes / Gate Instructions:</th>
                     <td colspan="3"><?= clean($dispatch['notes']) ?></td>
                 </tr>
                 <?php endif; ?>
@@ -112,17 +113,17 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
         </table>
 
         <!-- Itemized Products Table -->
-        <h6 class="fw-bold text-uppercase border-bottom pb-1 mb-2">Dispatched Garment Quantities</h6>
+        <h6 class="fw-bold text-uppercase border-bottom pb-1 mb-2">Dispatched Garment Quantities (ملٹی لاٹ آئٹمز)</h6>
         <table class="table table-bordered align-middle text-center mb-4">
             <thead>
                 <tr class="bg-light">
-                    <th>#</th>
+                    <th style="width: 35px;">#</th>
                     <th class="text-start">Product & Design Description</th>
-                    <th>Batch / Lot #</th>
-                    <th>Color & Size</th>
-                    <th class="text-end">Quantity (Pcs)</th>
-                    <th class="text-end">Unit Rate</th>
-                    <th class="text-end">Total Amount</th>
+                    <th style="width: 120px;">Batch / Lot #</th>
+                    <th style="width: 140px;">Color & Size</th>
+                    <th class="text-end" style="width: 110px;">Quantity (Pcs)</th>
+                    <th class="text-end" style="width: 100px;">Unit Rate</th>
+                    <th class="text-end" style="width: 120px;">Total Amount</th>
                 </tr>
             </thead>
             <tbody>
@@ -143,44 +144,63 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
             </tbody>
             <tfoot>
                 <tr class="bg-light fw-bold">
-                    <td colspan="4" class="text-end">Total Dispatched Pieces:</td>
+                    <td colspan="4" class="text-end">Total Dispatched Pieces (کل تعداد):</td>
                     <td class="text-end fs-6 text-success"><?= number_format($dispatch['total_pieces']) ?> pcs</td>
                     <td class="text-end">Total Value:</td>
-                    <td class="text-end fs-6">Rs. <?= number_format($dispatch['total_value'], 2) ?></td>
+                    <td class="text-end fs-6 text-primary">Rs. <?= number_format($dispatch['total_value'], 2) ?></td>
                 </tr>
-                <?php if ((float)$dispatch['total_value'] > 0): ?>
+                <?php 
+                $pStat = $dispatch['payment_status'] ?? 'Credit';
+                $paid = (float)($dispatch['paid_amount'] ?? 0);
+                $bal = (float)($dispatch['balance_amount'] ?? 0);
+                $badgeClass = ($pStat === 'Paid') ? 'bg-success text-white' : (($pStat === 'Partial') ? 'bg-warning text-dark' : 'bg-danger text-white');
+                $urduStatus = ($pStat === 'Paid') ? 'مکمل ادا شدہ (FULL PAID)' : (($pStat === 'Partial') ? 'جزوی ادائیگی (PARTIAL PAID)' : 'مکمل ادھار / باقی (UNPAID / CREDIT)');
+                ?>
                 <tr class="bg-white">
-                    <td colspan="4" class="text-end small">
-                        <strong>Payment Status:</strong> 
-                        <span class="badge bg-dark text-white"><?= clean($dispatch['payment_status'] ?? 'Credit') ?></span>
-                        via <?= clean($dispatch['payment_method'] ?? 'Cash') ?>
-                        <?= !empty($dispatch['payment_reference']) ? ' · Ref: ' . clean($dispatch['payment_reference']) : '' ?>
+                    <td colspan="3" class="text-start py-2">
+                        <div class="small fw-bold text-dark mb-1">Billing & Settlement Status (بل کی صورتحال):</div>
+                        <span class="badge <?= $badgeClass ?> fs-6 px-2 py-1">
+                            <i class="bi <?= $pStat === 'Paid' ? 'bi-check-circle-fill' : ($pStat === 'Partial' ? 'bi-pie-chart-fill' : 'bi-clock-history') ?> me-1"></i>
+                            <?= $urduStatus ?>
+                        </span>
+                        <div class="small text-muted mt-1">
+                            via <?= clean($dispatch['payment_method'] ?? 'Cash') ?>
+                            <?= !empty($dispatch['payment_reference']) ? ' · Ref: ' . clean($dispatch['payment_reference']) : '' ?>
+                        </div>
                     </td>
-                    <td class="text-end small fw-semibold text-success">
-                        Paid: Rs. <?= number_format((float)($dispatch['paid_amount'] ?? 0), 2) ?>
+                    <td colspan="2" class="text-end py-2">
+                        <div class="small text-muted">Amount Received (وصول شدہ):</div>
+                        <div class="fs-6 fw-bold text-success">Rs. <?= number_format($paid, 2) ?></div>
                     </td>
-                    <td class="text-end small" colspan="2">
-                        Balance Due: <strong class="text-danger">Rs. <?= number_format((float)($dispatch['balance_amount'] ?? 0), 2) ?></strong>
+                    <td colspan="2" class="text-end py-2">
+                        <div class="small text-muted">Balance Due (بقیہ واجب الادا):</div>
+                        <div class="fs-6 fw-bold <?= $bal > 0 ? 'text-danger' : 'text-success' ?>">Rs. <?= number_format($bal, 2) ?></div>
                     </td>
                 </tr>
-                <?php endif; ?>
             </tfoot>
         </table>
 
         <div class="p-2 border bg-light small mb-4">
-            <strong>Goods Condition Warranty:</strong> Goods checked, packed and dispatched in prime export condition. Any discrepancy or damage must be notified in writing within 48 hours of delivery.
+            <strong>Goods Condition Warranty & Gate Clearance:</strong> تمام مال پیکنگ اور کوالٹی چیک کے بعد درست حالت میں روانہ کیا گیا ہے۔ فیکٹری گیٹ سے مال نکلنے کے بعد کسی بھی کلیم کے لیے 48 گھنٹوں میں مطلع فرمائیں۔
         </div>
 
         <!-- Signature Section -->
         <div class="row pt-5 mt-4 border-top text-center">
-            <div class="col-4">
+            <div class="col-3">
                 <div class="border-top border-dark pt-1 fw-bold">Prepared / Dispatched By</div>
+                <div class="small text-muted" style="font-size: 11px;">(تیار کنندہ دستخط)</div>
             </div>
-            <div class="col-4">
-                <div class="border-top border-dark pt-1 fw-bold">Driver / Transport Signature</div>
+            <div class="col-3">
+                <div class="border-top border-dark pt-1 fw-bold">Security / Gate Officer</div>
+                <div class="small text-muted" style="font-size: 11px;">(گیٹ پاس کلیئرنس)</div>
             </div>
-            <div class="col-4">
+            <div class="col-3">
+                <div class="border-top border-dark pt-1 fw-bold">Driver / Transport Sign</div>
+                <div class="small text-muted" style="font-size: 11px;">(ڈرائیور / بلٹی دستخط)</div>
+            </div>
+            <div class="col-3">
                 <div class="border-top border-dark pt-1 fw-bold">Receiver / Party Stamp & Sign</div>
+                <div class="small text-muted" style="font-size: 11px;">(کسٹمر مہر و دستخط)</div>
             </div>
         </div>
     </div>

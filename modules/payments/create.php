@@ -200,15 +200,21 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <label class="form-label">Payment Amount (Rs.) *</label>
                             <div class="input-group">
                                 <span class="input-group-text">Rs.</span>
-                                <input type="number" name="amount" id="payAmount" class="form-control form-control-lg fw-bold text-success text-end" step="1" min="1" placeholder="0" required>
+                                <input type="number" name="amount" id="payAmount" class="form-control form-control-lg fw-bold text-success text-end" step="any" min="0.01" placeholder="0" required>
                             </div>
                         </div>
 
                         <div class="col-12 col-md-4">
                             <label class="form-label">Payment Method</label>
                             <select name="payment_method" class="form-select">
+                                <option value="Cash">Cash (نقد)</option>
+                                <option value="Bank Transfer">Bank Transfer (بینک)</option>
+                                <option value="Cheque">Cheque (چیک)</option>
+                                <option value="Online / Mobile">Online</option>
                                 <?php foreach ($methods as $m): ?>
-                                    <option value="<?= clean($m['name']) ?>"><?= clean($m['name']) ?></option>
+                                    <?php if (!in_array($m['name'], ['Cash', 'Bank Transfer', 'Cheque', 'Online / Mobile'])): ?>
+                                        <option value="<?= clean($m['name']) ?>"><?= clean($m['name']) ?></option>
+                                    <?php endif; ?>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -216,9 +222,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <div class="col-12 col-md-6">
                             <label class="form-label">From Account (Cash Register / Bank)</label>
                             <select name="account_id" class="form-select">
-                                <option value="">-- Direct Factory Cash Drawer --</option>
-                                <?php foreach ($accounts as $acc): ?>
-                                    <option value="<?= $acc['id'] ?>">
+                                <option value="" data-type="cash">-- Direct Factory Cash Drawer --</option>
+                                <?php foreach ($accounts as $acc): 
+                                    $isCash = (stripos($acc['account_name'], 'cash') !== false || stripos($acc['bank_name'] ?? '', 'cash') !== false || stripos($acc['bank_name'] ?? '', 'drawer') !== false);
+                                    $accType = $isCash ? 'cash' : 'bank';
+                                ?>
+                                    <option value="<?= $acc['id'] ?>" data-type="<?= $accType ?>">
                                         <?= clean($acc['account_name']) ?> (Balance: Rs. <?= number_format($acc['current_balance'], 2) ?>)
                                     </option>
                                 <?php endforeach; ?>

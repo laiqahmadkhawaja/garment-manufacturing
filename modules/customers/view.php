@@ -548,9 +548,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <div class="col-12 col-md-6">
                             <label class="form-label small fw-semibold">Deposit Account</label>
                             <select name="account_id" class="form-select">
-                                <option value="">-- No Account (Direct) --</option>
-                                <?php foreach ($accounts as $acc): ?>
-                                    <option value="<?= $acc['id'] ?>">
+                                <option value="" data-type="cash">-- Direct Factory Cash Drawer --</option>
+                                <?php foreach ($accounts as $acc): 
+                                    $isCash = (stripos($acc['account_name'], 'cash') !== false || stripos($acc['bank_name'] ?? '', 'cash') !== false || stripos($acc['bank_name'] ?? '', 'drawer') !== false);
+                                    $accType = $isCash ? 'cash' : 'bank';
+                                ?>
+                                    <option value="<?= $acc['id'] ?>" data-type="<?= $accType ?>">
                                         <?= clean($acc['account_name']) ?> (<?= format_currency($acc['current_balance']) ?>)
                                     </option>
                                 <?php endforeach; ?>

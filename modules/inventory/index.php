@@ -76,6 +76,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <i class="bi bi-clock-history"></i>
                     <span>Stock Movement Ledger</span>
                 </a>
+                <a href="<?= BASE_URL ?>modules/inventory/transfer.php" class="btn btn-outline-primary btn-sm d-flex align-items-center gap-1 shadow-sm">
+                    <i class="bi bi-arrow-left-right"></i>
+                    <span>Transfer Stock</span>
+                </a>
                 <a href="<?= BASE_URL ?>modules/dispatch/create.php" class="btn btn-primary btn-sm d-flex align-items-center gap-1 shadow-sm">
                     <i class="bi bi-truck me-1"></i>
                     <span>Create Customer Dispatch</span>
@@ -201,9 +205,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             <?= number_format($s['dispatched_stock']) ?> pcs
                                         </td>
                                         <td class="text-end">
-                                            <a href="<?= BASE_URL ?>modules/dispatch/create.php?lot_id=<?= $s['lot_id'] ?>" class="btn btn-sm btn-outline-primary py-1 px-2">
-                                                <i class="bi bi-truck me-1"></i> Dispatch
-                                            </a>
+                                            <div class="btn-group">
+                                                <a href="<?= BASE_URL ?>modules/inventory/transfer.php?stock_id=<?= $s['id'] ?>" class="btn btn-sm btn-outline-secondary py-1 px-2" title="Transfer to Another Warehouse (گودام ٹرانسفر)">
+                                                    <i class="bi bi-arrow-left-right"></i>
+                                                </a>
+                                                <a href="<?= BASE_URL ?>modules/dispatch/create.php?lot_id=<?= $s['lot_id'] ?>" class="btn btn-sm btn-outline-primary py-1 px-2" title="Create Dispatch">
+                                                    <i class="bi bi-truck me-1"></i> Dispatch
+                                                </a>
+                                            </div>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>

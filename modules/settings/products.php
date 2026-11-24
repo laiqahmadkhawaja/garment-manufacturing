@@ -200,13 +200,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'create_size') {
+        check_csrf();
         $name = trim($_POST['name'] ?? '');
         $code = trim($_POST['code'] ?? '');
         $sort = (int)($_POST['sort_order'] ?? 0);
         if (!empty($name) && !empty($code)) {
+            if ($sort <= 0) {
+                $maxSort = (int)$db->query("SELECT COALESCE(MAX(sort_order), 0) FROM sizes")->fetchColumn();
+                $sort = $maxSort + 1;
+            }
             $stmt = $db->prepare("INSERT INTO sizes (name, code, sort_order) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE code = VALUES(code), sort_order = VALUES(sort_order)");
             $stmt->execute([$name, $code, $sort]);
             redirect('modules/settings/products.php#variants', "Size '$name' saved!");
+        } else {
+            set_flash('danger', 'Size name and code are required.');
+        }
+    }
+
+    if ($action === 'update_size') {
+        check_csrf();
+        $sizeId = (int)($_POST['size_id'] ?? 0);
+        $name = trim($_POST['name'] ?? '');
+        $code = trim($_POST['code'] ?? '');
+        $sort = (int)($_POST['sort_order'] ?? 0);
+
+        if ($sizeId > 0 && !empty($name) && !empty($code)) {
+            try {
+                $stmt = $db->prepare("UPDATE sizes SET name = ?, code = ?, sort_order = ? WHERE id = ?");
+                $stmt->execute([$name, $code, $sort, $sizeId]);
+                log_audit('UPDATE_SIZE', 'sizes', $sizeId, null, ['name' => $name, 'code' => $code, 'sort_order' => $sort]);
+                redirect('modules/settings/products.php#variants', "Size '$name' ($code) updated successfully!");
+            } catch (PDOException $e) {
+                set_flash('danger', 'Error updating size: ' . $e->getMessage());
+            }
+        } else {
+            set_flash('danger', 'Size name and code are required.');
+        }
+    }
+
+    if ($action === 'delete_size') {
+        check_csrf();
+        $sizeId = (int)($_POST['size_id'] ?? 0);
+        if ($sizeId > 0) {
+            $inLot = (int)$db->query("SELECT COUNT(*) FROM lot_variants WHERE size_id = $sizeId")->fetchColumn();
+            $inSingleLot = (int)$db->query("SELECT COUNT(*) FROM lots WHERE single_size_id = $sizeId")->fetchColumn();
+            $inProd = (int)$db->query("SELECT COUNT(*) FROM production_entries WHERE size_id = $sizeId")->fetchColumn();
+
+            $totalUsage = $inLot + $inSingleLot + $inProd;
+            if ($totalUsage > 0) {
+                set_flash('danger', "Cannot delete size because it is used in " . ($inLot + $inSingleLot) . " lot(s) and $inProd production record(s).");
+            } else {
+                try {
+                    $db->prepare("DELETE FROM sizes WHERE id = ?")->execute([$sizeId]);
+                    redirect('modules/settings/products.php#variants', 'Size deleted successfully.');
+                } catch (PDOException $e) {
+                    set_flash('danger', 'Error deleting size: ' . $e->getMessage());
+                }
+            }
         }
     }
 
@@ -306,7 +356,10 @@ $colors = $db->query("SELECT c.*,
     (SELECT COUNT(*) FROM lot_variants WHERE color_id = c.id) AS lot_usage,
     (SELECT COUNT(*) FROM material_purchase_items WHERE color_id = c.id) AS purchase_usage 
     FROM colors c ORDER BY c.yarn_stock_kg DESC, c.name ASC")->fetchAll();
-$sizes = $db->query("SELECT * FROM sizes ORDER BY sort_order ASC")->fetchAll();
+$sizes = $db->query("SELECT s.*, 
+    (SELECT COUNT(*) FROM lot_variants WHERE size_id = s.id) + (SELECT COUNT(*) FROM lots WHERE single_size_id = s.id) AS lot_usage,
+    (SELECT COUNT(*) FROM production_entries WHERE size_id = s.id) AS prod_usage
+    FROM sizes s ORDER BY s.sort_order ASC, s.id ASC")->fetchAll();
 
 require_once __DIR__ . '/../../includes/header.php';
 require_once __DIR__ . '/../../includes/sidebar.php';
@@ -922,6 +975,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                                             <i class="bi bi-trash"></i>
                                                                         </button>
                                                                     </form>
+                                                                <?php else: ?>
+                                                                    <button type="button" class="btn btn-outline-secondary py-1 px-2 opacity-50" disabled 
+                                                                            title="Cannot delete: used in <?= (int)$c['lot_usage'] ?> lot(s) / <?= (int)$c['purchase_usage'] ?> purchase(s)">
+                                                                        <i class="bi bi-trash"></i>
+                                                                    </button>
                                                                 <?php endif; ?>
                                                             </div>
                                                         </td>
@@ -938,8 +996,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <!-- Sizes Column -->
                     <div class="col-12 col-lg-5">
                         <div class="card-modern mb-3">
-                            <div class="card-modern-header">
-                                <h6 class="fw-bold mb-0 text-dark">Add Size</h6>
+                            <div class="card-modern-header d-flex justify-content-between align-items-center">
+                                <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-rulers text-primary me-2"></i>Add Garment Size</h6>
+                                <span class="badge bg-primary-subtle text-primary"><?= count($sizes) ?> Sizes</span>
                             </div>
                             <div class="card-modern-body">
                                 <form method="POST" action="">
@@ -961,24 +1020,64 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         </div>
 
                         <div class="card-modern">
+                            <div class="card-modern-header">
+                                <h6 class="fw-bold mb-0 text-dark">Configured Sizes</h6>
+                            </div>
                             <div class="card-modern-body p-0">
                                 <div class="table-responsive">
                                     <table class="table table-modern mb-0">
                                         <thead>
                                             <tr>
-                                                <th>Sort</th>
+                                                <th style="width: 60px;">Sort</th>
                                                 <th>Size Name</th>
-                                                <th>Short Code</th>
+                                                <th style="width: 100px;">Code</th>
+                                                <th class="text-end" style="width: 110px;">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <?php foreach ($sizes as $s): ?>
-                                                <tr>
-                                                    <td><span class="badge bg-light text-dark border"><?= $s['sort_order'] ?></span></td>
-                                                    <td class="fw-semibold text-dark"><?= clean($s['name']) ?></td>
-                                                    <td class="fw-bold text-primary"><?= clean($s['code']) ?></td>
-                                                </tr>
-                                            <?php endforeach; ?>
+                                            <?php if (empty($sizes)): ?>
+                                                <tr><td colspan="4" class="text-center py-4 text-muted">No sizes configured yet. Add your first size above!</td></tr>
+                                            <?php else: ?>
+                                                <?php foreach ($sizes as $s): ?>
+                                                    <tr>
+                                                        <td><span class="badge bg-light text-dark border"><?= $s['sort_order'] ?></span></td>
+                                                        <td class="fw-semibold text-dark">
+                                                            <?= clean($s['name']) ?>
+                                                            <?php if (!empty($s['lot_usage'])): ?>
+                                                                <span class="badge bg-secondary-subtle text-secondary small ms-1" title="Used in lots"><?= $s['lot_usage'] ?> lots</span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td><span class="badge bg-primary-subtle text-primary font-monospace fw-bold"><?= clean($s['code']) ?></span></td>
+                                                        <td class="text-end">
+                                                            <div class="btn-group btn-group-sm">
+                                                                <button type="button" class="btn btn-outline-secondary py-1 px-2 btn-edit-size"
+                                                                        data-id="<?= $s['id'] ?>"
+                                                                        data-name="<?= clean($s['name']) ?>"
+                                                                        data-code="<?= clean($s['code']) ?>"
+                                                                        data-sort="<?= (int)$s['sort_order'] ?>"
+                                                                        title="Edit Size">
+                                                                    <i class="bi bi-pencil"></i>
+                                                                </button>
+                                                                <?php if ((int)($s['lot_usage'] ?? 0) === 0 && (int)($s['prod_usage'] ?? 0) === 0): ?>
+                                                                    <form method="POST" action="" class="d-inline" onsubmit="return confirm('Delete size \'<?= clean($s['name']) ?>\'?');">
+                                                                        <input type="hidden" name="action" value="delete_size">
+                                                                        <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+                                                                        <input type="hidden" name="size_id" value="<?= $s['id'] ?>">
+                                                                        <button type="submit" class="btn btn-outline-danger py-1 px-2" title="Delete Size">
+                                                                            <i class="bi bi-trash"></i>
+                                                                        </button>
+                                                                    </form>
+                                                                <?php else: ?>
+                                                                    <button type="button" class="btn btn-outline-secondary py-1 px-2 opacity-50" disabled 
+                                                                            title="Cannot delete: used in <?= (int)$s['lot_usage'] ?> lot(s)">
+                                                                        <i class="bi bi-trash"></i>
+                                                                    </button>
+                                                                <?php endif; ?>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
                                         </tbody>
                                     </table>
                                 </div>
@@ -1059,6 +1158,44 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary fw-semibold">Update Color</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Edit Size Modal -->
+<div class="modal fade" id="editSizeModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" action="">
+                <input type="hidden" name="action" value="update_size">
+                <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
+                <input type="hidden" name="size_id" id="edit_size_id">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-pencil-square text-primary me-2"></i>Edit Garment Size</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label small fw-semibold">Size Name *</label>
+                            <input type="text" name="name" id="edit_size_name" class="form-control" placeholder="e.g. Medium (M)" required>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="form-label small fw-semibold">Short Code *</label>
+                            <input type="text" name="code" id="edit_size_code" class="form-control text-uppercase" placeholder="e.g. M" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-semibold">Sort Order</label>
+                            <input type="number" name="sort_order" id="edit_size_sort" class="form-control" min="1" required>
+                            <div class="form-text small text-muted">Controls the display order of sizes in matrices and dropdowns.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary fw-semibold">Update Size</button>
                 </div>
             </form>
         </div>
@@ -1477,6 +1614,21 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         document.getElementById('edit_color_hex').addEventListener('input', function() {
             document.getElementById('edit_color_hex_txt').value = this.value;
+        });
+    }
+
+    // Size edit modal handler
+    const editSizeModalEl = document.getElementById('editSizeModal');
+    if (editSizeModalEl) {
+        const editSizeModal = new bootstrap.Modal(editSizeModalEl);
+        document.querySelectorAll('.btn-edit-size').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.getElementById('edit_size_id').value = this.dataset.id;
+                document.getElementById('edit_size_name').value = this.dataset.name;
+                document.getElementById('edit_size_code').value = this.dataset.code;
+                document.getElementById('edit_size_sort').value = this.dataset.sort;
+                editSizeModal.show();
+            });
         });
     }
 });

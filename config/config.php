@@ -29,7 +29,7 @@ if (!defined('DB_HOST')) define('DB_HOST', getenv('DB_HOST') ?: '127.0.0.1');   
 if (!defined('DB_PORT')) define('DB_PORT', getenv('DB_PORT') ?: '3306');          // Database port (default: 3306)
 if (!defined('DB_NAME')) define('DB_NAME', getenv('DB_NAME') ?: 'garment_erp');   // Name of the database on MySQL
 if (!defined('DB_USER')) define('DB_USER', getenv('DB_USER') ?: 'root');          // Database username
-if (!defined('DB_PASS')) define('DB_PASS', getenv('DB_PASS') !== false ? getenv('DB_PASS') : ''); // Database password
+if (!defined('DB_PASS')) define('DB_PASS', getenv('DB_PASS') !== false ? getenv('DB_PASS') : 'Lakhawaja@090078601'); // Database password
 
 // Database Singleton Connection Helper
 function get_db(): PDO {
@@ -44,6 +44,15 @@ function get_db(): PDO {
         try {
             $instance = new PDO($dsn, DB_USER, DB_PASS, $options);
         } catch (PDOException $e) {
+            // Smart local fallback: if running on local environment and DB_PASS failed, try empty password
+            if (!empty(DB_PASS) && (DB_HOST === '127.0.0.1' || DB_HOST === 'localhost')) {
+                try {
+                    $instance = new PDO($dsn, DB_USER, '', $options);
+                    return $instance;
+                } catch (PDOException $e2) {
+                    // Fall through to original exception reporting
+                }
+            }
             error_log("Database connection error: " . $e->getMessage());
             die("<strong>Database connection error:</strong> Unable to connect to MySQL database [<strong>" . htmlspecialchars(DB_NAME) . "</strong>] on <strong>" . htmlspecialchars(DB_HOST) . "</strong>.<br><br>Please verify database credentials in <code>config/config.php</code>.<br><br><small>Technical details: " . htmlspecialchars($e->getMessage()) . "</small>");
         }
@@ -152,6 +161,27 @@ function format_date(?string $date, string $format = 'd M Y'): string {
 }
 
 /**
+ * Format worker wage rate display based on wage / worker type
+ */
+function format_worker_wage_label(array $worker): string {
+    $type = $worker['worker_type'] ?? 'Piece Rate';
+    $defRate = (float)($worker['default_rate'] ?? 0.00);
+    $minRate = (float)($worker['rate_per_minute'] ?? 2.50);
+
+    if ($type === 'Daily Wage') {
+        return '— Rs. ' . number_format($defRate, 2) . '/day (Daily Wage)';
+    } elseif ($type === 'Minute Rate') {
+        return '— Rs. ' . number_format($minRate, 2) . '/m (Minute Rate)';
+    } elseif ($type === 'Monthly Salary') {
+        return '— Rs. ' . number_format($defRate, 2) . '/mo (Monthly Salary)';
+    } elseif ($type === 'Contractor' || $type === 'Contract') {
+        return $defRate > 0 ? ('— Rs. ' . number_format($defRate, 2) . '/pc (Contractor)') : ' (Contractor)';
+    } else { // Piece Rate
+        return $defRate > 0 ? ('— Rs. ' . number_format($defRate, 2) . '/pc (Piece Rate)') : ' (Piece Rate)';
+    }
+}
+
+/**
  * CSRF Protection
  */
 function csrf_token(): string {
@@ -208,28 +238,101 @@ function log_audit(string $action, string $entityType, ?int $entityId = null, mi
 }
 
 /**
- * Generate sequential document numbers
+ * Generate sequential, collision-free document numbers.
+ * Guaranteed to never duplicate an existing document number in the database.
  */
 function generate_doc_number(string $prefix, string $table, string $column): string {
     $db = get_db();
-    $like = $prefix . '%';
-    $stmt = $db->prepare("SELECT $column FROM $table WHERE $column LIKE ? ORDER BY id DESC LIMIT 1");
-    $stmt->execute([$like]);
-    $last = $stmt->fetchColumn();
-
-    if ($last) {
-        // extract numeric part directly following the prefix or anywhere in string
-        if (preg_match('/' . preg_quote($prefix, '/') . '(\d+)/', $last, $matches)) {
-            $next = (int)$matches[1] + 1;
-        } elseif (preg_match('/(\d+)/', $last, $matches)) {
-            $next = (int)$matches[1] + 1;
-        } else {
-            $next = 101;
-        }
-    } else {
-        $next = 101;
+    
+    // Whitelist tables and columns to prevent SQL injection
+    $allowedTables = [
+        'lots', 'production_entries', 'packing_entries', 'dispatches', 
+        'dispatch_returns', 'material_purchases', 'material_issues', 
+        'material_returns', 'worker_payments', 'warehouse_transfers', 
+        'workers', 'customers'
+    ];
+    $allowedCols = [
+        'lot_number', 'entry_number', 'packing_number', 'dispatch_number', 
+        'return_number', 'purchase_number', 'issue_number', 'payment_number', 
+        'transfer_number', 'code'
+    ];
+    
+    if (!in_array($table, $allowedTables) || !in_array($column, $allowedCols)) {
+        $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+        $column = preg_replace('/[^a-zA-Z0-9_]/', '', $column);
     }
-    return $prefix . str_pad((string)$next, 4, '0', STR_PAD_LEFT);
+    
+    // Disambiguate prefixes that are prefixes of other prefixes (e.g. 'PE-' vs 'PE-CUT-')
+    $escapedPrefix = str_replace(['%', '_'], ['\%', '\_'], $prefix);
+    $notLikeSql = "";
+    $params = [$escapedPrefix . '%'];
+    if ($prefix === 'PE-') {
+        $notLikeSql = " AND `$column` NOT LIKE 'PE-CUT-%' AND `$column` NOT LIKE 'PE-TEST-%'";
+    } elseif ($prefix === 'DIS-') {
+        $notLikeSql = " AND `$column` NOT LIKE 'DIST-%'";
+    }
+    
+    // Query recent matching records (last 200) to find maximum sequence number
+    $stmt = $db->prepare("SELECT `$column` FROM `$table` WHERE `$column` LIKE ? $notLikeSql ORDER BY `id` DESC LIMIT 200");
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    
+    $maxSeq = 100;
+    $regex = '/^' . preg_quote($prefix, '/') . '(\d+)/';
+    
+    if (!empty($rows)) {
+        foreach ($rows as $val) {
+            if (preg_match($regex, (string)$val, $m)) {
+                $num = (int)$m[1];
+                if ($num > $maxSeq) {
+                    $maxSeq = $num;
+                }
+            } elseif (preg_match('/(\d+)/', (string)$val, $m)) {
+                // Fallback for non-standard formats with digits
+                $num = (int)$m[1];
+                if ($num > $maxSeq && $num < 999999) { // Avoid epoch timestamps
+                    $maxSeq = $num;
+                }
+            }
+        }
+    }
+    
+    $candidateSeq = $maxSeq + 1;
+    
+    // Collision-safety guarantee: Verify candidate does not already exist anywhere in the database
+    $chkStmt = $db->prepare("SELECT COUNT(*) FROM `$table` WHERE `$column` = ?");
+    do {
+        $candidate = $prefix . str_pad((string)$candidateSeq, 4, '0', STR_PAD_LEFT);
+        $chkStmt->execute([$candidate]);
+        $exists = ((int)$chkStmt->fetchColumn() > 0);
+        if ($exists) {
+            $candidateSeq++;
+        }
+    } while ($exists);
+    
+    return $candidate;
+}
+
+/**
+ * Ensure a document number is unique for a given table and column.
+ * If candidate already exists, appends sequential suffix (-1, -2, etc.) until unique.
+ */
+function ensure_unique_doc_number(PDO $db, string $table, string $column, string $candidate): string {
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $column = preg_replace('/[^a-zA-Z0-9_]/', '', $column);
+    
+    $chk = $db->prepare("SELECT COUNT(*) FROM `$table` WHERE `$column` = ?");
+    $chk->execute([$candidate]);
+    if ((int)$chk->fetchColumn() === 0) {
+        return $candidate;
+    }
+    
+    $suffix = 1;
+    do {
+        $test = $candidate . '-' . ($suffix++);
+        $chk->execute([$test]);
+    } while ((int)$chk->fetchColumn() > 0);
+    return $test;
 }
 
 /**

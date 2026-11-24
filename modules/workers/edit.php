@@ -23,7 +23,14 @@ $pageTitle = 'Edit Worker: ' . clean($worker['name']);
 $activeNav = 'workers';
 
 $departments = $db->query("SELECT * FROM departments WHERE is_active = 1 ORDER BY name ASC")->fetchAll();
-$operations = $db->query("SELECT * FROM operations WHERE is_active = 1 ORDER BY sequence ASC")->fetchAll();
+$operations = $db->query("SELECT o.*, 
+                                 COALESCE(o.department_id, p_op.department_id) AS effective_dept_id,
+                                 d.name AS dept_name
+                          FROM operations o
+                          LEFT JOIN operations p_op ON o.parent_id = p_op.id
+                          LEFT JOIN departments d ON COALESCE(o.department_id, p_op.department_id) = d.id
+                          WHERE o.is_active = 1 
+                          ORDER BY o.sequence ASC, o.id ASC")->fetchAll();
 
 // Currently assigned operations
 $curOpsStmt = $db->prepare("SELECT operation_id FROM worker_operations WHERE worker_id = ?");
@@ -220,7 +227,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <label class="form-label fw-bold small text-primary" id="lbl_piece_rate">Default Piece Rate (ریٹ فی پیس) *</label>
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text bg-primary text-white fw-bold">Rs</span>
-                                <input type="number" name="default_rate" id="wrk_piece_rate" class="form-control form-control-sm fw-bold text-primary text-center" step="0.25" min="0" value="<?= clean($_POST['default_rate'] ?? $worker['default_rate']) ?>" placeholder="0.00">
+                                <input type="number" name="default_rate" id="wrk_piece_rate" class="form-control form-control-sm fw-bold text-primary text-center" step="any" min="0" value="<?= clean($_POST['default_rate'] ?? $worker['default_rate']) ?>" placeholder="0.00">
                                 <span class="input-group-text" id="unit_piece_rate">/pc</span>
                             </div>
                             <div class="form-text small" id="hint_piece_rate" style="font-size: 11px;">مکمل سویٹر یا کٹنگ فی پیس طے شدہ اجرت۔</div>
@@ -231,7 +238,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <label class="form-label fw-semibold small text-success">Minute Rate (روپے فی منٹ) *</label>
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text bg-success text-white fw-bold">Rs</span>
-                                <input type="number" name="rate_per_minute" id="wrk_min_rate" class="form-control form-control-sm fw-bold text-success text-center" step="0.05" min="0.1" required value="<?= clean($_POST['rate_per_minute'] ?? $worker['rate_per_minute']) ?>">
+                                <input type="number" name="rate_per_minute" id="wrk_min_rate" class="form-control form-control-sm fw-bold text-success text-center" step="any" min="0.1" required value="<?= clean($_POST['rate_per_minute'] ?? $worker['rate_per_minute']) ?>">
                                 <span class="input-group-text">/m</span>
                             </div>
                             <div class="form-text small text-muted" style="font-size: 11px;">مشین نٹنگ آپریٹر اور SAM وقت کا حساب: Rate = SAM × Rate/min</div>
@@ -266,17 +273,53 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-semibold small text-muted mb-1">Assigned Operations (ورکر کن مراحل پر کام کرتا ہے)</label>
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                            <div>
+                                <label class="form-label fw-bold text-dark mb-0">
+                                    <i class="bi bi-diagram-3-fill text-primary me-1"></i> Assigned Operations (ورکر کن مراحل پر کام کرتا ہے)
+                                </label>
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-2" id="lbl_op_count">0 selected</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <button type="button" class="btn btn-xs btn-outline-primary py-1 px-2 small" id="btn_select_all_ops" style="font-size: 11px;">
+                                    <i class="bi bi-check-all me-1"></i> Select All (سب منتخب کریں)
+                                </button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small" id="btn_deselect_all_ops" style="font-size: 11px;">
+                                    <i class="bi bi-x-lg me-1"></i> Deselect All
+                                </button>
+                                <div class="form-check form-switch mb-0 ms-2" title="Show all factory operations regardless of department">
+                                    <input class="form-check-input" type="checkbox" id="chk_show_all_ops">
+                                    <label class="form-check-label small text-muted" for="chk_show_all_ops" style="font-size: 11px;">Show All (تمام)</label>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="border rounded-3 p-3 bg-light">
-                            <div class="row g-2">
+                            <div id="msg_select_dept" class="alert alert-info py-2 small mb-2 d-none">
+                                <i class="bi bi-info-circle me-1"></i> براہ کرم اوپر سے ڈیپارٹمنٹ منتخب کریں۔ اس ڈیپارٹمنٹ کے متعلقہ آپریشنز خودکار نیچے ظاہر اور چیک ہو جائیں گے۔
+                            </div>
+                            <div id="msg_no_dept_ops" class="alert alert-warning py-2 small mb-2 d-none">
+                                <i class="bi bi-exclamation-triangle me-1"></i> اس ڈیپارٹمنٹ کے تحت ابھی سیٹنگز میں کوئی آپریشن درج نہیں ہے۔ آپ اوپر "Show All" کو فعال کر کے تمام آپریشنز دیکھ سکتے ہیں۔
+                            </div>
+
+                            <div class="row g-2" id="operations_container">
                                 <?php foreach ($operations as $op): 
                                     $isAssigned = in_array($op['id'], $currentOpIds);
                                 ?>
-                                    <div class="col-12 col-sm-6 col-md-4">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" name="operations[]" value="<?= $op['id'] ?>" id="op_<?= $op['id'] ?>" <?= $isAssigned ? 'checked' : '' ?>>
-                                            <label class="form-check-label small fw-semibold text-dark" for="op_<?= $op['id'] ?>">
-                                                <?= clean($op['sequence']) ?>. <?= clean($op['name']) ?>
+                                    <div class="col-12 col-sm-6 col-md-4 op-item-wrapper"
+                                         data-op-id="<?= $op['id'] ?>"
+                                         data-dept-id="<?= $op['effective_dept_id'] ?? '' ?>"
+                                         data-dept-name="<?= strtolower($op['dept_name'] ?? '') ?>"
+                                         data-op-name="<?= strtolower($op['name']) ?>"
+                                         data-init-assigned="<?= $isAssigned ? '1' : '0' ?>">
+                                        <div class="form-check p-2 rounded-2 border border-light-subtle bg-white h-100 op-check-card">
+                                            <input class="form-check-input wrk-op-checkbox ms-1 me-2" type="checkbox" name="operations[]" value="<?= $op['id'] ?>" id="op_<?= $op['id'] ?>" <?= $isAssigned ? 'checked' : '' ?>>
+                                            <label class="form-check-label small fw-semibold text-dark cursor-pointer d-block" for="op_<?= $op['id'] ?>">
+                                                <span class="badge bg-light text-secondary border me-1"><?= clean($op['sequence']) ?></span>
+                                                <?= clean($op['name']) ?>
+                                                <?php if (!empty($op['dept_name'])): ?>
+                                                    <span class="badge bg-light text-muted border ms-1 fw-normal d-inline-block" style="font-size: 10px;"><?= clean($op['dept_name']) ?></span>
+                                                <?php endif; ?>
                                             </label>
                                         </div>
                                     </div>
@@ -367,29 +410,180 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    const showAllOpsChk = document.getElementById('chk_show_all_ops');
+    const opCountBadge = document.getElementById('lbl_op_count');
+    const msgSelectDept = document.getElementById('msg_select_dept');
+    const msgNoDeptOps = document.getElementById('msg_no_dept_ops');
+    const btnSelectAll = document.getElementById('btn_select_all_ops');
+    const btnDeselectAll = document.getElementById('btn_deselect_all_ops');
+    const opWrappers = document.querySelectorAll('.op-item-wrapper');
+
+    function isOpMatchingDept(opEl, selectedDeptId, selectedDeptName) {
+        if (!selectedDeptId) return false;
+        const opDeptId = String(opEl.dataset.deptId || '').trim();
+        const opDeptName = String(opEl.dataset.deptName || '').toLowerCase();
+        const opName = String(opEl.dataset.opName || '').toLowerCase();
+
+        // 1. Direct ID match
+        if (opDeptId && opDeptId === String(selectedDeptId).trim()) {
+            return true;
+        }
+
+        // 2. Domain / Keyword match for synonym or multi-name departments
+        if (selectedDeptName.includes('cutt')) {
+            return opDeptName.includes('cutt') || opName.includes('cutt') || opDeptId === '1' || opDeptId === '9';
+        }
+        if (selectedDeptName.includes('operat') || selectedDeptName.includes('knit')) {
+            return opDeptName.includes('operat') || opDeptName.includes('knit') || opName.includes('operat') || opName.includes('knit') || opDeptId === '8' || opDeptId === '11';
+        }
+        if (selectedDeptName.includes('tailor') || selectedDeptName.includes('stitch')) {
+            return opDeptName.includes('tailor') || opDeptName.includes('stitch') || opName.includes('tailor') || opName.includes('stitch') || opDeptId === '2' || opDeptId === '3';
+        }
+        if (selectedDeptName.includes('safe') || selectedDeptName.includes('overlock')) {
+            return opDeptName.includes('safe') || opDeptName.includes('overlock') || opName.includes('safe') || opName.includes('overlock') || opDeptId === '4';
+        }
+        if (selectedDeptName.includes('finish') || selectedDeptName.includes('button')) {
+            return opDeptName.includes('finish') || opDeptName.includes('button') || opName.includes('button') || opName.includes('kaj') || opDeptId === '5';
+        }
+        if (selectedDeptName.includes('press') || selectedDeptName.includes('iron')) {
+            return opDeptName.includes('press') || opDeptName.includes('iron') || opName.includes('press') || opDeptId === '6';
+        }
+        if (selectedDeptName.includes('pack')) {
+            return opDeptName.includes('pack') || opName.includes('pack') || opDeptId === '7';
+        }
+        if (selectedDeptName.includes('wash') || selectedDeptName.includes('dye')) {
+            return opDeptName.includes('wash') || opDeptName.includes('dye') || opDeptId === '10';
+        }
+
+        return false;
+    }
+
+    function updateOpSummaryBadge() {
+        let checkedCount = 0;
+        let visibleCount = 0;
+        opWrappers.forEach(wrap => {
+            const isVisible = !wrap.classList.contains('d-none');
+            const chk = wrap.querySelector('.wrk-op-checkbox');
+            if (isVisible) visibleCount++;
+            if (chk && chk.checked) checkedCount++;
+        });
+
+        if (opCountBadge) {
+            opCountBadge.textContent = `${checkedCount} selected (${visibleCount} visible)`;
+        }
+    }
+
+    function syncOperationsWithDepartment(isUserChange = false) {
+        const selectedDeptId = deptSelect ? deptSelect.value : '';
+        const deptOpt = deptSelect ? deptSelect.selectedOptions[0] : null;
+        const selectedDeptName = deptOpt ? (deptOpt.dataset.name || deptOpt.textContent.toLowerCase()) : '';
+        const showAll = showAllOpsChk ? showAllOpsChk.checked : false;
+
+        if (!selectedDeptId && !showAll) {
+            if (msgSelectDept) msgSelectDept.classList.remove('d-none');
+            if (msgNoDeptOps) msgNoDeptOps.classList.add('d-none');
+            opWrappers.forEach(wrap => {
+                wrap.classList.add('d-none');
+                if (isUserChange) {
+                    const chk = wrap.querySelector('.wrk-op-checkbox');
+                    if (chk) chk.checked = false;
+                }
+            });
+            updateOpSummaryBadge();
+            return;
+        }
+
+        if (msgSelectDept) msgSelectDept.classList.add('d-none');
+
+        let matchCount = 0;
+        opWrappers.forEach(wrap => {
+            const chk = wrap.querySelector('.wrk-op-checkbox');
+            const matches = showAll || isOpMatchingDept(wrap, selectedDeptId, selectedDeptName);
+
+            if (matches) {
+                wrap.classList.remove('d-none');
+                matchCount++;
+                if (isUserChange) {
+                    // Automatically check all operations of this department when user changes department!
+                    if (chk) chk.checked = true;
+                }
+            } else {
+                wrap.classList.add('d-none');
+                if (isUserChange) {
+                    // Uncheck non-matching so they are not saved under the wrong department
+                    if (chk) chk.checked = false;
+                }
+            }
+        });
+
+        if (msgNoDeptOps) {
+            if (matchCount === 0 && selectedDeptId && !showAll) {
+                msgNoDeptOps.classList.remove('d-none');
+            } else {
+                msgNoDeptOps.classList.add('d-none');
+            }
+        }
+
+        updateOpSummaryBadge();
+    }
+
     if (typeSelect) {
         typeSelect.addEventListener('change', syncWageTypeUI);
         syncWageTypeUI();
     }
 
-    if (deptSelect && rateBasisSelect) {
+    if (deptSelect) {
         deptSelect.addEventListener('change', function() {
             const opt = this.options[this.selectedIndex];
             const deptName = opt ? (opt.dataset.name || opt.textContent.toLowerCase()) : '';
-            if (deptName.includes('operat') || deptName.includes('cutt') || deptName.includes('knitt')) {
-                rateBasisSelect.value = 'element_wise';
-                if (typeSelect && (deptName.includes('operat') || deptName.includes('knitt'))) {
-                    typeSelect.value = 'Minute Rate';
-                    syncWageTypeUI();
-                } else if (typeSelect && deptName.includes('cutt')) {
-                    typeSelect.value = 'Piece Rate';
-                    syncWageTypeUI();
+            if (rateBasisSelect) {
+                if (deptName.includes('operat') || deptName.includes('cutt') || deptName.includes('knitt')) {
+                    rateBasisSelect.value = 'element_wise';
+                } else if (deptName) {
+                    rateBasisSelect.value = 'whole_sweater';
                 }
-            } else if (deptName) {
-                rateBasisSelect.value = 'whole_sweater';
             }
+
+            syncOperationsWithDepartment(true);
         });
     }
+
+    if (btnSelectAll) {
+        btnSelectAll.addEventListener('click', function() {
+            opWrappers.forEach(wrap => {
+                if (!wrap.classList.contains('d-none')) {
+                    const chk = wrap.querySelector('.wrk-op-checkbox');
+                    if (chk) chk.checked = true;
+                }
+            });
+            updateOpSummaryBadge();
+        });
+    }
+
+    if (btnDeselectAll) {
+        btnDeselectAll.addEventListener('click', function() {
+            opWrappers.forEach(wrap => {
+                if (!wrap.classList.contains('d-none')) {
+                    const chk = wrap.querySelector('.wrk-op-checkbox');
+                    if (chk) chk.checked = false;
+                }
+            });
+            updateOpSummaryBadge();
+        });
+    }
+
+    if (showAllOpsChk) {
+        showAllOpsChk.addEventListener('change', function() {
+            syncOperationsWithDepartment(false);
+        });
+    }
+
+    document.querySelectorAll('.wrk-op-checkbox').forEach(chk => {
+        chk.addEventListener('change', updateOpSummaryBadge);
+    });
+
+    // Initialize operations filtering on load
+    syncOperationsWithDepartment(false);
 });
 </script>
 
