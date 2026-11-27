@@ -204,14 +204,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $name = trim($_POST['name'] ?? '');
         $code = trim($_POST['code'] ?? '');
         $sort = (int)($_POST['sort_order'] ?? 0);
+
+        $plaLen = trim($_POST['pla_length'] ?? '');
+        $plaWid = trim($_POST['pla_width'] ?? '');
+        $plaBor = trim($_POST['pla_border'] ?? '');
+        $plaMins = trim($_POST['pla_mins'] ?? '');
+
+        $bazoLen = trim($_POST['bazo_length'] ?? '');
+        $bazoWid = trim($_POST['bazo_width'] ?? '');
+        $bazoBor = trim($_POST['bazo_border'] ?? '');
+        $bazoMins = trim($_POST['bazo_mins'] ?? '');
+
+        $scheme = [];
+        for ($i = 1; $i <= 4; $i++) {
+            $scheme[$i] = [
+                'length' => trim($_POST["scheme_{$i}_length"] ?? ''),
+                'width' => trim($_POST["scheme_{$i}_width"] ?? ''),
+                'border' => trim($_POST["scheme_{$i}_border"] ?? ''),
+                'mins' => trim($_POST["scheme_{$i}_mins"] ?? '')
+            ];
+        }
+
+        $measurementsArray = [
+            'pla' => ['length' => $plaLen, 'width' => $plaWid, 'border' => $plaBor, 'mins' => $plaMins],
+            'bazo' => ['length' => $bazoLen, 'width' => $bazoWid, 'border' => $bazoBor, 'mins' => $bazoMins],
+            'scheme' => $scheme
+        ];
+        $measurementsJson = json_encode($measurementsArray, JSON_UNESCAPED_UNICODE);
+
         if (!empty($name) && !empty($code)) {
             if ($sort <= 0) {
                 $maxSort = (int)$db->query("SELECT COALESCE(MAX(sort_order), 0) FROM sizes")->fetchColumn();
                 $sort = $maxSort + 1;
             }
-            $stmt = $db->prepare("INSERT INTO sizes (name, code, sort_order) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE code = VALUES(code), sort_order = VALUES(sort_order)");
-            $stmt->execute([$name, $code, $sort]);
-            redirect('modules/settings/products.php#variants', "Size '$name' saved!");
+            $stmt = $db->prepare("INSERT INTO sizes (name, code, sort_order, measurements_json) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE code = VALUES(code), sort_order = VALUES(sort_order), measurements_json = VALUES(measurements_json)");
+            $stmt->execute([$name, $code, $sort, $measurementsJson]);
+            redirect('modules/settings/products.php#variants', "Size '$name' with pattern measurements saved successfully!");
         } else {
             set_flash('danger', 'Size name and code are required.');
         }
@@ -224,12 +252,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $code = trim($_POST['code'] ?? '');
         $sort = (int)($_POST['sort_order'] ?? 0);
 
+        $plaLen = trim($_POST['pla_length'] ?? '');
+        $plaWid = trim($_POST['pla_width'] ?? '');
+        $plaBor = trim($_POST['pla_border'] ?? '');
+        $plaMins = trim($_POST['pla_mins'] ?? '');
+
+        $bazoLen = trim($_POST['bazo_length'] ?? '');
+        $bazoWid = trim($_POST['bazo_width'] ?? '');
+        $bazoBor = trim($_POST['bazo_border'] ?? '');
+        $bazoMins = trim($_POST['bazo_mins'] ?? '');
+
+        $scheme = [];
+        for ($i = 1; $i <= 4; $i++) {
+            $scheme[$i] = [
+                'length' => trim($_POST["scheme_{$i}_length"] ?? ''),
+                'width' => trim($_POST["scheme_{$i}_width"] ?? ''),
+                'border' => trim($_POST["scheme_{$i}_border"] ?? ''),
+                'mins' => trim($_POST["scheme_{$i}_mins"] ?? '')
+            ];
+        }
+
+        $measurementsArray = [
+            'pla' => ['length' => $plaLen, 'width' => $plaWid, 'border' => $plaBor, 'mins' => $plaMins],
+            'bazo' => ['length' => $bazoLen, 'width' => $bazoWid, 'border' => $bazoBor, 'mins' => $bazoMins],
+            'scheme' => $scheme
+        ];
+        $measurementsJson = json_encode($measurementsArray, JSON_UNESCAPED_UNICODE);
+
         if ($sizeId > 0 && !empty($name) && !empty($code)) {
             try {
-                $stmt = $db->prepare("UPDATE sizes SET name = ?, code = ?, sort_order = ? WHERE id = ?");
-                $stmt->execute([$name, $code, $sort, $sizeId]);
+                $stmt = $db->prepare("UPDATE sizes SET name = ?, code = ?, sort_order = ?, measurements_json = ? WHERE id = ?");
+                $stmt->execute([$name, $code, $sort, $measurementsJson, $sizeId]);
                 log_audit('UPDATE_SIZE', 'sizes', $sizeId, null, ['name' => $name, 'code' => $code, 'sort_order' => $sort]);
-                redirect('modules/settings/products.php#variants', "Size '$name' ($code) updated successfully!");
+                redirect('modules/settings/products.php#variants', "Size '$name' ($code) with pattern measurements updated successfully!");
             } catch (PDOException $e) {
                 set_flash('danger', 'Error updating size: ' . $e->getMessage());
             }
@@ -1015,6 +1070,39 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             <button type="submit" class="btn btn-primary w-100 fw-semibold">Add</button>
                                         </div>
                                     </div>
+
+                                    <div class="mt-2">
+                                        <a class="small text-decoration-none text-primary fw-semibold d-inline-flex align-items-center" data-bs-toggle="collapse" href="#addSizeMeasurementsCollapse" role="button" aria-expanded="false">
+                                            <i class="bi bi-rulers me-1"></i> + Default Measurements (کٹنگ پیمائش درج کریں - اختیاری)
+                                        </a>
+                                        <div class="collapse mt-2" id="addSizeMeasurementsCollapse">
+                                            <div class="p-2 border rounded bg-light">
+                                                <div class="row g-2 mb-2">
+                                                    <div class="col-6">
+                                                        <span class="badge bg-primary text-white d-block mb-1 text-center py-1">پلا پیمائش (Panel)</span>
+                                                        <div class="row g-1">
+                                                            <div class="col-6"><input type="text" name="pla_length" class="form-control form-control-sm text-center" placeholder="لمبائی"></div>
+                                                            <div class="col-6"><input type="text" name="pla_width" class="form-control form-control-sm text-center" placeholder="چوڑائی"></div>
+                                                            <div class="col-6"><input type="text" name="pla_border" class="form-control form-control-sm text-center" placeholder="بارڈر"></div>
+                                                            <div class="col-6"><input type="text" name="pla_mins" class="form-control form-control-sm text-center" placeholder="منٹ"></div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <span class="badge bg-info text-dark d-block mb-1 text-center py-1">بازو پیمائش (Sleeves)</span>
+                                                        <div class="row g-1">
+                                                            <div class="col-6"><input type="text" name="bazo_length" class="form-control form-control-sm text-center" placeholder="لمبائی"></div>
+                                                            <div class="col-6"><input type="text" name="bazo_width" class="form-control form-control-sm text-center" placeholder="چوڑائی"></div>
+                                                            <div class="col-6"><input type="text" name="bazo_border" class="form-control form-control-sm text-center" placeholder="بارڈر"></div>
+                                                            <div class="col-6"><input type="text" name="bazo_mins" class="form-control form-control-sm text-center" placeholder="منٹ"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="text-muted" style="font-size: 0.72rem;">
+                                                    <i class="bi bi-info-circle me-1"></i> مزید سکیم کالمز 1-4 بعد میں بھی "Edit" بٹن دبا کر اپ ڈیٹ کیے جا سکتے ہیں۔
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </form>
                             </div>
                         </div>
@@ -1043,6 +1131,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                         <td><span class="badge bg-light text-dark border"><?= $s['sort_order'] ?></span></td>
                                                         <td class="fw-semibold text-dark">
                                                             <?= clean($s['name']) ?>
+                                                            <?php if (!empty($s['measurements_json'])): ?>
+                                                                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle small ms-1" title="Pattern measurements configured"><i class="bi bi-rulers"></i></span>
+                                                            <?php endif; ?>
                                                             <?php if (!empty($s['lot_usage'])): ?>
                                                                 <span class="badge bg-secondary-subtle text-secondary small ms-1" title="Used in lots"><?= $s['lot_usage'] ?> lots</span>
                                                             <?php endif; ?>
@@ -1055,6 +1146,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                                         data-name="<?= clean($s['name']) ?>"
                                                                         data-code="<?= clean($s['code']) ?>"
                                                                         data-sort="<?= (int)$s['sort_order'] ?>"
+                                                                        data-measurements='<?= htmlspecialchars($s['measurements_json'] ?: '{}') ?>'
                                                                         title="Edit Size">
                                                                     <i class="bi bi-pencil"></i>
                                                                 </button>
@@ -1166,36 +1258,151 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
 <!-- Quick Edit Size Modal -->
 <div class="modal fade" id="editSizeModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <form method="POST" action="">
                 <input type="hidden" name="action" value="update_size">
                 <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
                 <input type="hidden" name="size_id" id="edit_size_id">
                 <div class="modal-header">
-                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-pencil-square text-primary me-2"></i>Edit Garment Size</h5>
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-pencil-square text-primary me-2"></i>Edit Garment Size & Pattern Measurements</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    <div class="row g-3">
-                        <div class="col-12 col-sm-6">
+                <div class="modal-body p-4 bg-light">
+                    <div class="row g-3 mb-3 bg-white p-3 border rounded shadow-sm">
+                        <div class="col-12 col-sm-5">
                             <label class="form-label small fw-semibold">Size Name *</label>
                             <input type="text" name="name" id="edit_size_name" class="form-control" placeholder="e.g. Medium (M)" required>
                         </div>
-                        <div class="col-12 col-sm-6">
+                        <div class="col-12 col-sm-4">
                             <label class="form-label small fw-semibold">Short Code *</label>
                             <input type="text" name="code" id="edit_size_code" class="form-control text-uppercase" placeholder="e.g. M" required>
                         </div>
-                        <div class="col-12">
+                        <div class="col-12 col-sm-3">
                             <label class="form-label small fw-semibold">Sort Order</label>
                             <input type="number" name="sort_order" id="edit_size_sort" class="form-control" min="1" required>
-                            <div class="form-text small text-muted">Controls the display order of sizes in matrices and dropdowns.</div>
+                        </div>
+                    </div>
+
+                    <!-- Measurements Section -->
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-rulers text-warning me-1"></i> سائز اور کٹنگ پیمائش (Master Cutting Measurements)</h6>
+                        <span class="badge bg-warning-subtle text-dark border">Lot Creation Default</span>
+                    </div>
+                    <p class="text-muted small mb-3">یہ پیمائشیں لاٹ بناتے وقت اس سائز کے منتخب ہونے پر از خود فِل ہو جائیں گی۔</p>
+
+                    <!-- Body Panel & Sleeves -->
+                    <div class="row g-2 mb-3">
+                        <!-- Body Panel -->
+                        <div class="col-12 col-md-6">
+                            <div class="card border shadow-sm">
+                                <div class="card-header bg-primary text-white py-1 small fw-bold">
+                                    <i class="bi bi-square me-1"></i> پلہ پیمائش (Body Panel)
+                                </div>
+                                <div class="card-body p-2 bg-white">
+                                    <div class="row g-2">
+                                        <div class="col-6">
+                                            <label class="form-label small fw-semibold mb-1">لمبائی (Length)</label>
+                                            <input type="text" name="pla_length" id="edit_size_pla_length" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="41">
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="form-label small fw-semibold mb-1">چوڑائی (Width)</label>
+                                            <input type="text" name="pla_width" id="edit_size_pla_width" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="15">
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="form-label small fw-semibold mb-1">بارڈر (Border)</label>
+                                            <input type="text" name="pla_border" id="edit_size_pla_border" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="46">
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="form-label small fw-semibold mb-1">منٹ (SAM Mins)</label>
+                                            <input type="text" name="pla_mins" id="edit_size_pla_mins" class="form-control form-control-sm text-center font-monospace fw-bold text-success" placeholder="7">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sleeves -->
+                        <div class="col-12 col-md-6">
+                            <div class="card border shadow-sm">
+                                <div class="card-header bg-info text-white py-1 small fw-bold">
+                                    <i class="bi bi-diagram-2 me-1"></i> بازو پیمائش (Sleeves)
+                                </div>
+                                <div class="card-body p-2 bg-white">
+                                    <div class="row g-2">
+                                        <div class="col-6">
+                                            <label class="form-label small fw-semibold mb-1">لمبائی (Length)</label>
+                                            <input type="text" name="bazo_length" id="edit_size_bazo_length" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="48">
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="form-label small fw-semibold mb-1">چوڑائی (Width)</label>
+                                            <input type="text" name="bazo_width" id="edit_size_bazo_width" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="14">
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="form-label small fw-semibold mb-1">بارڈر (Border)</label>
+                                            <input type="text" name="bazo_border" id="edit_size_bazo_border" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="42">
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="form-label small fw-semibold mb-1">منٹ (SAM Mins)</label>
+                                            <input type="text" name="bazo_mins" id="edit_size_bazo_mins" class="form-control form-control-sm text-center font-monospace fw-bold text-success" placeholder="7">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Scheme Columns 1-4 -->
+                    <div class="card border shadow-sm">
+                        <div class="card-header bg-warning text-dark py-1 small fw-bold d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-palette me-1"></i> سائز / کلر سکیم کالمز (Scheme Columns 1-4)</span>
+                        </div>
+                        <div class="card-body p-2 bg-white">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm align-middle text-center mb-0" style="font-size: 0.8rem;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width: 20%;">پیمائش</th>
+                                            <th style="width: 20%;">کالم 1</th>
+                                            <th style="width: 20%;">کالم 2</th>
+                                            <th style="width: 20%;">کالم 3</th>
+                                            <th style="width: 20%;">کالم 4</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="fw-bold text-start ps-2">لمبائی (Length)</td>
+                                            <?php for ($i = 1; $i <= 4; $i++): ?>
+                                                <td><input type="text" name="scheme_<?= $i ?>_length" id="edit_size_scheme_<?= $i ?>_length" class="form-control form-control-sm text-center font-monospace" placeholder="—"></td>
+                                            <?php endfor; ?>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold text-start ps-2">چوڑائی (Width)</td>
+                                            <?php for ($i = 1; $i <= 4; $i++): ?>
+                                                <td><input type="text" name="scheme_<?= $i ?>_width" id="edit_size_scheme_<?= $i ?>_width" class="form-control form-control-sm text-center font-monospace" placeholder="—"></td>
+                                            <?php endfor; ?>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold text-start ps-2">بارڈر (Border)</td>
+                                            <?php for ($i = 1; $i <= 4; $i++): ?>
+                                                <td><input type="text" name="scheme_<?= $i ?>_border" id="edit_size_scheme_<?= $i ?>_border" class="form-control form-control-sm text-center font-monospace" placeholder="—"></td>
+                                            <?php endfor; ?>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold text-start ps-2">منٹ (Minutes)</td>
+                                            <?php for ($i = 1; $i <= 4; $i++): ?>
+                                                <td><input type="text" name="scheme_<?= $i ?>_mins" id="edit_size_scheme_<?= $i ?>_mins" class="form-control form-control-sm text-center font-monospace text-success" placeholder="—"></td>
+                                            <?php endfor; ?>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary fw-semibold">Update Size</button>
+                    <button type="submit" class="btn btn-primary fw-semibold"><i class="bi bi-check-circle me-1"></i> Update Size & Measurements</button>
                 </div>
             </form>
         </div>
@@ -1635,6 +1842,40 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('edit_size_name').value = this.dataset.name;
                 document.getElementById('edit_size_code').value = this.dataset.code;
                 document.getElementById('edit_size_sort').value = this.dataset.sort;
+
+                // Populate pattern measurements
+                try {
+                    const raw = this.getAttribute('data-measurements') || '';
+                    const m = raw ? JSON.parse(raw) : {};
+                    const pla = m.pla || {};
+                    const bazo = m.bazo || {};
+                    const scheme = m.scheme || {};
+
+                    document.getElementById('edit_size_pla_length').value = pla.length || '';
+                    document.getElementById('edit_size_pla_width').value = pla.width || '';
+                    document.getElementById('edit_size_pla_border').value = pla.border || '';
+                    document.getElementById('edit_size_pla_mins').value = pla.mins || '';
+
+                    document.getElementById('edit_size_bazo_length').value = bazo.length || '';
+                    document.getElementById('edit_size_bazo_width').value = bazo.width || '';
+                    document.getElementById('edit_size_bazo_border').value = bazo.border || '';
+                    document.getElementById('edit_size_bazo_mins').value = bazo.mins || '';
+
+                    for (let i = 1; i <= 4; i++) {
+                        const col = scheme[i] || {};
+                        const elLen = document.getElementById(`edit_size_scheme_${i}_length`);
+                        const elWid = document.getElementById(`edit_size_scheme_${i}_width`);
+                        const elBor = document.getElementById(`edit_size_scheme_${i}_border`);
+                        const elMin = document.getElementById(`edit_size_scheme_${i}_mins`);
+                        if (elLen) elLen.value = col.length || '';
+                        if (elWid) elWid.value = col.width || '';
+                        if (elBor) elBor.value = col.border || '';
+                        if (elMin) elMin.value = col.mins || '';
+                    }
+                } catch (e) {
+                    console.error('Error parsing size measurements', e);
+                }
+
                 editSizeModal.show();
             });
         });

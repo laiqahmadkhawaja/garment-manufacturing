@@ -251,12 +251,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     $machineName = trim($_POST['machine_name'] ?? 'CMS 430');
 
+                    // Collect Pattern Measurements
+                    $plaLen = trim($_POST['pla_length'] ?? '');
+                    $plaWid = trim($_POST['pla_width'] ?? '');
+                    $plaBor = trim($_POST['pla_border'] ?? '');
+                    $plaMins = trim($_POST['pla_mins'] ?? '');
+
+                    $bazoLen = trim($_POST['bazo_length'] ?? '');
+                    $bazoWid = trim($_POST['bazo_width'] ?? '');
+                    $bazoBor = trim($_POST['bazo_border'] ?? '');
+                    $bazoMins = trim($_POST['bazo_mins'] ?? '');
+
+                    $scheme = [];
+                    for ($i = 1; $i <= 4; $i++) {
+                        $scheme[$i] = [
+                            'length' => trim($_POST["scheme_{$i}_length"] ?? ''),
+                            'width' => trim($_POST["scheme_{$i}_width"] ?? ''),
+                            'border' => trim($_POST["scheme_{$i}_border"] ?? ''),
+                            'mins' => trim($_POST["scheme_{$i}_mins"] ?? '')
+                        ];
+                    }
+
+                    $measurementsArray = [
+                        'pla' => ['length' => $plaLen, 'width' => $plaWid, 'border' => $plaBor, 'mins' => $plaMins],
+                        'bazo' => ['length' => $bazoLen, 'width' => $bazoWid, 'border' => $bazoBor, 'mins' => $bazoMins],
+                        'scheme' => $scheme
+                    ];
+                    $measurementsJson = json_encode($measurementsArray, JSON_UNESCAPED_UNICODE);
+
                     // Insert Lot Master
                     $stmt = $db->prepare("INSERT INTO lots 
                         (lot_number, lot_date, product_id, design_number, design_id, shift_type, machine_name, operator_id, night_operator_id, 
                          supervisor_name, expected_date, instructions, total_pieces, total_colors, total_sizes, 
-                         size_mode, single_size_id, has_anatomy_variants, anatomy_breakdown, status, created_by) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft', ?)");
+                         size_mode, single_size_id, has_anatomy_variants, anatomy_breakdown, measurements_json, status, created_by) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft', ?)");
                     $stmt->execute([
                         $lotNumber,
                         $lotDate,
@@ -277,6 +305,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $singleSizeId,
                         $hasAnatomyVariants,
                         $anatomyBreakdown,
+                        $measurementsJson,
                         $_SESSION['user_id'] ?? null
                     ]);
                     $lotId = (int)$db->lastInsertId();
@@ -859,6 +888,135 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             </div>
 
             <!-- ========================================== -->
+            <!-- 2.5 GARMENT PATTERN MEASUREMENTS (پیمائش) -->
+            <!-- ========================================== -->
+            <div class="card-modern mb-4">
+                <div class="card-modern-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-warning p-2 rounded-2 text-dark"><i class="bi bi-rulers fs-6"></i></span>
+                        <div>
+                            <h6 class="fw-bold mb-0 text-dark">Garment Pattern Size & Cutting Measurements (سائز اور کٹنگ پیمائش: لمبائی، چوڑائی، بارڈر)</h6>
+                            <span class="text-muted small">Auto-filled from selected Size master (سائز منتخب کرنے پر خودکار فل ہو گی، ضرورت پڑنے پر ایڈٹ کی جا سکتی ہے)</span>
+                        </div>
+                    </div>
+                    <span class="badge bg-light text-dark border"><i class="bi bi-magic me-1 text-primary"></i> Auto-fills from Size Selection</span>
+                </div>
+                <div class="card-modern-body p-3 bg-light">
+                    <!-- Palla & Bazo Row -->
+                    <div class="row g-3 mb-3">
+                        <!-- Palla / Body Panel (پلہ) -->
+                        <div class="col-12 col-md-6">
+                            <div class="card border shadow-sm h-100">
+                                <div class="card-header bg-primary text-white py-1 small fw-bold d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-square me-1"></i> پلا پیمائش (Body Panel / Palla)</span>
+                                    <span class="badge bg-white text-primary fw-bold">Body</span>
+                                </div>
+                                <div class="card-body p-2 bg-white">
+                                    <div class="row g-2">
+                                        <div class="col-6">
+                                            <label class="form-label small fw-semibold mb-1">لمبائی (Length)</label>
+                                            <input type="text" name="pla_length" id="inp_pla_length" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="41">
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="form-label small fw-semibold mb-1">چوڑائی (Width)</label>
+                                            <input type="text" name="pla_width" id="inp_pla_width" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="15">
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="form-label small fw-semibold mb-1">بارڈر (Border)</label>
+                                            <input type="text" name="pla_border" id="inp_pla_border" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="46">
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="form-label small fw-semibold mb-1">منٹ (SAM Mins)</label>
+                                            <input type="text" name="pla_mins" id="inp_pla_mins" class="form-control form-control-sm text-center font-monospace fw-bold text-success" placeholder="7">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sleeves / Bazo (بازو) -->
+                        <div class="col-12 col-md-6">
+                            <div class="card border shadow-sm h-100">
+                                <div class="card-header bg-info text-dark py-1 small fw-bold d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-layers me-1"></i> بازو پیمائش (Sleeves / Bazo)</span>
+                                    <span class="badge bg-dark text-white fw-bold">Sleeves</span>
+                                </div>
+                                <div class="card-body p-2 bg-white">
+                                    <div class="row g-2">
+                                        <div class="col-6">
+                                            <label class="form-label small fw-semibold mb-1">لمبائی (Length)</label>
+                                            <input type="text" name="bazo_length" id="inp_bazo_length" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="48">
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="form-label small fw-semibold mb-1">چوڑائی (Width)</label>
+                                            <input type="text" name="bazo_width" id="inp_bazo_width" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="14">
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="form-label small fw-semibold mb-1">بارڈر (Border)</label>
+                                            <input type="text" name="bazo_border" id="inp_bazo_border" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="42">
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="form-label small fw-semibold mb-1">منٹ (SAM Mins)</label>
+                                            <input type="text" name="bazo_mins" id="inp_bazo_mins" class="form-control form-control-sm text-center font-monospace fw-bold text-success" placeholder="7">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Scheme Columns 1-4 -->
+                    <div class="card border shadow-sm">
+                        <div class="card-header bg-warning text-dark py-1 small fw-bold d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-palette me-1"></i> سائز / کلر سکیم کالمز (Scheme Columns 1-4)</span>
+                            <span class="small text-muted fw-normal">Reflected in Lot Design Sheet (لاٹ پرچہ)</span>
+                        </div>
+                        <div class="card-body p-2 bg-white">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm align-middle text-center mb-0" style="font-size: 0.82rem;">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width: 20%;">پیمائش</th>
+                                            <th style="width: 20%;">کالم 1</th>
+                                            <th style="width: 20%;">کالم 2</th>
+                                            <th style="width: 20%;">کالم 3</th>
+                                            <th style="width: 20%;">کالم 4</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="fw-bold text-start ps-2">لمبائی (Length)</td>
+                                            <?php for ($i = 1; $i <= 4; $i++): ?>
+                                                <td><input type="text" name="scheme_<?= $i ?>_length" id="inp_scheme_<?= $i ?>_length" class="form-control form-control-sm text-center font-monospace" placeholder="—"></td>
+                                            <?php endfor; ?>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold text-start ps-2">چوڑائی (Width)</td>
+                                            <?php for ($i = 1; $i <= 4; $i++): ?>
+                                                <td><input type="text" name="scheme_<?= $i ?>_width" id="inp_scheme_<?= $i ?>_width" class="form-control form-control-sm text-center font-monospace" placeholder="—"></td>
+                                            <?php endfor; ?>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold text-start ps-2">بارڈر (Border)</td>
+                                            <?php for ($i = 1; $i <= 4; $i++): ?>
+                                                <td><input type="text" name="scheme_<?= $i ?>_border" id="inp_scheme_<?= $i ?>_border" class="form-control form-control-sm text-center font-monospace" placeholder="—"></td>
+                                            <?php endfor; ?>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold text-start ps-2">منٹ (Minutes)</td>
+                                            <?php for ($i = 1; $i <= 4; $i++): ?>
+                                                <td><input type="text" name="scheme_<?= $i ?>_mins" id="inp_scheme_<?= $i ?>_mins" class="form-control form-control-sm text-center font-monospace text-success" placeholder="—"></td>
+                                            <?php endfor; ?>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
             <!-- 3. ACTIONS & SUBMISSION BAR -->
             <!-- ========================================== -->
             <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-3 p-3 bg-white border rounded-3 shadow-sm mb-4">
@@ -1404,6 +1562,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 recalcAll();
                 triggerAutoSave();
             } else if (e.target.classList.contains('item-size-select')) {
+                if (e.target.value) {
+                    populateMeasurementsFromSize(e.target.value);
+                }
                 recalcAll();
                 triggerAutoSave();
             }
@@ -1437,9 +1598,76 @@ document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('#lotItemsTbody .item-size-select').forEach(sel => {
                 sel.value = val;
             });
+            populateMeasurementsFromSize(val);
             this.value = '';
             recalcAll();
         });
+    }
+
+    // Pattern measurements auto-fill from Size master
+    function populateMeasurementsFromSize(sizeId) {
+        if (!sizeId) return;
+        const sizeObj = sizesList.find(s => s.id == sizeId);
+        if (!sizeObj) return;
+
+        let meas = null;
+        if (sizeObj.measurements_json) {
+            try {
+                meas = typeof sizeObj.measurements_json === 'string' ? JSON.parse(sizeObj.measurements_json) : sizeObj.measurements_json;
+            } catch (e) {
+                console.error('Error parsing size measurements_json', e);
+            }
+        }
+
+        if (!meas) {
+            meas = {
+                pla: { length: '41', width: '15', border: '46', mins: '7' },
+                bazo: { length: '48', width: '14', border: '42', mins: '7' },
+                scheme: {
+                    '1': { length: '41', width: '45', border: '46', mins: '43' },
+                    '2': { length: '', width: '', border: '', mins: '' },
+                    '3': { length: '', width: '', border: '', mins: '' },
+                    '4': { length: '', width: '', border: '', mins: '' }
+                }
+            };
+        }
+
+        const pla = meas.pla || {};
+        const bazo = meas.bazo || {};
+        const scheme = meas.scheme || {};
+
+        const elPlaLen = document.getElementById('inp_pla_length');
+        const elPlaWid = document.getElementById('inp_pla_width');
+        const elPlaBor = document.getElementById('inp_pla_border');
+        const elPlaMin = document.getElementById('inp_pla_mins');
+
+        if (elPlaLen) elPlaLen.value = pla.length || '';
+        if (elPlaWid) elPlaWid.value = pla.width || '';
+        if (elPlaBor) elPlaBor.value = pla.border || '';
+        if (elPlaMin) elPlaMin.value = pla.mins || '';
+
+        const elBazoLen = document.getElementById('inp_bazo_length');
+        const elBazoWid = document.getElementById('inp_bazo_width');
+        const elBazoBor = document.getElementById('inp_bazo_border');
+        const elBazoMin = document.getElementById('inp_bazo_mins');
+
+        if (elBazoLen) elBazoLen.value = bazo.length || '';
+        if (elBazoWid) elBazoWid.value = bazo.width || '';
+        if (elBazoBor) elBazoBor.value = bazo.border || '';
+        if (elBazoMin) elBazoMin.value = bazo.mins || '';
+
+        for (let i = 1; i <= 4; i++) {
+            const col = scheme[i] || {};
+            const elLen = document.getElementById(`inp_scheme_${i}_length`);
+            const elWid = document.getElementById(`inp_scheme_${i}_width`);
+            const elBor = document.getElementById(`inp_scheme_${i}_border`);
+            const elMin = document.getElementById(`inp_scheme_${i}_mins`);
+
+            if (elLen) elLen.value = col.length || '';
+            if (elWid) elWid.value = col.width || '';
+            if (elBor) elBor.value = col.border || '';
+            if (elMin) elMin.value = col.mins || '';
+        }
     }
 
     // Real-Time Quick Add Size (Modal & AJAX)
@@ -2012,6 +2240,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Run check on load
     checkExistingDraft();
     refreshColorDropdowns();
+
+    // Auto-populate pattern measurements from first size
+    const initialSizeSelect = document.querySelector('.item-size-select');
+    if (initialSizeSelect && initialSizeSelect.value) {
+        populateMeasurementsFromSize(initialSizeSelect.value);
+    } else if (sizesList.length > 0) {
+        populateMeasurementsFromSize(sizesList[0].id);
+    }
 });
 </script>
 

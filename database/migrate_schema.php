@@ -140,6 +140,69 @@ if (!in_array('measurements_json', $dCols)) {
     echo "[✓] Added measurements_json to designs\n";
 }
 
+// 6b. Sizes Table Enhancements (Measurements JSON)
+$sCols = $db->query("SHOW COLUMNS FROM sizes")->fetchAll(PDO::FETCH_COLUMN);
+if (!in_array('measurements_json', $sCols)) {
+    $db->exec("ALTER TABLE sizes ADD COLUMN measurements_json JSON NULL AFTER sort_order");
+    echo "[✓] Added measurements_json to sizes\n";
+}
+
+// Backfill standard cutting measurements for sizes if empty
+$sizesWithNullM = $db->query("SELECT id, name, code FROM sizes WHERE measurements_json IS NULL OR measurements_json = '' OR measurements_json = '[]'")->fetchAll();
+if (!empty($sizesWithNullM)) {
+    $upSizeM = $db->prepare("UPDATE sizes SET measurements_json = ? WHERE id = ?");
+    foreach ($sizesWithNullM as $sz) {
+        $name = strtolower($sz['name'] . ' ' . $sz['code']);
+        if (strpos($name, 'small') !== false || $sz['code'] === 'S') {
+            $m = [
+                'pla' => ['length' => '41', 'width' => '15', 'border' => '46', 'mins' => '7'],
+                'bazo' => ['length' => '48', 'width' => '14', 'border' => '42', 'mins' => '7'],
+                'scheme' => [
+                    '1' => ['length' => '41', 'width' => '45', 'border' => '46', 'mins' => '43'],
+                    '2' => ['length' => '', 'width' => '', 'border' => '', 'mins' => ''],
+                    '3' => ['length' => '', 'width' => '', 'border' => '', 'mins' => ''],
+                    '4' => ['length' => '', 'width' => '', 'border' => '', 'mins' => '']
+                ]
+            ];
+        } elseif (strpos($name, 'medium') !== false || $sz['code'] === 'M') {
+            $m = [
+                'pla' => ['length' => '43', 'width' => '16', 'border' => '48', 'mins' => '7.5'],
+                'bazo' => ['length' => '50', 'width' => '15', 'border' => '44', 'mins' => '7.5'],
+                'scheme' => [
+                    '1' => ['length' => '43', 'width' => '47', 'border' => '48', 'mins' => '45'],
+                    '2' => ['length' => '', 'width' => '', 'border' => '', 'mins' => ''],
+                    '3' => ['length' => '', 'width' => '', 'border' => '', 'mins' => ''],
+                    '4' => ['length' => '', 'width' => '', 'border' => '', 'mins' => '']
+                ]
+            ];
+        } elseif (strpos($name, 'extra') !== false || $sz['code'] === 'XL' || $sz['code'] === '2XL') {
+            $m = [
+                'pla' => ['length' => '47', 'width' => '18', 'border' => '52', 'mins' => '8.5'],
+                'bazo' => ['length' => '54', 'width' => '17', 'border' => '48', 'mins' => '8.5'],
+                'scheme' => [
+                    '1' => ['length' => '47', 'width' => '51', 'border' => '52', 'mins' => '49'],
+                    '2' => ['length' => '', 'width' => '', 'border' => '', 'mins' => ''],
+                    '3' => ['length' => '', 'width' => '', 'border' => '', 'mins' => ''],
+                    '4' => ['length' => '', 'width' => '', 'border' => '', 'mins' => '']
+                ]
+            ];
+        } else { // Large or default
+            $m = [
+                'pla' => ['length' => '45', 'width' => '17', 'border' => '50', 'mins' => '8'],
+                'bazo' => ['length' => '52', 'width' => '16', 'border' => '46', 'mins' => '8'],
+                'scheme' => [
+                    '1' => ['length' => '45', 'width' => '49', 'border' => '50', 'mins' => '47'],
+                    '2' => ['length' => '', 'width' => '', 'border' => '', 'mins' => ''],
+                    '3' => ['length' => '', 'width' => '', 'border' => '', 'mins' => ''],
+                    '4' => ['length' => '', 'width' => '', 'border' => '', 'mins' => '']
+                ]
+            ];
+        }
+        $upSizeM->execute([json_encode($m, JSON_UNESCAPED_UNICODE), $sz['id']]);
+    }
+    echo "[✓] Backfilled default garment measurements for " . count($sizesWithNullM) . " sizes\n";
+}
+
 // 7. Product Elements Multipliers & Flags
 $peCols = $db->query("SHOW COLUMNS FROM product_elements")->fetchAll(PDO::FETCH_COLUMN);
 if (!in_array('multiplier', $peCols)) {

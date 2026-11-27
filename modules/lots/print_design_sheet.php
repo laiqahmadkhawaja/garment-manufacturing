@@ -123,8 +123,20 @@ if (empty($bandPlateElements)) {
 // Keep dynamicElements for backwards compatibility if needed
 $dynamicElements = $bandPlateElements;
 
-// Decode measurements or provide standard defaults
+// Decode measurements or provide standard defaults (with size master fallback)
 $measurements = !empty($lot['measurements_json']) ? json_decode($lot['measurements_json'], true) : [];
+if (empty($measurements)) {
+    $fallbackSizeId = $lot['single_size_id'] ?? null;
+    if (!$fallbackSizeId && isset($lotId)) {
+        $fallbackSizeId = $db->query("SELECT size_id FROM lot_variants WHERE lot_id = " . (int)$lotId . " LIMIT 1")->fetchColumn();
+    }
+    if ($fallbackSizeId) {
+        $sizeRow = $db->query("SELECT measurements_json FROM sizes WHERE id = " . (int)$fallbackSizeId)->fetch(PDO::FETCH_ASSOC);
+        if (!empty($sizeRow['measurements_json'])) {
+            $measurements = json_decode($sizeRow['measurements_json'], true) ?: [];
+        }
+    }
+}
 $plaLen = $measurements['pla']['length'] ?? '41';
 $plaWid = $measurements['pla']['width'] ?? '15';
 $plaBor = $measurements['pla']['border'] ?? '46';

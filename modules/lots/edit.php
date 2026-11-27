@@ -93,8 +93,20 @@ if (empty($operators)) {
 // Existing anatomy breakdown
 $anatomyData = !empty($lot['anatomy_breakdown']) ? json_decode($lot['anatomy_breakdown'], true) : [];
 
-// Retrieve lot measurements with fallback to defaults
+// Retrieve lot measurements with fallback to size master or standard defaults
 $lotMeasurements = !empty($lot['measurements_json']) ? json_decode($lot['measurements_json'], true) : [];
+if (empty($lotMeasurements)) {
+    $fallbackSizeId = $lot['single_size_id'] ?? null;
+    if (!$fallbackSizeId && isset($lotId)) {
+        $fallbackSizeId = $db->query("SELECT size_id FROM lot_variants WHERE lot_id = " . (int)$lotId . " LIMIT 1")->fetchColumn();
+    }
+    if ($fallbackSizeId) {
+        $sizeRow = $db->query("SELECT measurements_json FROM sizes WHERE id = " . (int)$fallbackSizeId)->fetch(PDO::FETCH_ASSOC);
+        if (!empty($sizeRow['measurements_json'])) {
+            $lotMeasurements = json_decode($sizeRow['measurements_json'], true) ?: [];
+        }
+    }
+}
 $curPlaLen = $lotMeasurements['pla']['length'] ?? '41';
 $curPlaWid = $lotMeasurements['pla']['width'] ?? '15';
 $curPlaBor = $lotMeasurements['pla']['border'] ?? '46';
