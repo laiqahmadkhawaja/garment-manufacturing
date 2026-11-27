@@ -1036,6 +1036,8 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                                     <i class="bi bi-cart-plus"></i> Buy
                                                                 </a>
                                                                 <button type="button" class="btn btn-outline-secondary py-1 px-2 btn-edit-color"
+                                                                        data-bs-toggle="modal"
+                                                                        data-bs-target="#editColorModal"
                                                                         data-id="<?= $c['id'] ?>"
                                                                         data-code="<?= clean($c['color_code'] ?? '') ?>"
                                                                         data-name="<?= clean($c['name']) ?>"
@@ -1165,6 +1167,8 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                         <td class="text-end">
                                                             <div class="btn-group btn-group-sm">
                                                                 <button type="button" class="btn btn-outline-secondary py-1 px-2 btn-edit-size"
+                                                                        data-bs-toggle="modal"
+                                                                        data-bs-target="#editSizeModal"
                                                                         data-id="<?= $s['id'] ?>"
                                                                         data-name="<?= clean($s['name']) ?>"
                                                                         data-code="<?= clean($s['code']) ?>"
@@ -1716,12 +1720,6 @@ document.addEventListener('DOMContentLoaded', function() {
         createProdRow('Bazo / Sleeves (بازو)', 2, '1 panel yields 2 sleeves', 4.0, 2.0, 1.0, 20.0);
         createProdRow('Pockets (پاکٹ)', 2, '1 panel yields 4 pockets (0.5 پلہ)', 0.5, 4.0, 0.5, 20.0);
     }
-        createProdRow('Front', 1, 'Main front body', 1.5);
-        createProdRow('Back', 1, 'Main back body', 1.5);
-        createProdRow('Sleeves', 2, 'Left & right sleeves', 2.0);
-        createProdRow('Pockets', 2, 'Side pockets', 0.5);
-        createProdRow('Collar / Neck', 1, 'Collar / Neck trim', 1.0);
-    }
 
     // =========================================================================
     // 3. PRODUCT RECIPE / BOM BUILDER SCRIPT
@@ -1913,74 +1911,128 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // Helper function to populate Color Edit Modal
+    function populateColorEdit(btn) {
+        if (!btn) return;
+        const id = btn.getAttribute('data-id') || '';
+        const code = btn.getAttribute('data-code') || '';
+        const name = btn.getAttribute('data-name') || '';
+        const hex = btn.getAttribute('data-hex') || '#2563eb';
+        const yarn = btn.getAttribute('data-yarn') || '0';
+
+        const elId = document.getElementById('edit_color_id');
+        const elCode = document.getElementById('edit_color_code');
+        const elName = document.getElementById('edit_color_name');
+        const elHex = document.getElementById('edit_color_hex');
+        const elHexTxt = document.getElementById('edit_color_hex_txt');
+        const elYarn = document.getElementById('edit_color_yarn');
+
+        if (elId) elId.value = id;
+        if (elCode) elCode.value = code;
+        if (elName) elName.value = name;
+        if (elHex) elHex.value = hex;
+        if (elHexTxt) elHexTxt.value = hex;
+        if (elYarn) elYarn.value = yarn;
+    }
+
     // Color edit modal handler
     const editColorModalEl = document.getElementById('editColorModal');
     if (editColorModalEl) {
-        const editColorModal = new bootstrap.Modal(editColorModalEl);
-        document.querySelectorAll('.btn-edit-color').forEach(btn => {
-            btn.addEventListener('click', function() {
-                document.getElementById('edit_color_id').value = this.dataset.id;
-                document.getElementById('edit_color_code').value = this.dataset.code;
-                document.getElementById('edit_color_name').value = this.dataset.name;
-                document.getElementById('edit_color_hex').value = this.dataset.hex;
-                document.getElementById('edit_color_hex_txt').value = this.dataset.hex;
-                document.getElementById('edit_color_yarn').value = this.dataset.yarn;
-                editColorModal.show();
+        editColorModalEl.addEventListener('show.bs.modal', function(event) {
+            const btn = event.relatedTarget || document.activeElement;
+            if (btn && btn.classList && btn.classList.contains('btn-edit-color')) {
+                populateColorEdit(btn);
+            }
+        });
+
+        const hexInp = document.getElementById('edit_color_hex');
+        if (hexInp) {
+            hexInp.addEventListener('input', function() {
+                const hexTxt = document.getElementById('edit_color_hex_txt');
+                if (hexTxt) hexTxt.value = this.value;
             });
-        });
-        document.getElementById('edit_color_hex').addEventListener('input', function() {
-            document.getElementById('edit_color_hex_txt').value = this.value;
-        });
+        }
+    }
+
+    // Size edit modal helper
+    function populateSizeEdit(btn) {
+        if (!btn) return;
+        const elId = document.getElementById('edit_size_id');
+        const elName = document.getElementById('edit_size_name');
+        const elCode = document.getElementById('edit_size_code');
+        const elSort = document.getElementById('edit_size_sort');
+
+        if (elId) elId.value = btn.getAttribute('data-id') || '';
+        if (elName) elName.value = btn.getAttribute('data-name') || '';
+        if (elCode) elCode.value = btn.getAttribute('data-code') || '';
+        if (elSort) elSort.value = btn.getAttribute('data-sort') || '1';
+
+        // Populate pattern measurements
+        try {
+            const raw = btn.getAttribute('data-measurements') || '';
+            const m = raw ? JSON.parse(raw) : {};
+            const pla = m.pla || {};
+            const bazo = m.bazo || {};
+            const scheme = m.scheme || {};
+
+            const setVal = (id, val) => {
+                const el = document.getElementById(id);
+                if (el) el.value = (val !== undefined && val !== null) ? val : '';
+            };
+
+            setVal('edit_size_pla_length', pla.length);
+            setVal('edit_size_pla_width', pla.width);
+            setVal('edit_size_pla_border', pla.border);
+            setVal('edit_size_pla_mins', pla.mins);
+
+            setVal('edit_size_bazo_length', bazo.length);
+            setVal('edit_size_bazo_width', bazo.width);
+            setVal('edit_size_bazo_border', bazo.border);
+            setVal('edit_size_bazo_mins', bazo.mins);
+
+            for (let i = 1; i <= 4; i++) {
+                const col = scheme[i] || {};
+                setVal(`edit_size_scheme_${i}_length`, col.length);
+                setVal(`edit_size_scheme_${i}_width`, col.width);
+                setVal(`edit_size_scheme_${i}_border`, col.border);
+                setVal(`edit_size_scheme_${i}_mins`, col.mins);
+            }
+        } catch (e) {
+            console.error('Error parsing size measurements', e);
+        }
     }
 
     // Size edit modal handler
     const editSizeModalEl = document.getElementById('editSizeModal');
     if (editSizeModalEl) {
-        const editSizeModal = new bootstrap.Modal(editSizeModalEl);
-        document.querySelectorAll('.btn-edit-size').forEach(btn => {
-            btn.addEventListener('click', function() {
-                document.getElementById('edit_size_id').value = this.dataset.id;
-                document.getElementById('edit_size_name').value = this.dataset.name;
-                document.getElementById('edit_size_code').value = this.dataset.code;
-                document.getElementById('edit_size_sort').value = this.dataset.sort;
-
-                // Populate pattern measurements
-                try {
-                    const raw = this.getAttribute('data-measurements') || '';
-                    const m = raw ? JSON.parse(raw) : {};
-                    const pla = m.pla || {};
-                    const bazo = m.bazo || {};
-                    const scheme = m.scheme || {};
-
-                    document.getElementById('edit_size_pla_length').value = pla.length || '';
-                    document.getElementById('edit_size_pla_width').value = pla.width || '';
-                    document.getElementById('edit_size_pla_border').value = pla.border || '';
-                    document.getElementById('edit_size_pla_mins').value = pla.mins || '';
-
-                    document.getElementById('edit_size_bazo_length').value = bazo.length || '';
-                    document.getElementById('edit_size_bazo_width').value = bazo.width || '';
-                    document.getElementById('edit_size_bazo_border').value = bazo.border || '';
-                    document.getElementById('edit_size_bazo_mins').value = bazo.mins || '';
-
-                    for (let i = 1; i <= 4; i++) {
-                        const col = scheme[i] || {};
-                        const elLen = document.getElementById(`edit_size_scheme_${i}_length`);
-                        const elWid = document.getElementById(`edit_size_scheme_${i}_width`);
-                        const elBor = document.getElementById(`edit_size_scheme_${i}_border`);
-                        const elMin = document.getElementById(`edit_size_scheme_${i}_mins`);
-                        if (elLen) elLen.value = col.length || '';
-                        if (elWid) elWid.value = col.width || '';
-                        if (elBor) elBor.value = col.border || '';
-                        if (elMin) elMin.value = col.mins || '';
-                    }
-                } catch (e) {
-                    console.error('Error parsing size measurements', e);
-                }
-
-                editSizeModal.show();
-            });
+        editSizeModalEl.addEventListener('show.bs.modal', function(event) {
+            const btn = event.relatedTarget || document.activeElement;
+            if (btn && btn.classList && btn.classList.contains('btn-edit-size')) {
+                populateSizeEdit(btn);
+            }
         });
     }
+
+    // Global click delegation as bulletproof fallback for both buttons
+    document.addEventListener('click', function(e) {
+        const colorBtn = e.target.closest('.btn-edit-color');
+        if (colorBtn) {
+            populateColorEdit(colorBtn);
+            if (editColorModalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                bootstrap.Modal.getOrCreateInstance(editColorModalEl).show();
+            }
+            return;
+        }
+
+        const sizeBtn = e.target.closest('.btn-edit-size');
+        if (sizeBtn) {
+            populateSizeEdit(sizeBtn);
+            if (editSizeModalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                bootstrap.Modal.getOrCreateInstance(editSizeModalEl).show();
+            }
+            return;
+        }
+    });
 });
 </script>
 
