@@ -1536,6 +1536,13 @@ if (empty($cuttingWorkers)) {
 // Fetch active warehouses for packing stage
 $finishedWarehouses = $db->query("SELECT id, name, location FROM warehouses WHERE is_active = 1 ORDER BY id ASC")->fetchAll();
 
+// Fetch all active operations for fast desk filters
+$operationsList = $db->query("SELECT o.*, dep.name AS department_name 
+                             FROM operations o 
+                             LEFT JOIN departments dep ON o.department_id = dep.id 
+                             WHERE o.is_active = 1 
+                             ORDER BY o.sequence ASC, o.name ASC")->fetchAll();
+
 // Active/Preselected lot for recent entries panel
 $activePanelLotId = $preselectedLotId ?: (int)($_POST['lot_id'] ?? 0);
 if ($activePanelLotId <= 0 && !empty($lots)) {
@@ -1594,6 +1601,149 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             </div>
         <?php endif; ?>
 
+        <!-- WORKFLOW ENTRY MODE SWITCHER TABS -->
+        <div class="card-modern shadow-sm mb-4 border-0 bg-white">
+            <div class="card-modern-body p-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn <?= (empty($preselectedMode) && empty($_POST)) ? 'btn-primary' : 'btn-outline-secondary' ?> fw-bold px-3 py-2" id="tabBtnFastDesk">
+                        <i class="bi bi-lightning-charge-fill me-1"></i> ⚡ کاریگر فاسٹ ڈیسک (Worker Fast Desk)
+                    </button>
+                    <button type="button" class="btn <?= (!empty($preselectedMode) || !empty($_POST)) ? 'btn-primary' : 'btn-outline-secondary' ?> fw-semibold px-3 py-2" id="tabBtnAdvancedMatrix">
+                        <i class="bi bi-sliders me-1"></i> 📋 تفصیلی میٹرکس فارم (Advanced Matrix Form)
+                    </button>
+                </div>
+                <div class="text-muted small">
+                    <span class="badge bg-success-subtle text-success me-1">Real-time</span>
+                    ورکر اور آپریشن منتخب کر کے تمام لاٹس کی پروڈکشن انٹری رو وائز محفوظ کریں
+                </div>
+            </div>
+        </div>
+
+        <!-- 1. WORKER-CENTRIC FAST PRODUCTION DESK (DEFAULT PRIMARY VIEW) -->
+        <div id="fastDeskContainer" class="<?= (!empty($preselectedMode) || !empty($_POST)) ? 'd-none' : '' ?>">
+            <!-- TOP FILTER BAR -->
+            <div class="card-modern shadow-sm mb-4 border-0">
+                <div class="card-modern-header py-2 px-3 bg-light border-bottom d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-primary p-2 rounded-2"><i class="bi bi-person-lines-fill text-white fs-6"></i></span>
+                        <div>
+                            <h6 class="fw-bold mb-0 text-dark">کاریگر اور پروڈکشن فلٹرز (Worker Production Desk)</h6>
+                            <span class="text-muted small" style="font-size: 0.75rem;">ورکر سلیکٹ کریں، اس کے اسائنڈ آپریشنز اور ایکٹیو لاٹس خودکار لوڈ ہو جائیں گی</span>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="btnDeskReload" title="ریفریش شیٹ">
+                            <i class="bi bi-arrow-clockwise me-1"></i> ریفریش (Refresh)
+                        </button>
+                    </div>
+                </div>
+                <div class="card-modern-body p-3">
+                    <div class="row g-2 align-items-end">
+                        <!-- Filter 1: Worker (Primary) -->
+                        <div class="col-12 col-md-3">
+                            <label class="form-label fw-bold small text-dark mb-1">
+                                <i class="bi bi-person-fill text-primary me-1"></i> کاریگر منتخب کریں (Worker) *
+                            </label>
+                            <select id="deskWorkerSelect" class="form-select form-select-sm fw-bold border-primary shadow-sm">
+                                <option value="">-- تمام فعال کاریگر (All Workers) --</option>
+                                <?php foreach ($workers as $w): ?>
+                                    <option value="<?= $w['id'] ?>" data-dept="<?= $w['department_id'] ?>" data-rate="<?= $w['default_rate'] ?>" data-minrate="<?= $w['rate_per_minute'] ?>" data-type="<?= clean($w['worker_type']) ?>">
+                                        <?= clean($w['name']) ?> (<?= clean($w['code']) ?>) — <?= clean($w['department_name'] ?: 'عام') ?> [<?= clean($w['worker_type']) ?>]
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <!-- Filter 2: Workflow Step / Operation -->
+                        <div class="col-12 col-md-3">
+                            <label class="form-label fw-bold small text-dark mb-1">
+                                <i class="bi bi-gear-wide-connected text-secondary me-1"></i> مرحلہ / آپریشن (Operation)
+                            </label>
+                            <select id="deskOpFilter" class="form-select form-select-sm fw-semibold">
+                                <option value="">-- تمام متعلقہ آپریشنز (All Operations) --</option>
+                                <?php foreach ($operationsList as $op): ?>
+                                    <option value="<?= $op['id'] ?>" data-dept="<?= $op['department_id'] ?>" data-rate="<?= $op['default_rate'] ?>" data-mins="<?= $op['estimated_minutes'] ?>" <?= ($preselectedOpId === $op['id']) ? 'selected' : '' ?>>
+                                        <?= clean($op['name']) ?> (<?= clean($op['department_name'] ?: 'Dept') ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <!-- Filter 3: Lot Filter -->
+                        <div class="col-12 col-md-2">
+                            <label class="form-label fw-bold small text-dark mb-1">
+                                <i class="bi bi-stack text-secondary me-1"></i> لاٹ فلٹر (Lot #)
+                            </label>
+                            <select id="deskLotFilter" class="form-select form-select-sm fw-semibold">
+                                <option value="">-- تمام ایکٹیو لاٹس (All Lots) --</option>
+                                <?php foreach ($lots as $l): ?>
+                                    <option value="<?= $l['id'] ?>" <?= ($preselectedLotId === $l['id']) ? 'selected' : '' ?>>
+                                        LOT #<?= clean($l['lot_number']) ?> (<?= $l['total_pieces'] ?> pcs)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <!-- Filter 4: Entry Date -->
+                        <div class="col-6 col-md-2">
+                            <label class="form-label fw-bold small text-dark mb-1">
+                                <i class="bi bi-calendar-event text-secondary me-1"></i> تاریخ (Date)
+                            </label>
+                            <input type="date" id="deskEntryDate" class="form-control form-control-sm fw-semibold" value="<?= date('Y-m-d') ?>">
+                        </div>
+
+                        <!-- Filter 5: Shift -->
+                        <div class="col-6 col-md-2">
+                            <label class="form-label fw-bold small text-dark mb-1">
+                                <i class="bi bi-sun text-secondary me-1"></i> شفٹ (Shift)
+                            </label>
+                            <select id="deskShiftSelect" class="form-select form-select-sm fw-semibold">
+                                <option value="Day Shift" selected>Day Shift (دن)</option>
+                                <option value="Night Shift">Night Shift (رات)</option>
+                                <option value="Single Shift">Single Shift (سنگل)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Second row of Filter: Search & Status summary -->
+                    <div class="row g-2 mt-2 pt-2 border-top align-items-center">
+                        <div class="col-12 col-md-4">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                <input type="text" id="deskQuickSearch" class="form-control form-control-sm border-start-0" placeholder="فوری تلاش (Lot #, Design, Product, Operation)...">
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-8 text-md-end">
+                            <div class="d-flex flex-wrap align-items-center justify-content-md-end gap-2">
+                                <span class="badge bg-light text-dark border px-2 py-1" id="deskWorkerInfoBadge">
+                                    <i class="bi bi-person me-1"></i> کاریگر: <strong>تمام کاریگر</strong>
+                                </span>
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1" id="deskLotsCountBadge">
+                                    <i class="bi bi-boxes me-1"></i> <strong>0</strong> لاٹس
+                                </span>
+                                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1" id="deskPendingCountBadge">
+                                    <i class="bi bi-hourglass-split me-1"></i> <strong>0</strong> پینڈنگ مراحل
+                                </span>
+                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1" id="deskSavedCountBadge">
+                                    <i class="bi bi-check-circle-fill me-1"></i> <strong>0</strong> محفوظ شدہ انٹریز
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- NOTIFICATION / TOAST ALERT CONTAINER -->
+            <div id="fastDeskAlertContainer" style="position: sticky; top: 10px; z-index: 1050;"></div>
+
+            <!-- MAIN ACTIVE LOTS SHEET CONTAINER -->
+            <div id="fastDeskSheet">
+                <!-- Rendered dynamically by loadFastDeskSheet() -->
+            </div>
+        </div>
+
+        <!-- 2. ADVANCED FORM CONTAINER (ORIGINAL MULTI-MODE FORM) -->
+        <div id="advancedFormContainer" class="<?= (!empty($preselectedMode) || !empty($_POST)) ? '' : 'd-none' ?>">
         <form method="POST" action="" id="prodEntryForm">
             <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
             <input type="hidden" name="entry_mode" id="pe_entry_mode" value="operator_initial">
@@ -2394,10 +2544,624 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 </div>
             </div>
         </form>
+        </div> <!-- /#advancedFormContainer -->
     </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // =========================================================================
+    // FAST WORKER PRODUCTION DESK CONTROLLER
+    // =========================================================================
+    const fastDeskContainer = document.getElementById('fastDeskContainer');
+    const advancedFormContainer = document.getElementById('advancedFormContainer');
+    const tabBtnFastDesk = document.getElementById('tabBtnFastDesk');
+    const tabBtnAdvancedMatrix = document.getElementById('tabBtnAdvancedMatrix');
+
+    const deskWorkerSelect = document.getElementById('deskWorkerSelect');
+    const deskOpFilter = document.getElementById('deskOpFilter');
+    const deskLotFilter = document.getElementById('deskLotFilter');
+    const deskEntryDate = document.getElementById('deskEntryDate');
+    const deskShiftSelect = document.getElementById('deskShiftSelect');
+    const deskQuickSearch = document.getElementById('deskQuickSearch');
+    const btnDeskReload = document.getElementById('btnDeskReload');
+
+    const fastDeskSheet = document.getElementById('fastDeskSheet');
+    const fastDeskAlertContainer = document.getElementById('fastDeskAlertContainer');
+    const deskWorkerInfoBadge = document.getElementById('deskWorkerInfoBadge');
+    const deskLotsCountBadge = document.getElementById('deskLotsCountBadge');
+    const deskPendingCountBadge = document.getElementById('deskPendingCountBadge');
+    const deskSavedCountBadge = document.getElementById('deskSavedCountBadge');
+
+    let savedEntriesCount = 0;
+    let fastSheetCachedData = null;
+
+    function escapeHtml(text) {
+        if (!text && text !== 0) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function showDeskToast(type, title, message) {
+        if (!fastDeskAlertContainer) return;
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show shadow-sm d-flex align-items-center justify-content-between p-2 px-3 mb-3`;
+        alertDiv.setAttribute('role', 'alert');
+        alertDiv.innerHTML = `
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi ${type === 'success' ? 'bi-check-circle-fill text-success' : 'bi-exclamation-triangle-fill text-danger'} fs-5"></i>
+                <div>
+                    <strong class="text-dark">${escapeHtml(title)}</strong>
+                    ${message ? `<div class="small text-muted">${message}</div>` : ''}
+                </div>
+            </div>
+            <button type="button" class="btn-close p-2" data-bs-dismiss="alert"></button>
+        `;
+        fastDeskAlertContainer.prepend(alertDiv);
+        setTimeout(() => {
+            alertDiv.classList.remove('show');
+            setTimeout(() => alertDiv.remove(), 250);
+        }, 7000);
+    }
+
+    function switchTopTab(tab) {
+        if (tab === 'advanced') {
+            if (fastDeskContainer) fastDeskContainer.classList.add('d-none');
+            if (advancedFormContainer) advancedFormContainer.classList.remove('d-none');
+            if (tabBtnFastDesk) {
+                tabBtnFastDesk.className = 'btn btn-outline-secondary fw-semibold px-3 py-2';
+            }
+            if (tabBtnAdvancedMatrix) {
+                tabBtnAdvancedMatrix.className = 'btn btn-primary fw-bold px-3 py-2';
+            }
+        } else {
+            if (fastDeskContainer) fastDeskContainer.classList.remove('d-none');
+            if (advancedFormContainer) advancedFormContainer.classList.add('d-none');
+            if (tabBtnFastDesk) {
+                tabBtnFastDesk.className = 'btn btn-primary fw-bold px-3 py-2';
+            }
+            if (tabBtnAdvancedMatrix) {
+                tabBtnAdvancedMatrix.className = 'btn btn-outline-secondary fw-semibold px-3 py-2';
+            }
+            loadFastDeskSheet();
+        }
+    }
+
+    if (tabBtnFastDesk) tabBtnFastDesk.addEventListener('click', () => switchTopTab('fast_desk'));
+    if (tabBtnAdvancedMatrix) tabBtnAdvancedMatrix.addEventListener('click', () => switchTopTab('advanced'));
+
+    async function loadFastDeskSheet() {
+        if (!fastDeskSheet) return;
+        const workerId = deskWorkerSelect ? deskWorkerSelect.value : '';
+        const opId = deskOpFilter ? deskOpFilter.value : '';
+        const lotId = deskLotFilter ? deskLotFilter.value : '';
+
+        fastDeskSheet.innerHTML = `
+            <div class="card-modern shadow-sm text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <div class="mt-2 text-dark fw-bold">لاٹس اور آپریشنز لوڈ ہو رہے ہیں...</div>
+                <div class="text-muted small">براہ کرم انتظار کریں</div>
+            </div>
+        `;
+
+        try {
+            const url = `${BASE_URL}modules/production/ajax.php?action=get_fast_sheet_data&worker_id=${encodeURIComponent(workerId)}&operation_id=${encodeURIComponent(opId)}&lot_id=${encodeURIComponent(lotId)}`;
+            const res = await fetch(url);
+            const data = await res.json();
+
+            if (data.status !== 'success') {
+                fastDeskSheet.innerHTML = `
+                    <div class="alert alert-danger py-3">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> ${escapeHtml(data.message || 'Error loading sheet data')}
+                    </div>
+                `;
+                return;
+            }
+
+            fastSheetCachedData = data;
+            renderFastDeskSheet(data);
+        } catch (err) {
+            fastDeskSheet.innerHTML = `
+                <div class="alert alert-danger py-3">
+                    <i class="bi bi-exclamation-circle me-2"></i> نیٹ ورک یا سرور کنکشن میں خرابی: ${escapeHtml(err.message)}
+                </div>
+            `;
+        }
+    }
+
+    function renderFastDeskSheet(data) {
+        const worker = data.worker;
+        const assignedOps = data.assigned_operation_ids || [];
+        const allWorkers = data.all_workers || [];
+        const lots = data.sheet || [];
+
+        // Update summary badges
+        if (deskWorkerInfoBadge) {
+            if (worker) {
+                deskWorkerInfoBadge.innerHTML = `<i class="bi bi-person-check-fill text-success me-1"></i> کاریگر: <strong>${escapeHtml(worker.name)}</strong> (${escapeHtml(worker.department_name || 'عام')}) [${escapeHtml(worker.worker_type)}]`;
+            } else {
+                deskWorkerInfoBadge.innerHTML = `<i class="bi bi-people me-1"></i> کاریگر: <strong>تمام کاریگر (All Workers)</strong>`;
+            }
+        }
+
+        let totalPendingStages = 0;
+        lots.forEach(l => {
+            totalPendingStages += (l.operations || []).filter(o => o.pending_balance > 0).length;
+        });
+
+        if (deskLotsCountBadge) {
+            deskLotsCountBadge.innerHTML = `<i class="bi bi-boxes me-1"></i> <strong>${lots.length}</strong> لاٹس`;
+        }
+        if (deskPendingCountBadge) {
+            deskPendingCountBadge.innerHTML = `<i class="bi bi-hourglass-split me-1"></i> <strong>${totalPendingStages}</strong> باقی مراحل`;
+        }
+
+        if (lots.length === 0) {
+            fastDeskSheet.innerHTML = `
+                <div class="card-modern shadow-sm text-center py-5">
+                    <i class="bi bi-check-circle-fill text-success fs-1 mb-2"></i>
+                    <h5 class="fw-bold text-dark">کوئی پینڈنگ کام نہیں ملا</h5>
+                    <p class="text-muted small mb-0">منتخب کردہ فلٹرز کے لیے تمام کام مکمل ہے یا کوئی فعال لاٹ موجود نہیں ہے۔</p>
+                </div>
+            `;
+            return;
+        }
+
+        const selectedWorkerId = deskWorkerSelect ? parseInt(deskWorkerSelect.value, 10) : 0;
+
+        let html = '';
+        lots.forEach(lot => {
+            const ops = lot.operations || [];
+            if (ops.length === 0) return;
+
+            html += `
+            <div class="card-modern mb-4 shadow-sm lot-block" data-lot-id="${lot.lot_id}">
+                <div class="card-modern-header d-flex flex-wrap justify-content-between align-items-center gap-2 py-2 px-3 bg-light border-bottom">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="fs-5 fw-bold text-primary">LOT #${escapeHtml(lot.lot_number)}</span>
+                        <span class="badge bg-white text-dark border fw-semibold">${escapeHtml(lot.product_name)}</span>
+                        ${lot.design_number ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle">Design #${escapeHtml(lot.design_number)}</span>` : ''}
+                        <span class="badge bg-secondary-subtle text-secondary">${escapeHtml(lot.single_size_name || 'Standard Size')}</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-dark fs-6 px-2 py-1">ٹوٹل لاٹ: ${lot.total_pieces} pcs</span>
+                        <span class="badge ${lot.lot_status === 'In Production' ? 'bg-primary' : 'bg-secondary'}">${escapeHtml(lot.lot_status)}</span>
+                        <a href="${BASE_URL}modules/lots/view.php?id=${lot.lot_id}" target="_blank" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size: 0.72rem;">
+                            <i class="bi bi-box-arrow-up-right me-1"></i> لاٹ فائل
+                        </a>
+                    </div>
+                </div>
+                <div class="card-modern-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr class="small text-muted text-uppercase" style="font-size: 0.75rem;">
+                                    <th style="width: 45px;" class="text-center">ترتیب</th>
+                                    <th>مرحلہ / آپریشن (Operation)</th>
+                                    <th style="min-width: 160px;">کاریگر (Worker)</th>
+                                    <th style="width: 100px;">شفٹ</th>
+                                    <th class="text-center" style="width: 85px;">ٹوٹل لاٹ</th>
+                                    <th class="text-center" style="width: 85px;">پہلے شدہ</th>
+                                    <th class="text-center" style="width: 85px;">باقی پینڈنگ</th>
+                                    <th class="text-center" style="min-width: 130px;">آج کے پیس (Good Pcs)</th>
+                                    <th class="text-center" style="width: 110px;">خراب / ری ورک</th>
+                                    <th class="text-end" style="min-width: 120px;">ریٹ اور اجرت</th>
+                                    <th class="text-center" style="width: 125px;">محفوظ کریں</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+            `;
+
+            ops.forEach(op => {
+                const isCompleted = (op.pending_balance <= 0);
+                const currentShiftVal = deskShiftSelect ? deskShiftSelect.value : 'Day Shift';
+
+                let workerOptionsHtml = `<option value="">-- کاریگر منتخب کریں --</option>`;
+                allWorkers.forEach(w => {
+                    const isSelected = selectedWorkerId > 0 ? (w.id === selectedWorkerId) : (worker && w.id === worker.id);
+                    workerOptionsHtml += `<option value="${w.id}" data-rate="${w.default_rate}" data-minrate="${w.rate_per_minute}" ${isSelected ? 'selected' : ''}>${escapeHtml(w.name)} (${escapeHtml(w.code)}) - ${escapeHtml(w.department_name || '')}</option>`;
+                });
+
+                const initialLabour = (op.pending_balance * op.default_rate).toFixed(2);
+
+                html += `
+                <tr class="op-row ${isCompleted ? 'table-success bg-opacity-25' : ''}" 
+                    data-lot-id="${lot.lot_id}" 
+                    data-op-id="${op.operation_id}" 
+                    data-pending="${op.pending_balance}" 
+                    data-total="${op.required_qty}"
+                    data-search-text="${escapeHtml(lot.lot_number + ' ' + lot.product_name + ' ' + (lot.design_number || '') + ' ' + op.op_name + ' ' + (op.dept_name || '')).toLowerCase()}">
+                    <td class="text-center fw-bold text-muted">${op.sequence}</td>
+                    <td>
+                        <div class="fw-bold text-dark">${escapeHtml(op.op_name)}</div>
+                        <span class="badge bg-light text-secondary border small" style="font-size: 0.7rem;">${escapeHtml(op.dept_name || 'عام')}</span>
+                        ${(op.is_operator_or_cutting && op.elements && op.elements.length > 0) ? `
+                            <button type="button" class="btn btn-link btn-xs p-0 text-decoration-none text-primary fw-semibold toggle-elements-btn ms-1" style="font-size: 0.72rem;" data-target="elem-drawer-${lot.lot_id}-${op.operation_id}">
+                                <i class="bi bi-puzzle me-1"></i>اعضاء و پلے (${op.elements.length})
+                            </button>
+                        ` : ''}
+                    </td>
+                    <td>
+                        <select class="form-select form-select-sm row-worker-select fw-semibold" style="font-size: 0.78rem;" ${isCompleted ? 'disabled' : ''}>
+                            ${workerOptionsHtml}
+                        </select>
+                    </td>
+                    <td>
+                        <select class="form-select form-select-sm row-shift-select" style="font-size: 0.78rem;" ${isCompleted ? 'disabled' : ''}>
+                            <option value="Day Shift" ${currentShiftVal === 'Day Shift' ? 'selected' : ''}>Day (دن)</option>
+                            <option value="Night Shift" ${currentShiftVal === 'Night Shift' ? 'selected' : ''}>Night (رات)</option>
+                        </select>
+                    </td>
+                    <td class="text-center">
+                        <span class="fw-bold text-secondary">${op.required_qty}</span>
+                        <div class="text-muted" style="font-size: 0.65rem;">ٹوٹل اتنے ہیں</div>
+                    </td>
+                    <td class="text-center">
+                        <span class="fw-bold text-success fs-6 cell-good-done">${op.good_done}</span>
+                        <div class="text-muted" style="font-size: 0.65rem;">پہلے شدہ</div>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge ${op.pending_balance > 0 ? 'bg-warning-subtle text-warning-emphasis' : 'bg-success-subtle text-success'} fs-6 cell-pending-bal">${op.pending_balance}</span>
+                        <div class="text-muted" style="font-size: 0.65rem;">باقی پینڈنگ</div>
+                    </td>
+                    <td class="text-center">
+                        <div class="input-group input-group-sm mx-auto" style="max-width: 105px;">
+                            <input type="number" class="form-control form-control-sm text-center fw-bold input-good-qty text-primary fs-6" 
+                                   value="${op.pending_balance}" min="0" max="${op.pending_balance}" step="1" 
+                                   ${isCompleted ? 'disabled' : ''}>
+                        </div>
+                        <span class="text-muted d-block validation-hint" style="font-size: 0.65rem;">(میکس: <span class="max-bal-text">${op.pending_balance}</span>)</span>
+                    </td>
+                    <td class="text-center">
+                        <div class="d-flex gap-1 justify-content-center">
+                            <input type="number" class="form-control form-control-sm px-1 text-center input-rej text-danger fw-semibold" placeholder="خراب" title="خراب پیسز (Rejections)" value="0" min="0" style="width: 48px; font-size: 0.75rem;" ${isCompleted ? 'disabled' : ''}>
+                            <input type="number" class="form-control form-control-sm px-1 text-center input-rew text-warning-emphasis fw-semibold" placeholder="ری ورک" title="ری ورک پیسز (Rework)" value="0" min="0" style="width: 48px; font-size: 0.75rem;" ${isCompleted ? 'disabled' : ''}>
+                        </div>
+                    </td>
+                    <td class="text-end">
+                        <div class="d-flex align-items-center justify-content-end gap-1 mb-1">
+                            <span class="text-muted small" style="font-size: 0.68rem;">Rs.</span>
+                            <input type="number" step="0.25" class="form-control form-control-sm px-1 text-end fw-bold input-rate" value="${op.default_rate.toFixed(2)}" style="width: 65px; font-size: 0.78rem;" ${isCompleted ? 'disabled' : ''}>
+                        </div>
+                        <span class="badge bg-success-subtle text-success fw-bold preview-labour-badge" style="font-size: 0.75rem;">
+                            Rs. ${initialLabour}
+                        </span>
+                    </td>
+                    <td class="text-center">
+                        ${isCompleted ? `
+                            <span class="badge bg-success text-white py-1 px-2"><i class="bi bi-check-circle-fill me-1"></i> مکمل</span>
+                        ` : `
+                            <button type="button" class="btn btn-success btn-sm fw-bold px-2 py-1 btn-save-fast-row shadow-sm">
+                                <i class="bi bi-check2-circle me-1"></i> محفوظ کریں
+                            </button>
+                        `}
+                    </td>
+                </tr>
+                `;
+
+                // Elements Sub-Row
+                if (op.is_operator_or_cutting && op.elements && op.elements.length > 0) {
+                    html += `
+                    <tr class="table-light elements-drawer-row d-none" id="elem-drawer-${lot.lot_id}-${op.operation_id}">
+                        <td colspan="11" class="py-2 px-3 border-bottom">
+                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                <span class="badge bg-primary text-white fw-bold"><i class="bi bi-puzzle me-1"></i> اعضاء اور پلے (Elements Breakdown):</span>
+                                ${op.elements.map(el => `
+                                    <div class="badge bg-white text-dark border p-1 px-2 text-start" style="font-size: 0.75rem;">
+                                        <div><strong>${escapeHtml(el.element_name)}</strong>: 
+                                            <span class="text-primary fw-bold el-calc-pcs" data-mult="${el.multiplier}">${Math.ceil(op.pending_balance * el.multiplier)} pcs</span>
+                                        </div>
+                                        <div class="text-muted" style="font-size: 0.68rem;">
+                                            (کل مطلوب: ${el.required_pieces} | ہو چکے: ${el.done_pieces} | باقی: ${el.pending_pieces})
+                                            ${el.pieces_per_palla > 1 ? ` &bull; <em>${el.pieces_per_palla} pcs/پلہ</em>` : ''}
+                                            ${el.rate_per_palla > 0 ? ` &bull; <strong class="text-success">Rs. ${el.rate_per_palla}/پلہ</strong>` : ''}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </td>
+                    </tr>
+                    `;
+                }
+            });
+
+            html += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            `;
+        });
+
+        fastDeskSheet.innerHTML = html;
+        attachFastDeskRowEvents();
+    }
+
+    function attachFastDeskRowEvents() {
+        if (!fastDeskSheet) return;
+
+        // 1. Toggle Elements Drawer
+        fastDeskSheet.querySelectorAll('.toggle-elements-btn').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('data-target');
+                const drawer = document.getElementById(targetId);
+                if (drawer) {
+                    drawer.classList.toggle('d-none');
+                }
+            });
+        });
+
+        // 2. Row Calculations & Validation (Good Qty, Rate, Defects)
+        fastDeskSheet.querySelectorAll('.op-row').forEach(row => {
+            const lotId = row.getAttribute('data-lot-id');
+            const opId = row.getAttribute('data-op-id');
+            const inpGood = row.querySelector('.input-good-qty');
+            const inpRate = row.querySelector('.input-rate');
+            const previewLabour = row.querySelector('.preview-labour-badge');
+            const validationHint = row.querySelector('.validation-hint');
+            const saveBtn = row.querySelector('.btn-save-fast-row');
+            const workerSelect = row.querySelector('.row-worker-select');
+            const drawerRow = document.getElementById(`elem-drawer-${lotId}-${opId}`);
+
+            function updateRowCalculations() {
+                if (!inpGood || !inpRate) return;
+                const maxVal = parseInt(row.getAttribute('data-pending'), 10) || 0;
+                let goodVal = parseInt(inpGood.value, 10);
+                if (isNaN(goodVal)) goodVal = 0;
+
+                const rateVal = parseFloat(inpRate.value) || 0.00;
+
+                // Capacity check: Cannot exceed pending balance
+                if (goodVal > maxVal) {
+                    inpGood.classList.add('is-invalid');
+                    inpGood.classList.add('border-danger');
+                    if (validationHint) {
+                        validationHint.innerHTML = `<span class="text-danger fw-bold">⚠️ زیادہ نہیں ہو سکتے! باقی صرف ${maxVal} ہیں</span>`;
+                    }
+                    if (saveBtn) saveBtn.disabled = true;
+                } else {
+                    inpGood.classList.remove('is-invalid');
+                    inpGood.classList.remove('border-danger');
+                    if (validationHint) {
+                        validationHint.innerHTML = `(میکس: <span class="max-bal-text">${maxVal}</span>)`;
+                    }
+                    if (saveBtn) saveBtn.disabled = false;
+                }
+
+                // Update labour preview
+                if (previewLabour) {
+                    const totalLabour = (Math.max(0, goodVal) * rateVal).toFixed(2);
+                    previewLabour.textContent = `Rs. ${totalLabour}`;
+                }
+
+                // Update element drawer numbers
+                if (drawerRow) {
+                    drawerRow.querySelectorAll('.el-calc-pcs').forEach(elSpan => {
+                        const mult = parseFloat(elSpan.getAttribute('data-mult')) || 1.0;
+                        const calcPcs = Math.ceil(Math.max(0, goodVal) * mult);
+                        elSpan.textContent = `${calcPcs} pcs`;
+                    });
+                }
+            }
+
+            if (inpGood) {
+                inpGood.addEventListener('input', updateRowCalculations);
+            }
+            if (inpRate) {
+                inpRate.addEventListener('input', updateRowCalculations);
+            }
+
+            // Worker change in row
+            if (workerSelect) {
+                workerSelect.addEventListener('change', function() {
+                    const opt = this.options[this.selectedIndex];
+                    if (opt) {
+                        const optRate = parseFloat(opt.getAttribute('data-rate')) || 0;
+                        if (optRate > 0 && inpRate) {
+                            inpRate.value = optRate.toFixed(2);
+                            updateRowCalculations();
+                        }
+                    }
+                });
+            }
+
+            // Save Row Entry Button
+            if (saveBtn) {
+                saveBtn.addEventListener('click', async function(e) {
+                    e.preventDefault();
+                    const workerId = workerSelect ? parseInt(workerSelect.value, 10) : 0;
+                    if (!workerId) {
+                        alert('براہ کرم کاریگر منتخب کریں (Please select a worker)');
+                        if (workerSelect) workerSelect.focus();
+                        return;
+                    }
+
+                    const maxVal = parseInt(row.getAttribute('data-pending'), 10) || 0;
+                    const goodVal = parseInt(inpGood ? inpGood.value : 0, 10) || 0;
+                    const rejInp = row.querySelector('.input-rej');
+                    const rewInp = row.querySelector('.input-rew');
+                    const rejVal = parseInt(rejInp ? rejInp.value : 0, 10) || 0;
+                    const rewVal = parseInt(rewInp ? rewInp.value : 0, 10) || 0;
+                    const rateVal = parseFloat(inpRate ? inpRate.value : 0) || 0.00;
+                    const shiftVal = row.querySelector('.row-shift-select') ? row.querySelector('.row-shift-select').value : 'Day Shift';
+                    const entryDateVal = deskEntryDate ? deskEntryDate.value : '';
+
+                    if (goodVal > maxVal) {
+                        alert(`تعداد باقی پینڈنگ پیسز (${maxVal}) سے زیادہ نہیں ہو سکتی!`);
+                        if (inpGood) inpGood.focus();
+                        return;
+                    }
+
+                    if (goodVal <= 0 && rejVal <= 0 && rewVal <= 0) {
+                        alert('براہ کرم کم از کم 1 پیس درج کریں');
+                        if (inpGood) inpGood.focus();
+                        return;
+                    }
+
+                    // Disable button and show spinner
+                    const originalBtnContent = saveBtn.innerHTML;
+                    saveBtn.disabled = true;
+                    saveBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status"></span> محفوظ ہو رہا ہے...`;
+
+                    try {
+                        const formData = new FormData();
+                        formData.append('action', 'save_fast_row_entry');
+                        formData.append('lot_id', lotId);
+                        formData.append('operation_id', opId);
+                        formData.append('worker_id', workerId);
+                        formData.append('shift', shiftVal);
+                        formData.append('good_qty', goodVal);
+                        formData.append('rejected_qty', rejVal);
+                        formData.append('rework_qty', rewVal);
+                        formData.append('rate', rateVal);
+                        formData.append('entry_date', entryDateVal);
+
+                        const response = await fetch(`${BASE_URL}modules/production/ajax.php`, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        const res = await response.json();
+
+                        if (res.status === 'success') {
+                            savedEntriesCount++;
+                            if (deskSavedCountBadge) {
+                                deskSavedCountBadge.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> <strong>${savedEntriesCount}</strong> محفوظ شدہ انٹریز`;
+                            }
+
+                            // Update row indicators
+                            const cellGood = row.querySelector('.cell-good-done');
+                            const cellPending = row.querySelector('.cell-pending-bal');
+                            if (cellGood) cellGood.textContent = res.new_good_done;
+                            if (cellPending) {
+                                cellPending.textContent = res.new_pending;
+                                if (res.new_pending === 0) {
+                                    cellPending.className = 'badge bg-success-subtle text-success fs-6 cell-pending-bal';
+                                }
+                            }
+
+                            row.setAttribute('data-pending', res.new_pending);
+
+                            if (res.new_pending === 0) {
+                                row.classList.add('table-success', 'bg-opacity-25');
+                                if (inpGood) inpGood.disabled = true;
+                                if (rejInp) rejInp.disabled = true;
+                                if (rewInp) rewInp.disabled = true;
+                                if (inpRate) inpRate.disabled = true;
+                                if (workerSelect) workerSelect.disabled = true;
+
+                                saveBtn.outerHTML = `<span class="badge bg-success text-white py-1 px-2"><i class="bi bi-check-circle-fill me-1"></i> مکمل</span>`;
+                            } else {
+                                if (inpGood) {
+                                    inpGood.value = res.new_pending;
+                                    inpGood.setAttribute('max', res.new_pending);
+                                }
+                                if (rejInp) rejInp.value = 0;
+                                if (rewInp) rewInp.value = 0;
+                                updateRowCalculations();
+
+                                saveBtn.disabled = false;
+                                saveBtn.className = 'btn btn-outline-success btn-sm fw-bold px-2 py-1 btn-save-fast-row shadow-sm';
+                                saveBtn.innerHTML = `<i class="bi bi-check-all me-1"></i> محفوظ شد! اگلا درج کریں`;
+                                setTimeout(() => {
+                                    saveBtn.className = 'btn btn-success btn-sm fw-bold px-2 py-1 btn-save-fast-row shadow-sm';
+                                    saveBtn.innerHTML = `<i class="bi bi-check2-circle me-1"></i> محفوظ کریں`;
+                                }, 3000);
+                            }
+
+                            showDeskToast('success', res.message, `اجرت: <strong>${res.labour_formatted}</strong> | انٹری نمبر: <code>${res.entry_number}</code>`);
+                        } else {
+                            saveBtn.disabled = false;
+                            saveBtn.innerHTML = originalBtnContent;
+                            showDeskToast('danger', 'انٹری محفوظ نہ ہو سکی', res.message || 'Error occurred');
+                        }
+                    } catch (err) {
+                        saveBtn.disabled = false;
+                        saveBtn.innerHTML = originalBtnContent;
+                        showDeskToast('danger', 'کنکشن کی خرابی', err.message);
+                    }
+                });
+            }
+        });
+    }
+
+    // 3. Quick Search Filter
+    if (deskQuickSearch) {
+        deskQuickSearch.addEventListener('input', function() {
+            const query = this.value.trim().toLowerCase();
+            if (!fastDeskSheet) return;
+
+            fastDeskSheet.querySelectorAll('.lot-block').forEach(lotBlock => {
+                let anyVisibleInLot = false;
+                lotBlock.querySelectorAll('.op-row').forEach(row => {
+                    const text = row.getAttribute('data-search-text') || '';
+                    if (!query || text.includes(query)) {
+                        row.classList.remove('d-none');
+                        anyVisibleInLot = true;
+                    } else {
+                        row.classList.add('d-none');
+                    }
+                });
+
+                if (anyVisibleInLot) {
+                    lotBlock.classList.remove('d-none');
+                } else {
+                    lotBlock.classList.add('d-none');
+                }
+            });
+        });
+    }
+
+    // 4. Filters Change Listeners
+    if (deskWorkerSelect) {
+        deskWorkerSelect.addEventListener('change', function() {
+            const selectedOpt = this.options[this.selectedIndex];
+            const workerDept = selectedOpt ? selectedOpt.getAttribute('data-dept') : null;
+
+            // Auto-highlight worker's operations in operation filter
+            if (deskOpFilter && workerDept) {
+                Array.from(deskOpFilter.options).forEach(opt => {
+                    if (!opt.value) return;
+                    const opDept = opt.getAttribute('data-dept');
+                    if (opDept === workerDept) {
+                        opt.style.fontWeight = 'bold';
+                        opt.style.color = '#0d6efd';
+                    } else {
+                        opt.style.fontWeight = 'normal';
+                        opt.style.color = '';
+                    }
+                });
+            }
+            loadFastDeskSheet();
+        });
+    }
+
+    if (deskOpFilter) deskOpFilter.addEventListener('change', loadFastDeskSheet);
+    if (deskLotFilter) deskLotFilter.addEventListener('change', loadFastDeskSheet);
+    if (deskShiftSelect) {
+        deskShiftSelect.addEventListener('change', function() {
+            const newShift = this.value;
+            if (fastDeskSheet) {
+                fastDeskSheet.querySelectorAll('.row-shift-select').forEach(sel => {
+                    sel.value = newShift;
+                });
+            }
+        });
+    }
+    if (btnDeskReload) btnDeskReload.addEventListener('click', loadFastDeskSheet);
+
+    // Initial Load: If preselectedMode or POST was present, open advanced tab; otherwise open Fast Desk
+    const initialModeVal = <?= json_encode(!empty($preselectedMode) ? clean($preselectedMode) : (!empty($_POST) ? 'advanced' : 'fast_desk')) ?>;
+    if (initialModeVal === 'advanced' || initialModeVal === 'matrix' || initialModeVal === 'operator_initial' || initialModeVal === 'cutting' || initialModeVal === 'single') {
+        switchTopTab('advanced');
+    } else {
+        switchTopTab('fast_desk');
+    }
+
+    // =========================================================================
+    // LEGACY / ADVANCED MATRIX FORM CONTROLLER
+    // =========================================================================
     const lotSelect = document.getElementById('pe_lot_id');
     const opSelect = document.getElementById('pe_operation_id');
     const workerSelect = document.getElementById('pe_worker_id');

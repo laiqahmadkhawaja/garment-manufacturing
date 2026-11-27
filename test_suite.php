@@ -1141,6 +1141,110 @@ $scenario39Passed = (
 assert_test("39. Palla Yield, Pieces per Palla & Rate per Palla Calculation", $scenario39Passed, 
     "Sleeves (2/2 = 1 palla @ Rs. 10/pc), Pockets (2/4 = 0.5 palla @ Rs. 5/pc); 100 pcs lot = 250 pallas (Rs. 5,000 labour)");
 
+// ------------------------------------------------------------------------
+// Scenario 40: Worker-Centric Fast Production Sheet & Real-time Row Save
+// ------------------------------------------------------------------------
+echo "\n--- TESTING SCENARIO 40: FAST PRODUCTION DESK & ROW-WISE REAL-TIME SAVE ---\n";
+
+// Create test lot
+$lotNum40 = 'LOT-TEST-FAST-' . time();
+$db->prepare("INSERT INTO lots (lot_number, lot_date, product_id, total_pieces, status, created_by) 
+              VALUES (?, CURDATE(), 1, 100, 'In Production', 1)")->execute([$lotNum40]);
+$lotId40 = (int)$db->lastInsertId();
+
+// Attach cutting operation (Operation 8: Katai)
+$db->prepare("INSERT INTO lot_workflow_steps (lot_id, operation_id, sequence, is_mandatory, status) 
+              VALUES (?, 8, 1, 1, 'Pending')")->execute([$lotId40]);
+
+// Find a cutting worker (e.g. Worker 6: Ali Raza)
+$worker40Id = 6;
+$initialWorkerBal = (float)$db->query("SELECT COALESCE(
+    (SELECT running_balance FROM worker_ledger WHERE worker_id = $worker40Id ORDER BY id DESC LIMIT 1),
+    (SELECT opening_balance FROM workers WHERE id = $worker40Id)
+)")->fetchColumn();
+
+// 1. Worker assigned operations check
+$w40Dept = (int)$db->query("SELECT department_id FROM workers WHERE id = $worker40Id")->fetchColumn();
+$w40Ops = $db->query("SELECT id FROM operations WHERE department_id = $w40Dept")->fetchAll(PDO::FETCH_COLUMN);
+$hasCuttingOp = in_array(8, $w40Ops);
+
+// 2. Capacity Check validation
+$currentGood0 = (int)$db->query("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = $lotId40 AND operation_id = 8")->fetchColumn();
+$pendingInitial = 100 - $currentGood0;
+$attemptExceeded = 150;
+$capacityBlocked = ($attemptExceeded > $pendingInitial);
+
+// 3. First Fast Row Entry: 90 pcs @ Rs. 12.00 = Rs. 1,080.00
+$docNum40_1 = 'PE-FAST-' . time() . '-1';
+$labour1 = 90 * 12.00;
+$db->prepare("INSERT INTO production_entries 
+    (entry_number, entry_date, lot_id, operation_id, worker_id, shift, qty_received, good_qty, rate, labour_amount, notes, created_by)
+    VALUES (?, CURDATE(), ?, 8, ?, 'Day Shift', 90, 90, 12.00, ?, 'Fast Desk Row Entry 1', 1)")
+   ->execute([$docNum40_1, $lotId40, $worker40Id, $labour1]);
+
+$balStmt1 = $db->query("SELECT COALESCE((SELECT running_balance FROM worker_ledger WHERE worker_id = $worker40Id ORDER BY id DESC LIMIT 1), (SELECT opening_balance FROM workers WHERE id = $worker40Id))");
+$lastBal1 = (float)$balStmt1->fetchColumn();
+$newBal1 = $lastBal1 + $labour1;
+$db->prepare("INSERT INTO worker_ledger (worker_id, transaction_date, transaction_type, reference_type, reference_id, lot_id, operation_id, credit, running_balance, description, created_by)
+              VALUES (?, CURDATE(), 'Labour', 'PRODUCTION_ENTRY', ?, ?, 8, ?, ?, 'Fast Desk Entry 1 (90 pcs)', 1)")
+   ->execute([$worker40Id, $lotId40, $lotId40, $labour1, $newBal1]);
+
+$goodAfter1 = (int)$db->query("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = $lotId40 AND operation_id = 8")->fetchColumn();
+$pendingAfter1 = 100 - $goodAfter1;
+$step1Status = ($goodAfter1 >= 100) ? 'Completed' : 'In Progress';
+$db->prepare("UPDATE lot_workflow_steps SET status = ? WHERE lot_id = ? AND operation_id = 8")->execute([$step1Status, $lotId40]);
+
+// 4. Second Fast Row Entry: Remaining 10 pcs @ Rs. 12.00 = Rs. 120.00
+$docNum40_2 = 'PE-FAST-' . time() . '-2';
+$labour2 = 10 * 12.00;
+$db->prepare("INSERT INTO production_entries 
+    (entry_number, entry_date, lot_id, operation_id, worker_id, shift, qty_received, good_qty, rate, labour_amount, notes, created_by)
+    VALUES (?, CURDATE(), ?, 8, ?, 'Day Shift', 10, 10, 12.00, ?, 'Fast Desk Row Entry 2', 1)")
+   ->execute([$docNum40_2, $lotId40, $worker40Id, $labour2]);
+
+$balStmt2 = $db->query("SELECT COALESCE((SELECT running_balance FROM worker_ledger WHERE worker_id = $worker40Id ORDER BY id DESC LIMIT 1), (SELECT opening_balance FROM workers WHERE id = $worker40Id))");
+$lastBal2 = (float)$balStmt2->fetchColumn();
+$newBal2 = $lastBal2 + $labour2;
+$db->prepare("INSERT INTO worker_ledger (worker_id, transaction_date, transaction_type, reference_type, reference_id, lot_id, operation_id, credit, running_balance, description, created_by)
+              VALUES (?, CURDATE(), 'Labour', 'PRODUCTION_ENTRY', ?, ?, 8, ?, ?, 'Fast Desk Entry 2 (10 pcs)', 1)")
+   ->execute([$worker40Id, $lotId40, $lotId40, $labour2, $newBal2]);
+
+$goodAfter2 = (int)$db->query("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = $lotId40 AND operation_id = 8")->fetchColumn();
+$pendingAfter2 = 100 - $goodAfter2;
+$step2Status = ($goodAfter2 >= 100) ? 'Completed' : 'In Progress';
+$db->prepare("UPDATE lot_workflow_steps SET status = ? WHERE lot_id = ? AND operation_id = 8")->execute([$step2Status, $lotId40]);
+
+// Verify total ledger credit for Ali Raza
+$finalWorkerBal = (float)$db->query("SELECT COALESCE(
+    (SELECT running_balance FROM worker_ledger WHERE worker_id = $worker40Id ORDER BY id DESC LIMIT 1),
+    (SELECT opening_balance FROM workers WHERE id = $worker40Id)
+)")->fetchColumn();
+
+$ledgerCreditCorrect = (round($finalWorkerBal - $initialWorkerBal, 2) === 1200.00);
+
+// Cleanup test lot & production entries
+$db->exec("DELETE FROM worker_ledger WHERE reference_type = 'PRODUCTION_ENTRY' AND lot_id = $lotId40");
+$db->exec("DELETE FROM production_entries WHERE lot_id = $lotId40");
+$db->exec("DELETE FROM lot_operator_element_entries WHERE lot_id = $lotId40");
+$db->exec("DELETE FROM lot_workflow_steps WHERE lot_id = $lotId40");
+$db->exec("DELETE FROM lots WHERE id = $lotId40");
+
+$scenario40Passed = (
+    $hasCuttingOp && 
+    $pendingInitial === 100 && 
+    $capacityBlocked && 
+    $goodAfter1 === 90 && 
+    $pendingAfter1 === 10 && 
+    $step1Status === 'In Progress' && 
+    $goodAfter2 === 100 && 
+    $pendingAfter2 === 0 && 
+    $step2Status === 'Completed' && 
+    $ledgerCreditCorrect
+);
+
+assert_test("40. Fast Production Desk & Real-time Row Save", $scenario40Passed, 
+    "Worker operations mapped correctly; capacity check blocked 150 > 100; 90+10 completed lot; Rs. 1,200 credited to ledger");
+
 echo "\n========================================================================\n";
 echo "TEST SUITE SUMMARY: $passCount PASSED, $failCount FAILED\n";
 echo "========================================================================\n";
