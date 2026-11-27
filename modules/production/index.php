@@ -2791,7 +2791,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     data-search-text="${escapeHtml(lot.lot_number + ' ' + lot.product_name + ' ' + (lot.design_number || '') + ' ' + op.op_name + ' ' + (op.dept_name || '')).toLowerCase()}">
                     <td class="text-center fw-bold text-muted">${op.sequence}</td>
                     <td>
-                        <div class="fw-bold text-dark">${escapeHtml(op.op_name)}</div>
+                        <div class="fw-bold text-dark ${(op.is_operator_or_cutting && op.elements && op.elements.length > 0) ? 'toggle-elements-btn cursor-pointer' : ''}" ${(op.is_operator_or_cutting && op.elements && op.elements.length > 0) ? `data-target="elem-drawer-${lot.lot_id}-${op.operation_id}" role="button" title="اعضاء و پلے کا اندراج کھولنے کے لیے کلک کریں"` : ''}>
+                            ${escapeHtml(op.op_name)}
+                        </div>
                         <div class="d-flex flex-wrap align-items-center gap-1 mt-1">
                             <span class="badge bg-light text-secondary border small" style="font-size: 0.7rem;">${escapeHtml(op.dept_name || 'عام')}</span>
                             ${op.predecessor_op_name ? `
@@ -2805,8 +2807,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             `}
                         </div>
                         ${(op.is_operator_or_cutting && op.elements && op.elements.length > 0) ? `
-                            <button type="button" class="btn btn-link btn-xs p-0 text-decoration-none text-primary fw-semibold toggle-elements-btn mt-1" style="font-size: 0.72rem;" data-target="elem-drawer-${lot.lot_id}-${op.operation_id}">
-                                <i class="bi bi-puzzle me-1"></i>اعضاء و پلے (${op.elements.length})
+                            <button type="button" class="btn btn-outline-primary btn-xs py-0 px-2 fw-semibold toggle-elements-btn mt-1 shadow-sm" style="font-size: 0.72rem; border-radius: 4px;" data-target="elem-drawer-${lot.lot_id}-${op.operation_id}">
+                                <i class="bi bi-puzzle me-1"></i>اعضاء و پلے اندراج (${op.elements.length})
                             </button>
                         ` : ''}
                     </td>
@@ -2885,25 +2887,130 @@ document.addEventListener('DOMContentLoaded', function() {
                 </tr>
                 `;
 
-                // Elements Sub-Row
+                // Elements Sub-Row (Interactive Element-Wise Breakdown Entry)
                 if (op.is_operator_or_cutting && op.elements && op.elements.length > 0) {
+                    const totalSuggestedElPcs = op.elements.reduce((acc, el) => acc + (parseInt(el.suggested_today, 10) || 0), 0);
+                    let initialDrawerLabour = 0.00;
+                    op.elements.forEach(el => {
+                        const elRate = parseFloat(el.element_rate || op.default_rate) || 0.00;
+                        const ppp = parseFloat(el.pieces_per_palla) || 1.0;
+                        const rpp = parseFloat(el.rate_per_palla) || 0.00;
+                        const sPcs = parseInt(el.suggested_today, 10) || 0;
+                        initialDrawerLabour += (rpp > 0 && ppp > 0) ? ((sPcs / ppp) * rpp) : (sPcs * elRate);
+                    });
+
                     html += `
-                    <tr class="table-light elements-drawer-row d-none" id="elem-drawer-${lot.lot_id}-${op.operation_id}">
-                        <td colspan="11" class="py-2 px-3 border-bottom">
-                            <div class="d-flex flex-wrap align-items-center gap-2">
-                                <span class="badge bg-primary text-white fw-bold"><i class="bi bi-puzzle me-1"></i> اعضاء اور پلے (Elements Breakdown):</span>
-                                ${op.elements.map(el => `
-                                    <div class="badge bg-white text-dark border p-1 px-2 text-start" style="font-size: 0.75rem;">
-                                        <div><strong>${escapeHtml(el.element_name)}</strong>: 
-                                            <span class="text-primary fw-bold el-calc-pcs" data-mult="${el.multiplier}">${Math.ceil(op.pending_balance * el.multiplier)} pcs</span>
-                                        </div>
-                                        <div class="text-muted" style="font-size: 0.68rem;">
-                                            (کل مطلوب: ${el.required_pieces} | ہو چکے: ${el.done_pieces} | باقی: ${el.pending_pieces})
-                                            ${el.pieces_per_palla > 1 ? ` &bull; <em>${el.pieces_per_palla} pcs/پلہ</em>` : ''}
-                                            ${el.rate_per_palla > 0 ? ` &bull; <strong class="text-success">Rs. ${el.rate_per_palla}/پلہ</strong>` : ''}
-                                        </div>
+                    <tr class="table-light elements-drawer-row d-none" id="elem-drawer-${lot.lot_id}-${op.operation_id}" data-lot-id="${lot.lot_id}" data-op-id="${op.operation_id}">
+                        <td colspan="11" class="p-3 bg-light border-top border-bottom">
+                            <div class="card border-primary border-opacity-25 shadow-sm rounded-3">
+                                <div class="card-header bg-primary bg-opacity-10 py-2 px-3 d-flex flex-wrap justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge bg-primary fs-7"><i class="bi bi-puzzle-fill me-1"></i> اعضاء اور پلے اندراج (Element Breakdown Entry) &mdash; ${escapeHtml(op.op_name)}</span>
+                                        <span class="small text-muted">ہر حصے کے تیار شدہ پیسز نیچے فیلڈز میں الگ الگ درج کریں</span>
                                     </div>
-                                `).join('')}
+                                    <div class="d-flex align-items-center gap-2">
+                                        <button type="button" class="btn btn-xs btn-outline-primary fw-semibold sync-el-from-main-btn" data-lot="${lot.lot_id}" data-op="${op.operation_id}" title="مین فیلڈ کے پیسز کے مطابق تمام اعضاء کو دوبارہ سیٹ کریں">
+                                            <i class="bi bi-arrow-repeat me-1"></i> مین پیسز (${suggestedQty}) سے سب فیلڈز سیٹ کریں
+                                        </button>
+                                        <button type="button" class="btn btn-xs btn-outline-secondary close-elem-drawer-btn" data-target="elem-drawer-${lot.lot_id}-${op.operation_id}">
+                                            <i class="bi bi-x-lg"></i> بند کریں
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-hover table-bordered align-middle mb-0 text-center" style="font-size: 0.82rem;">
+                                            <thead class="table-light">
+                                                <tr class="text-muted small">
+                                                    <th style="width: 38px;">#</th>
+                                                    <th class="text-start" style="min-width: 170px;">عضو / پلہ کا نام (Element)</th>
+                                                    <th style="width: 85px;">نسبت / پلہ</th>
+                                                    <th style="width: 80px;">کل مطلوب</th>
+                                                    <th style="width: 80px;">پہلے شدہ</th>
+                                                    <th style="width: 80px;">باقی پینڈنگ</th>
+                                                    <th style="min-width: 145px;" class="bg-primary bg-opacity-10 text-primary fw-bold">آج کے پیسز (Today Pcs)</th>
+                                                    <th style="width: 105px;">پلے تعداد</th>
+                                                    <th style="width: 100px;">ریٹ</th>
+                                                    <th class="text-end" style="min-width: 110px;">اجرت (Labour)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                ${op.elements.map((el, elIdx) => {
+                                                    const elRate = parseFloat(el.element_rate || op.default_rate) || 0.00;
+                                                    const ppp = parseFloat(el.pieces_per_palla) || 1.0;
+                                                    const rpp = parseFloat(el.rate_per_palla) || 0.00;
+                                                    const suggPcs = parseInt(el.suggested_today, 10) || 0;
+                                                    const suggPallas = (ppp > 1) ? (suggPcs / ppp).toFixed(1) : '-';
+                                                    const elLabour = (rpp > 0 && ppp > 0) ? ((suggPcs / ppp) * rpp).toFixed(2) : (suggPcs * elRate).toFixed(2);
+
+                                                    return `
+                                                    <tr class="el-entry-row" 
+                                                        data-el-id="${el.id}" 
+                                                        data-mult="${el.multiplier}" 
+                                                        data-pending="${el.pending_pieces}" 
+                                                        data-req="${el.required_pieces}" 
+                                                        data-rate="${elRate}" 
+                                                        data-ppp="${ppp}" 
+                                                        data-rpp="${rpp}">
+                                                        <td class="text-muted fw-bold">${elIdx + 1}</td>
+                                                        <td class="text-start fw-bold text-dark">
+                                                            <span class="text-primary me-1">🧵</span> ${escapeHtml(el.element_name)}
+                                                            <span class="badge bg-light text-secondary border ms-1" style="font-size: 0.68rem;">×${el.multiplier}</span>
+                                                        </td>
+                                                        <td>
+                                                            ${ppp > 1 ? `<span class="badge bg-info-subtle text-info-emphasis border small" style="font-size: 0.70rem;">${ppp} pcs/پلہ</span>` : `<span class="text-muted small">1:1</span>`}
+                                                        </td>
+                                                        <td class="fw-bold text-secondary">${el.required_pieces}</td>
+                                                        <td class="fw-semibold text-success">${el.done_pieces}</td>
+                                                        <td class="fw-bold text-warning-emphasis el-pending-cell">${el.pending_pieces}</td>
+                                                        <td class="bg-primary bg-opacity-10">
+                                                            <div class="input-group input-group-sm mx-auto" style="max-width: 115px;">
+                                                                <input type="number" 
+                                                                       class="form-control form-control-sm text-center fw-bold el-fast-input text-primary fs-7" 
+                                                                       data-el-id="${el.id}" 
+                                                                       data-mult="${el.multiplier}" 
+                                                                       data-pending="${el.pending_pieces}" 
+                                                                       data-ppp="${ppp}"
+                                                                       data-rpp="${rpp}"
+                                                                       data-rate="${elRate}"
+                                                                       value="${suggPcs}" 
+                                                                       min="0" 
+                                                                       max="${el.pending_pieces}" 
+                                                                       step="1"
+                                                                       ${(isCompleted || isBlocked) ? 'disabled' : ''}>
+                                                            </div>
+                                                            <span class="text-muted d-block el-hint-text" style="font-size: 0.65rem;">(میکس باقی: <span class="el-max-text">${el.pending_pieces}</span>)</span>
+                                                        </td>
+                                                        <td class="small text-muted el-palla-calc-cell">
+                                                            ${ppp > 1 ? `<span class="fw-semibold text-dark el-pallas-val">${suggPallas}</span> پلے` : `<span class="text-muted">-</span>`}
+                                                        </td>
+                                                        <td class="small text-muted">
+                                                            ${rpp > 0 ? `Rs. ${rpp.toFixed(2)}/پلہ` : `Rs. ${elRate.toFixed(2)}/pc`}
+                                                        </td>
+                                                        <td class="text-end fw-bold text-success el-row-labour">
+                                                            Rs. ${elLabour}
+                                                        </td>
+                                                    </tr>
+                                                    `;
+                                                }).join('')}
+                                            </tbody>
+                                            <tfoot class="table-light fw-bold" style="font-size: 0.8rem;">
+                                                <tr>
+                                                    <td colspan="6" class="text-start px-3 text-muted">
+                                                        <i class="bi bi-calculator me-1"></i> مجموعہ اعضاء (Total Elements Sum):
+                                                    </td>
+                                                    <td class="text-center text-primary el-total-pcs-sum">
+                                                        ${totalSuggestedElPcs} pcs
+                                                    </td>
+                                                    <td colspan="2" class="text-end text-muted">کل اجرت:</td>
+                                                    <td class="text-end text-success fs-7 el-total-labour-sum">
+                                                        Rs. ${initialDrawerLabour.toFixed(2)}
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         </td>
                     </tr>
@@ -2935,7 +3042,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 const drawer = document.getElementById(targetId);
                 if (drawer) {
                     drawer.classList.toggle('d-none');
+                    if (!drawer.classList.contains('d-none')) {
+                        const firstInput = drawer.querySelector('.el-fast-input:not([disabled])');
+                        if (firstInput) {
+                            firstInput.focus();
+                            firstInput.select();
+                        }
+                    }
                 }
+            });
+        });
+
+        fastDeskSheet.querySelectorAll('.close-elem-drawer-btn').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('data-target');
+                const drawer = document.getElementById(targetId);
+                if (drawer) drawer.classList.add('d-none');
             });
         });
 
@@ -2950,6 +3073,86 @@ document.addEventListener('DOMContentLoaded', function() {
             const saveBtn = row.querySelector('.btn-save-fast-row');
             const workerSelect = row.querySelector('.row-worker-select');
             const drawerRow = document.getElementById(`elem-drawer-${lotId}-${opId}`);
+
+            // Bind element inputs inside drawer
+            if (drawerRow) {
+                function recalcDrawerTotals() {
+                    let drawerLabourSum = 0;
+                    let drawerPcsSum = 0;
+                    drawerRow.querySelectorAll('.el-fast-input').forEach(inp => {
+                        const ppp = parseFloat(inp.getAttribute('data-ppp')) || 1.0;
+                        const rpp = parseFloat(inp.getAttribute('data-rpp')) || 0.00;
+                        const elRate = parseFloat(inp.getAttribute('data-rate')) || (parseFloat(inpRate ? inpRate.value : 0) || 0);
+                        const val = parseInt(inp.value, 10) || 0;
+
+                        drawerPcsSum += val;
+                        const elLabour = (rpp > 0 && ppp > 0) ? ((val / ppp) * rpp) : (val * elRate);
+                        drawerLabourSum += elLabour;
+                    });
+
+                    const totPcsCell = drawerRow.querySelector('.el-total-pcs-sum');
+                    const totLabCell = drawerRow.querySelector('.el-total-labour-sum');
+                    if (totPcsCell) totPcsCell.textContent = `${drawerPcsSum} pcs`;
+                    if (totLabCell) totLabCell.textContent = `Rs. ${drawerLabourSum.toFixed(2)}`;
+
+                    if (previewLabour && drawerLabourSum > 0) {
+                        previewLabour.textContent = `Rs. ${drawerLabourSum.toFixed(2)}`;
+                    }
+                }
+
+                drawerRow.querySelectorAll('.el-fast-input').forEach(elInp => {
+                    elInp.addEventListener('input', function() {
+                        const elPend = parseInt(this.getAttribute('data-pending'), 10) || 0;
+                        const ppp = parseFloat(this.getAttribute('data-ppp')) || 1.0;
+                        const rpp = parseFloat(this.getAttribute('data-rpp')) || 0.00;
+                        const elRate = parseFloat(this.getAttribute('data-rate')) || (parseFloat(inpRate ? inpRate.value : 0) || 0);
+
+                        let elVal = parseInt(this.value, 10);
+                        if (isNaN(elVal) || elVal < 0) elVal = 0;
+
+                        const elTr = this.closest('tr');
+                        const hintText = elTr ? elTr.querySelector('.el-hint-text') : null;
+
+                        if (elVal > elPend) {
+                            this.classList.add('is-invalid');
+                            if (hintText) hintText.innerHTML = `<span class="text-danger fw-bold">⚠️ باقی صرف ${elPend} ہیں!</span>`;
+                        } else {
+                            this.classList.remove('is-invalid');
+                            if (hintText) hintText.innerHTML = `(میکس باقی: <span class="el-max-text">${elPend}</span>)`;
+                        }
+
+                        // Update pallas
+                        if (elTr && ppp > 1) {
+                            const pVal = elTr.querySelector('.el-pallas-val');
+                            if (pVal) pVal.textContent = (elVal / ppp).toFixed(1);
+                        }
+
+                        // Update this element's labour
+                        const elLabour = (rpp > 0 && ppp > 0) ? ((elVal / ppp) * rpp) : (elVal * elRate);
+                        if (elTr) {
+                            const labCell = elTr.querySelector('.el-row-labour');
+                            if (labCell) labCell.textContent = `Rs. ${elLabour.toFixed(2)}`;
+                        }
+
+                        recalcDrawerTotals();
+                    });
+                });
+
+                // Sync button inside drawer
+                const syncBtn = drawerRow.querySelector('.sync-el-from-main-btn');
+                if (syncBtn) {
+                    syncBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        const goodVal = parseInt(inpGood ? inpGood.value : 0, 10) || 0;
+                        drawerRow.querySelectorAll('.el-fast-input').forEach(inp => {
+                            const mult = parseFloat(inp.getAttribute('data-mult')) || 1.0;
+                            const elPend = parseInt(inp.getAttribute('data-pending'), 10) || 0;
+                            inp.value = Math.min(elPend, Math.ceil(goodVal * mult));
+                            inp.dispatchEvent(new Event('input'));
+                        });
+                    });
+                }
+            }
 
             function updateRowCalculations() {
                 if (!inpGood || !inpRate) return;
@@ -2989,13 +3192,40 @@ document.addEventListener('DOMContentLoaded', function() {
                     previewLabour.textContent = `Rs. ${totalLabour}`;
                 }
 
-                // Update element drawer numbers
+                // Sync element drawer values when main Good Pcs is typed
                 if (drawerRow) {
-                    drawerRow.querySelectorAll('.el-calc-pcs').forEach(elSpan => {
-                        const mult = parseFloat(elSpan.getAttribute('data-mult')) || 1.0;
-                        const calcPcs = Math.ceil(Math.max(0, goodVal) * mult);
-                        elSpan.textContent = `${calcPcs} pcs`;
+                    let drawerLabourSum = 0;
+                    let drawerPcsSum = 0;
+                    drawerRow.querySelectorAll('.el-fast-input').forEach(elInp => {
+                        const mult = parseFloat(elInp.getAttribute('data-mult')) || 1.0;
+                        const elPend = parseInt(elInp.getAttribute('data-pending'), 10) || 0;
+                        const ppp = parseFloat(elInp.getAttribute('data-ppp')) || 1.0;
+                        const rpp = parseFloat(elInp.getAttribute('data-rpp')) || 0.00;
+                        const elRate = parseFloat(elInp.getAttribute('data-rate')) || rateVal;
+
+                        const calcPcs = Math.min(elPend, Math.ceil(Math.max(0, goodVal) * mult));
+                        elInp.value = calcPcs;
+
+                        const elTr = elInp.closest('tr');
+                        if (elTr) {
+                            if (ppp > 1) {
+                                const pVal = elTr.querySelector('.el-pallas-val');
+                                if (pVal) pVal.textContent = (calcPcs / ppp).toFixed(1);
+                            }
+                            const elLabour = (rpp > 0 && ppp > 0) ? ((calcPcs / ppp) * rpp) : (calcPcs * elRate);
+                            const labCell = elTr.querySelector('.el-row-labour');
+                            if (labCell) labCell.textContent = `Rs. ${elLabour.toFixed(2)}`;
+                            drawerLabourSum += elLabour;
+                            drawerPcsSum += calcPcs;
+                        }
                     });
+                    const totPcsCell = drawerRow.querySelector('.el-total-pcs-sum');
+                    const totLabCell = drawerRow.querySelector('.el-total-labour-sum');
+                    if (totPcsCell) totPcsCell.textContent = `${drawerPcsSum} pcs`;
+                    if (totLabCell) totLabCell.textContent = `Rs. ${drawerLabourSum.toFixed(2)}`;
+                    if (drawerLabourSum > 0 && previewLabour) {
+                        previewLabour.textContent = `Rs. ${drawerLabourSum.toFixed(2)}`;
+                    }
                 }
             }
 
@@ -3056,6 +3286,20 @@ document.addEventListener('DOMContentLoaded', function() {
                         return;
                     }
 
+                    // Collect custom element pieces if drawer exists
+                    const elemObj = {};
+                    let hasCustomElements = false;
+                    if (drawerRow) {
+                        drawerRow.querySelectorAll('.el-fast-input').forEach(inp => {
+                            const elId = inp.getAttribute('data-el-id');
+                            const eVal = parseInt(inp.value, 10);
+                            if (elId) {
+                                elemObj[elId] = isNaN(eVal) ? 0 : eVal;
+                                hasCustomElements = true;
+                            }
+                        });
+                    }
+
                     // Disable button and show spinner
                     const originalBtnContent = saveBtn.innerHTML;
                     saveBtn.disabled = true;
@@ -3073,6 +3317,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         formData.append('rework_qty', rewVal);
                         formData.append('rate', rateVal);
                         formData.append('entry_date', entryDateVal);
+                        if (hasCustomElements) {
+                            formData.append('elements', JSON.stringify(elemObj));
+                        }
 
                         const response = await fetch(`${BASE_URL}modules/production/ajax.php`, {
                             method: 'POST',

@@ -636,13 +636,18 @@ if ($action === 'get_fast_sheet_data') {
                     $reqPcs = (int)ceil($m * $totPcs);
                     $donePcs = $isCuttingOp ? (int)$er['cut_pieces'] : (int)$er['op_pieces'];
                     $elPending = max(0, $reqPcs - $donePcs);
+                    $ppp = (float)$er['pieces_per_palla'] > 0 ? (float)$er['pieces_per_palla'] : 1.0;
+                    $rpp = (float)$er['rate_per_palla'];
+                    $elRate = ($rpp > 0 && $ppp > 0) ? round($rpp / $ppp, 2) : $effRate;
+
                     $elements[] = [
                         'id' => (int)$er['id'],
                         'element_name' => $er['element_name'],
                         'multiplier' => $m,
-                        'pieces_per_palla' => (float)$er['pieces_per_palla'],
+                        'pieces_per_palla' => $ppp,
                         'pallas_per_garment' => (float)$er['pallas_per_garment'],
-                        'rate_per_palla' => (float)$er['rate_per_palla'],
+                        'rate_per_palla' => $rpp,
+                        'element_rate' => $elRate,
                         'required_pieces' => $reqPcs,
                         'done_pieces' => $donePcs,
                         'pending_pieces' => $elPending,
@@ -823,6 +828,27 @@ if ($action === 'save_fast_row_entry') {
             $labourAmount = 0.00;
         } else {
             $labourAmount = round($goodQty * $rate, 2);
+            // If custom element quantities are provided with palla rates:
+            if (!empty($elements) && is_array($elements)) {
+                $pElems = $db->prepare("SELECT id, multiplier, pieces_per_palla, rate_per_palla FROM product_elements WHERE product_id = ?");
+                $pElems->execute([$lot['product_id']]);
+                $peRows = $pElems->fetchAll(PDO::FETCH_ASSOC);
+                $hasPallaRates = false;
+                $elemLabourSum = 0.00;
+                foreach ($peRows as $pel) {
+                    $elId = (int)$pel['id'];
+                    $rpp = (float)$pel['rate_per_palla'];
+                    $ppp = (float)$pel['pieces_per_palla'];
+                    if ($rpp > 0 && $ppp > 0) {
+                        $hasPallaRates = true;
+                        $elQty = isset($elements[$elId]) ? (int)$elements[$elId] : (int)ceil($goodQty * (float)($pel['multiplier'] ?: 1.0));
+                        $elemLabourSum += round(($elQty / $ppp) * $rpp, 2);
+                    }
+                }
+                if ($hasPallaRates && $elemLabourSum > 0) {
+                    $labourAmount = $elemLabourSum;
+                }
+            }
         }
 
         // 2. Insert Production Entry
