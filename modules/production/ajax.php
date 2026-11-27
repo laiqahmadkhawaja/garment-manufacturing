@@ -796,7 +796,7 @@ if ($action === 'save_fast_row_entry') {
         }
 
         // 2. Insert Production Entry
-        $baseDocNum = generate_doc_number('PE');
+        $baseDocNum = generate_doc_number('PE-', 'production_entries', 'entry_number');
         $entryNum = ensure_unique_doc_number($db, 'production_entries', 'entry_number', $baseDocNum);
         $estMins = (float)($op['estimated_minutes'] ?? 0.00);
         $minRate = (float)($worker['rate_per_minute'] ?? 2.50);
@@ -940,7 +940,7 @@ if ($action === 'save_fast_row_entry') {
             'step_status' => $stepStatus
         ]);
 
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         if ($db->inTransaction()) {
             $db->rollBack();
         }

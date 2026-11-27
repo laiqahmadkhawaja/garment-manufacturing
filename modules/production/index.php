@@ -2648,7 +2648,13 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             const url = `${BASE_URL}modules/production/ajax.php?action=get_fast_sheet_data&worker_id=${encodeURIComponent(workerId)}&operation_id=${encodeURIComponent(opId)}&lot_id=${encodeURIComponent(lotId)}`;
             const res = await fetch(url);
-            const data = await res.json();
+            const rawText = await res.text();
+            let data;
+            try {
+                data = JSON.parse(rawText);
+            } catch (parseErr) {
+                throw new Error(rawText.substring(0, 150) || 'سرور سے نامکمل جواب موصول ہوا');
+            }
 
             if (data.status !== 'success') {
                 fastDeskSheet.innerHTML = `
@@ -3023,7 +3029,13 @@ document.addEventListener('DOMContentLoaded', function() {
                             method: 'POST',
                             body: formData
                         });
-                        const res = await response.json();
+                        const rawText = await response.text();
+                        let res;
+                        try {
+                            res = JSON.parse(rawText);
+                        } catch (parseErr) {
+                            throw new Error(rawText.substring(0, 150) || 'سرور سے نامکمل یا غیر متوقع جواب موصول ہوا');
+                        }
 
                         if (res.status === 'success') {
                             savedEntriesCount++;
