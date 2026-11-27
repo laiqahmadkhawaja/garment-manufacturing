@@ -729,7 +729,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <tbody id="lotItemsTbody">
                                 <?php
                                 $defaultRow1Color = $colors[0]['id'] ?? 0;
-                                $defaultRow2Color = $colors[1]['id'] ?? ($colors[0]['id'] ?? 0);
+                                $defaultRow2Color = $colors[1]['id'] ?? '';
                                 $defaultSize = $sizes[0]['id'] ?? 0;
                                 ?>
                                 <!-- Default Row 1 -->
@@ -738,7 +738,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <td>
                                         <select name="items[0][color_id]" class="form-select fw-semibold item-color-select" required>
                                             <option value="">-- Choose Color --</option>
-                                            <?php foreach ($colors as $c): ?>
+                                            <?php foreach ($colors as $c): 
+                                                if (!empty($defaultRow2Color) && $c['id'] == $defaultRow2Color) continue;
+                                            ?>
                                                 <option value="<?= $c['id'] ?>" 
                                                         data-code="<?= clean($c['color_code'] ?: $c['name']) ?>" 
                                                         data-hex="<?= clean($c['hex_code']) ?>" 
@@ -785,7 +787,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <td>
                                         <select name="items[1][color_id]" class="form-select fw-semibold item-color-select" required>
                                             <option value="">-- Choose Color --</option>
-                                            <?php foreach ($colors as $c): ?>
+                                            <?php foreach ($colors as $c): 
+                                                if (!empty($defaultRow1Color) && $c['id'] == $defaultRow1Color) continue;
+                                            ?>
                                                 <option value="<?= $c['id'] ?>" 
                                                         data-code="<?= clean($c['color_code'] ?: $c['name']) ?>" 
                                                         data-hex="<?= clean($c['hex_code']) ?>" 
@@ -795,7 +799,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 </option>
                                             <?php endforeach; ?>
                                         </select>
-                                        <input type="hidden" name="items[1][color_code]" class="item-color-code" value="<?= clean($colors[1]['color_code'] ?? ($colors[0]['color_code'] ?? '')) ?>">
+                                        <input type="hidden" name="items[1][color_code]" class="item-color-code" value="<?= clean($colors[1]['color_code'] ?? '') ?>">
                                     </td>
                                     <td>
                                         <select name="items[1][size_id]" class="form-select fw-semibold item-size-select" required>
@@ -809,8 +813,8 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     </td>
                                     <td class="text-center">
                                         <div class="item-yarn-badge d-inline-flex align-items-center gap-2 px-2 py-1 bg-light border rounded">
-                                            <span class="item-color-dot rounded-circle border" style="width: 14px; height: 14px; background-color: <?= clean($colors[1]['hex_code'] ?? ($colors[0]['hex_code'] ?? '#ccc')) ?>;"></span>
-                                            <span class="item-yarn-text fw-semibold small text-dark"><?= (float)($colors[1]['yarn_stock_kg'] ?? ($colors[0]['yarn_stock_kg'] ?? 0)) ?> KG</span>
+                                            <span class="item-color-dot rounded-circle border" style="width: 14px; height: 14px; background-color: <?= clean($colors[1]['hex_code'] ?? '#ccc') ?>;"></span>
+                                            <span class="item-yarn-text fw-semibold small text-dark"><?= !empty($defaultRow2Color) ? (float)($colors[1]['yarn_stock_kg'] ?? 0) . ' KG' : '—' ?></span>
                                         </div>
                                     </td>
                                     <td>
@@ -1109,17 +1113,57 @@ document.addEventListener('DOMContentLoaded', function() {
     const colorsList = <?= json_encode($colors) ?>;
     const sizesList = <?= json_encode($sizes) ?>;
 
-    function buildColorOptionsHtml(selectedId = '') {
+    function buildColorOptionsHtml(selectedId = '', excludeIds = new Set()) {
         let html = '<option value="">-- Choose Color --</option>';
+        let availableCount = 0;
         colorsList.forEach(c => {
-            const sel = (c.id == selectedId) ? 'selected' : '';
+            const isSelected = (String(c.id) === String(selectedId));
+            const isExcluded = excludeIds.has(String(c.id)) && !isSelected;
+            if (isExcluded) return; // Skip color already selected in another row
+
+            availableCount++;
+            const sel = isSelected ? 'selected' : '';
             const code = c.color_code || c.name;
             const yarn = parseFloat(c.yarn_stock_kg || 0).toFixed(2);
             html += `<option value="${c.id}" data-code="${escapeHtml(code)}" data-hex="${escapeHtml(c.hex_code)}" data-yarn="${yarn}" ${sel}>
                 ${escapeHtml(code)} - ${escapeHtml(c.name)} (${yarn} KG)
             </option>`;
         });
+        if (availableCount === 0 && !selectedId) {
+            html += `<option value="" disabled>(All available colors already selected / تمام رنگ منتخب ہو چکے ہیں)</option>`;
+        }
         return html;
+    }
+
+    function refreshColorDropdowns() {
+        const rows = document.querySelectorAll('#lotItemsTbody tr.lot-item-row');
+        
+        // 1. Map of selected color_id per row index
+        const selectedByRow = new Map();
+        rows.forEach((tr, idx) => {
+            const cSel = tr.querySelector('.item-color-select');
+            if (cSel && cSel.value) {
+                selectedByRow.set(idx, String(cSel.value));
+            }
+        });
+
+        // 2. Rebuild each row's options so that colors selected in other rows are completely skipped
+        rows.forEach((tr, idx) => {
+            const cSel = tr.querySelector('.item-color-select');
+            if (!cSel) return;
+            const currentVal = cSel.value ? String(cSel.value) : '';
+
+            // Colors taken by any OTHER row
+            const excludeIds = new Set();
+            selectedByRow.forEach((cId, rIdx) => {
+                if (rIdx !== idx && cId) {
+                    excludeIds.add(cId);
+                }
+            });
+
+            cSel.innerHTML = buildColorOptionsHtml(currentVal, excludeIds);
+            cSel.value = currentVal;
+        });
     }
 
     function buildSizeOptionsHtml(selectedId = '') {
@@ -1231,6 +1275,12 @@ document.addEventListener('DOMContentLoaded', function() {
             defaultSizeId = sizesList[0].id;
         }
 
+        // Collect colors already selected in other rows to exclude them
+        const excludeIds = new Set();
+        lotItemsTbody.querySelectorAll('.lot-item-row .item-color-select').forEach(sel => {
+            if (sel.value) excludeIds.add(String(sel.value));
+        });
+
         const tr = document.createElement('tr');
         tr.className = 'lot-item-row';
         tr.dataset.rowIndex = newIdx;
@@ -1238,7 +1288,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <td class="text-center fw-bold text-muted row-num">${newIdx + 1}</td>
             <td>
                 <select name="items[${newIdx}][color_id]" class="form-select fw-semibold item-color-select" required>
-                    ${buildColorOptionsHtml(colorId)}
+                    ${buildColorOptionsHtml(colorId, excludeIds)}
                 </select>
                 <input type="hidden" name="items[${newIdx}][color_code]" class="item-color-code" value="${escapeHtml(colorCode)}">
             </td>
@@ -1287,12 +1337,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         renumberRows();
+        refreshColorDropdowns();
         return tr;
     }
 
     if (btnAddItemRow && lotItemsTbody) {
         btnAddItemRow.addEventListener('click', function() {
             const tr = createRow();
+            refreshColorDropdowns();
             tr.querySelector('.item-color-select').focus();
             if (hasAnatomySwitch.checked && (parseInt(withSleevesInput.value, 10) + parseInt(sleevelessInput.value, 10)) > 0) {
                 autoDistributeAnatomyToColorRows();
@@ -1310,6 +1362,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (rows.length > 1) {
                 btn.closest('tr').remove();
                 renumberRows();
+                refreshColorDropdowns();
                 if (hasAnatomySwitch.checked && (parseInt(withSleevesInput.value, 10) + parseInt(sleevelessInput.value, 10)) > 0) {
                     autoDistributeAnatomyToColorRows();
                 } else {
@@ -1322,8 +1375,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 row.querySelector('.item-qty-input').value = '';
                 row.querySelector('.item-color-dot').style.backgroundColor = '#ccc';
                 row.querySelector('.item-yarn-text').textContent = '—';
+                refreshColorDropdowns();
                 recalcAll();
             }
+            triggerAutoSave();
         });
 
         // Color & Size change inside rows
@@ -1345,9 +1400,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 const yarnText = row.querySelector('.item-yarn-text');
                 if (yarnText) yarnText.textContent = sel.value ? `${yarn} KG` : '—';
 
+                refreshColorDropdowns();
                 recalcAll();
+                triggerAutoSave();
             } else if (e.target.classList.contains('item-size-select')) {
                 recalcAll();
+                triggerAutoSave();
             }
         });
     }
@@ -1471,6 +1529,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     quickAddSizeModal.hide();
                     recalcAll();
+                refreshColorDropdowns();
                     triggerAutoSave();
                 } else {
                     if (fb) {
@@ -1558,17 +1617,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     const c = res.color;
                     colorsList.unshift(c);
 
-                    // Add option to ALL existing .item-color-select dropdowns
-                    document.querySelectorAll('.item-color-select').forEach(sel => {
-                        const opt = document.createElement('option');
-                        opt.value = c.id;
-                        opt.dataset.code = c.color_code || c.name;
-                        opt.dataset.hex = c.hex_code || '#6366f1';
-                        opt.dataset.yarn = parseFloat(c.yarn_stock_kg || 0).toFixed(2);
-                        opt.textContent = `${c.color_code || c.name} - ${c.name} (${opt.dataset.yarn} KG)`;
-                        sel.add(opt, 1);
-                    });
-
                     // Select in the last row or active row
                     const rows = document.querySelectorAll('#lotItemsTbody .lot-item-row');
                     if (rows.length > 0) {
@@ -1576,12 +1624,22 @@ document.addEventListener('DOMContentLoaded', function() {
                         const sel = lastRow.querySelector('.item-color-select');
                         if (sel) {
                             sel.value = c.id;
+                        }
+                    }
+
+                    refreshColorDropdowns();
+
+                    if (rows.length > 0) {
+                        const lastRow = rows[rows.length - 1];
+                        const sel = lastRow.querySelector('.item-color-select');
+                        if (sel) {
                             sel.dispatchEvent(new Event('change', { bubbles: true }));
                         }
                     }
 
                     quickAddColorModal.hide();
                     recalcAll();
+                refreshColorDropdowns();
                     triggerAutoSave();
                 } else {
                     if (fb) {
@@ -1898,6 +1956,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 recalcAll();
+                refreshColorDropdowns();
 
                 // Hide banner
                 const banner = document.getElementById('draftRestoreBanner');
@@ -1952,6 +2011,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Run check on load
     checkExistingDraft();
+    refreshColorDropdowns();
 });
 </script>
 
