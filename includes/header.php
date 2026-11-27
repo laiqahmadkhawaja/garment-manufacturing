@@ -25,6 +25,12 @@ $user = current_user();
     <link rel="stylesheet" href="<?= BASE_URL ?>assets/css/bootstrap.min.css">
     <link rel="stylesheet" href="<?= BASE_URL ?>assets/css/bootstrap-icons.css">
     <link rel="stylesheet" href="<?= BASE_URL ?>assets/css/app.css">
+    
+    <!-- Global Base URL for JavaScript -->
+    <script>
+        window.BASE_URL = '<?= BASE_URL ?>';
+        window.APP_URL = '<?= BASE_URL ?>';
+    </script>
 </head>
 <body>
 <div class="app-wrapper">

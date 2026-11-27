@@ -2548,6 +2548,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
     </div>
 
 <script>
+const BASE_URL = window.BASE_URL || '<?= BASE_URL ?>';
 document.addEventListener('DOMContentLoaded', function() {
     // =========================================================================
     // FAST WORKER PRODUCTION DESK CONTROLLER
