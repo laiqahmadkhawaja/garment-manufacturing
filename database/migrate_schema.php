@@ -155,6 +155,15 @@ if (!in_array('default_sam_minutes', $peCols)) {
     echo "[✓] Added default_sam_minutes to product_elements\n";
 }
 
+// Ensure quantity and multiplier are DECIMAL(8,2) to allow fractional parts (e.g. 0.5 pocket)
+try {
+    $db->exec("ALTER TABLE product_elements MODIFY COLUMN quantity DECIMAL(8,2) NOT NULL DEFAULT 1.00");
+    $db->exec("ALTER TABLE product_elements MODIFY COLUMN multiplier DECIMAL(8,2) NOT NULL DEFAULT 1.00");
+    echo "[✓] Updated product_elements quantity and multiplier to DECIMAL(8,2)\n";
+} catch (Exception $e) {
+    echo "[!] Could not alter product_elements decimals: " . $e->getMessage() . "\n";
+}
+
 // 8. Operator Element Entries Table (Stage 1 without colors)
 $db->exec("CREATE TABLE IF NOT EXISTS lot_operator_element_entries (
     id INT AUTO_INCREMENT PRIMARY KEY,

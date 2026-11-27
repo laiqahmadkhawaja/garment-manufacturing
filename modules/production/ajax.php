@@ -92,8 +92,8 @@ if ($action === 'get_lot_operations_and_variants') {
     // Calculate maximum complete whole units ready from operator for cutting
     $maxWholeReadyToCut = null;
     foreach ($lotElements as $el) {
-        $m = (int)($el['quantity'] ?: $el['multiplier'] ?: 1);
-        if ($m <= 0) $m = 1;
+        $m = (float)($el['quantity'] ?: $el['multiplier'] ?: 1);
+        if ($m <= 0) $m = 1.0;
         $avail = max(0, (int)$el['operator_total'] - (int)$el['cut_pieces']);
         $w = (int)floor($avail / $m);
         if ($maxWholeReadyToCut === null || $w < $maxWholeReadyToCut) {
@@ -300,8 +300,8 @@ if ($action === 'get_lot_stage_matrix') {
     $mElements = $maxWholeStmt->fetchAll();
     $maxWholeReadyToCut = null;
     foreach ($mElements as $mel) {
-        $m = (int)($mel['quantity'] ?: $mel['multiplier'] ?: 1);
-        if ($m <= 0) $m = 1;
+        $m = (float)($mel['quantity'] ?: $mel['multiplier'] ?: 1);
+        if ($m <= 0) $m = 1.0;
         $avail = max(0, (int)$mel['operator_total'] - (int)$mel['cut_pieces']);
         $w = (int)floor($avail / $m);
         if ($maxWholeReadyToCut === null || $w < $maxWholeReadyToCut) {

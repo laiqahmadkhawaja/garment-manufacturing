@@ -361,7 +361,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <div class="d-flex flex-wrap gap-1 align-items-center">
                                         <?php foreach ($productElements as $pe): ?>
                                             <span class="badge bg-white text-dark border p-2">
-                                                <?= clean($pe['element_name']) ?>: <strong class="text-primary">×<?= (int)$pe['quantity'] ?></strong>
+                                                <?= clean($pe['element_name']) ?>: <strong class="text-primary">×<?= (float)$pe['quantity'] ?></strong>
                                                 <?php if ($pe['notes']): ?>
                                                     <small class="text-muted ms-1">(<?= clean($pe['notes']) ?>)</small>
                                                 <?php endif; ?>

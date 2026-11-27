@@ -61,17 +61,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
             // 2. Synchronize Product Elements
             $db->prepare("DELETE FROM product_elements WHERE product_id = ?")->execute([$productId]);
 
-            $insElem = $db->prepare("INSERT INTO product_elements (product_id, element_name, quantity, default_sam_minutes, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?)");
+            $insElem = $db->prepare("INSERT INTO product_elements (product_id, element_name, quantity, multiplier, default_sam_minutes, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)");
             $savedCount = 0;
             if (is_array($elemNames) && !empty($elemNames)) {
                 $sort = 1;
                 foreach ($elemNames as $idx => $eName) {
                     $eName = trim($eName);
                     if ($eName === '') continue;
-                    $q = max(1, (int)($elemQtys[$idx] ?? 1));
+                    $q = max(0, (float)($elemQtys[$idx] ?? 1.0));
                     $sam = max(0, (float)($elemSams[$idx] ?? 0.00));
                     $notes = trim($elemNotes[$idx] ?? '');
-                    $insElem->execute([$productId, $eName, $q, $sam, $notes, $sort++]);
+                    $insElem->execute([$productId, $eName, $q, $q, $sam, $notes, $sort++]);
                     $savedCount++;
                 }
             }
@@ -298,13 +298,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             <td>
                                                 <div class="input-group input-group-sm">
                                                     <button type="button" class="btn btn-outline-secondary btn-qty-minus"><i class="bi bi-dash"></i></button>
-                                                    <input type="number" name="element_qty[]" class="form-control text-center fw-bold el-qty-input" value="<?= (int)$el['quantity'] ?>" min="1" max="50" required>
+                                                    <input type="number" step="any" min="0" name="element_qty[]" class="form-control text-center fw-bold el-qty-input" value="<?= (float)$el['quantity'] ?>" placeholder="1" required>
                                                     <button type="button" class="btn btn-outline-secondary btn-qty-plus"><i class="bi bi-plus"></i></button>
                                                 </div>
                                             </td>
                                             <td>
                                                 <div class="input-group input-group-sm">
-                                                    <input type="number" step="0.1" min="0" name="element_sam[]" class="form-control text-center fw-bold text-primary el-sam-input" value="<?= (float)($el['default_sam_minutes'] ?? 0.0) ?>" placeholder="0.0">
+                                                    <input type="number" step="any" min="0" name="element_sam[]" class="form-control text-center fw-bold text-primary el-sam-input" value="<?= (float)($el['default_sam_minutes'] ?? 0.0) ?>" placeholder="0.0">
                                                     <span class="input-group-text px-1 small text-muted">m</span>
                                                 </div>
                                             </td>
@@ -424,13 +424,13 @@ document.addEventListener('DOMContentLoaded', function() {
             <td>
                 <div class="input-group input-group-sm">
                     <button type="button" class="btn btn-outline-secondary btn-qty-minus"><i class="bi bi-dash"></i></button>
-                    <input type="number" name="element_qty[]" class="form-control text-center fw-bold el-qty-input" value="${qty}" min="1" max="50" required>
+                    <input type="number" step="any" min="0" name="element_qty[]" class="form-control text-center fw-bold el-qty-input" value="${qty}" placeholder="1" required>
                     <button type="button" class="btn btn-outline-secondary btn-qty-plus"><i class="bi bi-plus"></i></button>
                 </div>
             </td>
             <td>
                 <div class="input-group input-group-sm">
-                    <input type="number" step="0.1" min="0" name="element_sam[]" class="form-control text-center fw-bold text-primary el-sam-input" value="${sam}" placeholder="0.0">
+                    <input type="number" step="any" min="0" name="element_sam[]" class="form-control text-center fw-bold text-primary el-sam-input" value="${sam}" placeholder="0.0">
                     <span class="input-group-text px-1 small text-muted">m</span>
                 </div>
             </td>
@@ -456,16 +456,24 @@ document.addEventListener('DOMContentLoaded', function() {
         const removeBtn = tr.querySelector('.btn-remove-row');
 
         minusBtn.addEventListener('click', function() {
-            let v = parseInt(qtyInput.value) || 1;
+            let v = parseFloat(qtyInput.value) || 0;
             if (v > 1) {
-                qtyInput.value = v - 1;
-                recalcTotals();
+                qtyInput.value = Math.round((v - 1) * 100) / 100;
+            } else if (v > 0.5) {
+                qtyInput.value = 0.5;
+            } else if (v > 0.1) {
+                qtyInput.value = Math.max(0, Math.round((v - 0.1) * 100) / 100);
             }
+            recalcTotals();
         });
 
         plusBtn.addEventListener('click', function() {
-            let v = parseInt(qtyInput.value) || 1;
-            qtyInput.value = v + 1;
+            let v = parseFloat(qtyInput.value) || 0;
+            if (v >= 0 && v < 1) {
+                qtyInput.value = Math.round((v + 0.5) * 100) / 100;
+            } else {
+                qtyInput.value = Math.round((v + 1) * 100) / 100;
+            }
             recalcTotals();
         });
 
@@ -486,14 +494,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
         rows.forEach((r, idx) => {
             r.querySelector('.row-index').textContent = idx + 1;
-            const q = parseInt(r.querySelector('.el-qty-input').value) || 0;
+            const q = parseFloat(r.querySelector('.el-qty-input').value) || 0;
             const s = parseFloat(r.querySelector('.el-sam-input') ? r.querySelector('.el-sam-input').value : 0) || 0;
             totalQty += q;
             totalSam += (q * s);
         });
 
         if (lblElements) lblElements.textContent = count;
-        if (lblPieces) lblPieces.textContent = totalQty + ' pcs';
+        if (lblPieces) lblPieces.textContent = (Math.round(totalQty * 100) / 100) + ' pcs';
         if (lblSam) lblSam.textContent = totalSam.toFixed(1) + ' mins';
 
         if (noNotice) {
@@ -539,7 +547,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.quick-add-chip').forEach(chip => {
         chip.addEventListener('click', function() {
             const name = this.getAttribute('data-name');
-            const qty = parseInt(this.getAttribute('data-qty')) || 1;
+            const qty = parseFloat(this.getAttribute('data-qty')) || 1;
             const sam = parseFloat(this.getAttribute('data-sam')) || 0.0;
             const notes = this.getAttribute('data-notes') || '';
             createRow(name, qty, notes, sam);

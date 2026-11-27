@@ -391,11 +391,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $peList = $db->prepare("SELECT id, multiplier, quantity FROM product_elements WHERE product_id = (SELECT product_id FROM lots WHERE id = ?)");
                         $peList->execute([$lotId]);
                         foreach ($peList->fetchAll() as $pel) {
-                            $m = (int)($pel['quantity'] ?: $pel['multiplier'] ?: 1);
+                            $m = (float)($pel['quantity'] ?: $pel['multiplier'] ?: 1);
+                            if ($m <= 0) $m = 1.0;
                             $elId = (int)$pel['id'];
-                            $req = $m * (int)$lotRow['total_pieces'];
-                            $p1 = $m * $dayTotalPcs;
-                            $p2 = $m * $nightTotalPcs;
+                            $req = (int)round($m * (int)$lotRow['total_pieces']);
+                            $p1 = (int)round($m * $dayTotalPcs);
+                            $p2 = (int)round($m * $nightTotalPcs);
 
                             $chkEl = $db->prepare("SELECT id, operator1_id, operator1_pieces, operator2_id, operator2_pieces, total_pieces FROM lot_operator_element_entries WHERE lot_id = ? AND element_id = ?");
                             $chkEl->execute([$lotId, $elId]);
@@ -599,8 +600,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $peMultStmt = $db->prepare("SELECT multiplier, quantity FROM product_elements WHERE id = ?");
                             $peMultStmt->execute([$elId]);
                             $multRow = $peMultStmt->fetch();
-                            $mult = $multRow ? (int)($multRow['quantity'] ?: $multRow['multiplier'] ?: 1) : 1;
-                            $req = $mult * (int)$lotRow['total_pieces'];
+                            $mult = $multRow ? (float)($multRow['quantity'] ?: $multRow['multiplier'] ?: 1) : 1;
+                            if ($mult <= 0) $mult = 1.0;
+                            $req = (int)round($mult * (int)$lotRow['total_pieces']);
 
                             $insEl = $db->prepare("INSERT INTO lot_operator_element_entries 
                                 (lot_id, element_id, entry_date, required_pieces, cut_pieces, notes, created_by)
@@ -2529,7 +2531,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         let minWhole = null;
         currentOpLotData.elements.forEach(el => {
-            const mult = parseInt(el.quantity || el.multiplier || 1) || 1;
+            const mult = parseFloat(el.quantity || el.multiplier || 1) || 1;
             const ready = parseInt(el.operator_total || 0) || 0;
             const alreadyCut = parseInt(el.cut_pieces || 0) || 0;
             const avail = Math.max(0, ready - alreadyCut);
@@ -2707,7 +2709,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         let html = '';
         elements.forEach(el => {
-            const mult = parseInt(el.quantity || el.multiplier || 1);
+            const mult = parseFloat(el.quantity || el.multiplier || 1) || 1;
             const req = parseInt(el.required_pieces) || 0;
             const done = parseInt(el.operator_total || el.operator1_pieces || 0);
             const pending = Math.max(0, req - done);
@@ -2956,7 +2958,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         let html = '';
         elements.forEach(el => {
-            const mult = parseInt(el.quantity || el.multiplier || 1) || 1;
+            const mult = parseFloat(el.quantity || el.multiplier || 1) || 1;
             const ready = parseInt(el.operator_total || 0) || 0;
             const alreadyCut = parseInt(el.cut_pieces || 0) || 0;
             const availToCut = Math.max(0, ready - alreadyCut);
@@ -4750,7 +4752,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (currentOpLotData && currentOpLotData.elements) {
             currentOpLotData.elements.forEach(el => {
                 const sam = parseFloat(el.default_sam_minutes) || 0;
-                const mult = parseInt(el.quantity || el.multiplier || 1);
+                const mult = parseFloat(el.quantity || el.multiplier || 1) || 1;
                 totalElemSam += (sam * mult);
             });
         }

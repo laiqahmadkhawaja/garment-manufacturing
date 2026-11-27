@@ -577,7 +577,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 </div>
                             </div>
                             <div class="d-flex align-items-center gap-3">
-                                <span class="small text-muted">Per Garment: <strong class="text-dark"><?= $totalElemPcs ?> pieces</strong></span>
+                                <span class="small text-muted">Per Garment: <strong class="text-dark"><?= (float)$totalElemPcs ?> pieces</strong></span>
                                 <span class="vr"></span>
                                 <span class="small text-muted">Total Batch Cutting Pieces: <strong class="text-primary fw-bold"><?= number_format($batchTotalPcs) ?> pieces</strong></span>
                                 <a href="<?= BASE_URL ?>modules/settings/product_edit.php?id=<?= $lot['product_id'] ?>" class="btn btn-sm btn-outline-primary py-0 px-2 small">
@@ -607,7 +607,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                     <?= clean($el['element_name']) ?>
                                                 </td>
                                                 <td class="text-center fw-bold text-muted">
-                                                    <?= (int)$el['quantity_per_unit'] ?> pcs
+                                                    <?= (float)$el['quantity_per_unit'] ?> pcs
                                                 </td>
                                                 <td class="text-center fw-semibold <?= $el['is_sleeve'] && $hasAnatomy ? 'text-primary' : 'text-dark' ?>">
                                                     <?= number_format($el['target_pieces']) ?> pcs

@@ -46,15 +46,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $savedElemCount = 0;
                 $elemSams = $_POST['element_sam'] ?? [];
                 if (is_array($elemNames) && !empty($elemNames)) {
-                    $insElem = $db->prepare("INSERT INTO product_elements (product_id, element_name, quantity, default_sam_minutes, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?)");
+                    $insElem = $db->prepare("INSERT INTO product_elements (product_id, element_name, quantity, multiplier, default_sam_minutes, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)");
                     $sort = 1;
                     foreach ($elemNames as $idx => $eName) {
                         $eName = trim($eName);
                         if ($eName === '') continue;
-                        $q = max(1, (int)($elemQtys[$idx] ?? 1));
+                        $q = max(0, (float)($elemQtys[$idx] ?? 1.0));
                         $sam = max(0, (float)($elemSams[$idx] ?? 0.00));
                         $notes = trim($elemNotes[$idx] ?? '');
-                        $insElem->execute([$newProductId, $eName, $q, $sam, $notes, $sort++]);
+                        $insElem->execute([$newProductId, $eName, $q, $q, $sam, $notes, $sort++]);
                         $savedElemCount++;
                     }
                 }
@@ -587,12 +587,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                     <div class="d-flex flex-wrap gap-1 align-items-center">
                                                         <?php foreach ($pElems as $pe): ?>
                                                             <span class="badge bg-light text-dark border" style="font-size: 0.73rem;" title="<?= clean($pe['notes'] ?? '') ?>">
-                                                                <?= clean($pe['element_name']) ?> <strong class="text-primary">×<?= (int)$pe['quantity'] ?></strong>
+                                                                <?= clean($pe['element_name']) ?> <strong class="text-primary">×<?= (float)$pe['quantity'] ?></strong>
                                                             </span>
                                                         <?php endforeach; ?>
                                                     </div>
                                                     <div class="small text-muted mt-1" style="font-size: 0.72rem;">
-                                                        <?= count($pElems) ?> components (<?= $elemSum ?> pcs / unit)
+                                                        <?= count($pElems) ?> components (<?= (float)$elemSum ?> pcs / unit)
                                                     </div>
                                                 <?php endif; ?>
                                             </td>
@@ -1255,13 +1255,13 @@ document.addEventListener('DOMContentLoaded', function() {
             <td>
                 <div class="input-group input-group-sm">
                     <button type="button" class="btn btn-outline-secondary btn-pel-minus"><i class="bi bi-dash"></i></button>
-                    <input type="number" name="element_qty[]" class="form-control text-center fw-bold pel-qty-val" value="${qty}" min="1" max="50" required>
+                    <input type="number" step="any" min="0" name="element_qty[]" class="form-control text-center fw-bold pel-qty-val" value="${qty}" placeholder="1" required>
                     <button type="button" class="btn btn-outline-secondary btn-pel-plus"><i class="bi bi-plus"></i></button>
                 </div>
             </td>
             <td>
                 <div class="input-group input-group-sm">
-                    <input type="number" step="0.1" min="0" name="element_sam[]" class="form-control text-center fw-bold text-primary pel-sam-val" value="${sam}" placeholder="0.0">
+                    <input type="number" step="any" min="0" name="element_sam[]" class="form-control text-center fw-bold text-primary pel-sam-val" value="${sam}" placeholder="0.0">
                     <span class="input-group-text px-1 small text-muted">m</span>
                 </div>
             </td>
@@ -1287,16 +1287,24 @@ document.addEventListener('DOMContentLoaded', function() {
         const remove = tr.querySelector('.btn-pel-remove');
 
         minus.addEventListener('click', function() {
-            let v = parseInt(qty.value) || 1;
+            let v = parseFloat(qty.value) || 0;
             if (v > 1) {
-                qty.value = v - 1;
-                recalcProdTotals();
+                qty.value = Math.round((v - 1) * 100) / 100;
+            } else if (v > 0.5) {
+                qty.value = 0.5;
+            } else if (v > 0.1) {
+                qty.value = Math.max(0, Math.round((v - 0.1) * 100) / 100);
             }
+            recalcProdTotals();
         });
 
         plus.addEventListener('click', function() {
-            let v = parseInt(qty.value) || 1;
-            qty.value = v + 1;
+            let v = parseFloat(qty.value) || 0;
+            if (v >= 0 && v < 1) {
+                qty.value = Math.round((v + 0.5) * 100) / 100;
+            } else {
+                qty.value = Math.round((v + 1) * 100) / 100;
+            }
             recalcProdTotals();
         });
 
@@ -1315,13 +1323,13 @@ document.addEventListener('DOMContentLoaded', function() {
         let totalSam = 0;
         rows.forEach((r, i) => {
             r.querySelector('.p-row-idx').textContent = i + 1;
-            const q = parseInt(r.querySelector('.pel-qty-val').value) || 0;
+            const q = parseFloat(r.querySelector('.pel-qty-val').value) || 0;
             const s = parseFloat(r.querySelector('.pel-sam-val') ? r.querySelector('.pel-sam-val').value : 0) || 0;
             totalPcs += q;
             totalSam += (q * s);
         });
         if (lblCount) lblCount.textContent = rows.length;
-        if (lblPcs) lblPcs.textContent = totalPcs + ' pcs';
+        if (lblPcs) lblPcs.textContent = (Math.round(totalPcs * 100) / 100) + ' pcs';
         if (lblSam) lblSam.textContent = totalSam.toFixed(1) + ' mins';
     }
 

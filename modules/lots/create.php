@@ -67,7 +67,7 @@ foreach ($allProductElements as $pe) {
     $productElementsMap[$pe['product_id']][] = [
         'id' => (int)$pe['id'],
         'name' => $pe['element_name'],
-        'quantity' => (int)$pe['quantity'],
+        'quantity' => (float)$pe['quantity'],
         'notes' => $pe['notes'] ?? ''
     ];
 }

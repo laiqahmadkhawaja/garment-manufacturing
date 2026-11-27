@@ -110,7 +110,7 @@ $operatorEntries = $oeStmt->fetchAll();
 // If no entries saved yet, build standard template for preview
 if (empty($operatorEntries)) {
     foreach ($productElements as $se) {
-        $req = (int)$lot['total_pieces'] * (int)$se['quantity'];
+        $req = (int)round((int)$lot['total_pieces'] * (float)$se['quantity']);
         $operatorEntries[] = [
             'element_id' => $se['id'],
             'element_name' => $se['element_name'],

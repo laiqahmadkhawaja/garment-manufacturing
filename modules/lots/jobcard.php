@@ -104,7 +104,7 @@ if (empty($operatorEntries)) {
         ];
     }
     foreach ($stdElements as $se) {
-        $req = (int)$lot['total_pieces'] * (int)$se['multiplier'];
+        $req = (int)round((int)$lot['total_pieces'] * (float)$se['multiplier']);
         $operatorEntries[] = [
             'element_id' => $se['id'],
             'element_name' => $se['element_name'],

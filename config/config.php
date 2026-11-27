@@ -634,16 +634,16 @@ function calculate_lot_element_requirements(array $productElements, int $totalPi
 
     foreach ($productElements as $pe) {
         $name = trim($pe['element_name'] ?? '');
-        $qtyPerUnit = (int)($pe['quantity'] ?? 1);
+        $qtyPerUnit = (float)($pe['quantity'] ?? 1.0);
         $isSleeve = (bool)preg_match('/(sleeve|بازو|bazu|aasteen|آستین)/iu', $name);
 
         if ($hasAnatomyVariants && $isSleeve) {
             $targetPieces = $sleevedQty;
-            $batchCut = $qtyPerUnit * $sleevedQty;
+            $batchCut = (int)round($qtyPerUnit * $sleevedQty);
             $calcNote = "{$sleevedQty} بازو والے پیسز کے لیے ({$qtyPerUnit} × {$sleevedQty} = {$batchCut})";
         } else {
             $targetPieces = $totalPieces;
-            $batchCut = $qtyPerUnit * $totalPieces;
+            $batchCut = (int)round($qtyPerUnit * $totalPieces);
             $calcNote = "تمام {$totalPieces} پیسز کے لیے ({$qtyPerUnit} × {$totalPieces} = {$batchCut})";
         }
 
