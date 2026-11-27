@@ -671,6 +671,134 @@ function calculate_lot_element_requirements(array $productElements, int $totalPi
 }
 
 /**
+ * Sequential Workflow Stage Allowance & Capacity Verification
+ *
+ * Ensures that in any workflow sequence (e.g. Seq 1: Knitting -> Seq 2: Press -> Seq 3: Katai -> Seq 4: Tailor),
+ * each subsequent stage can ONLY produce up to the good pieces completed by its preceding workflow stage.
+ * If the preceding stage has produced 100 pieces out of a 200-piece lot, the current stage's cumulative
+ * good pieces cannot exceed 100 pieces (i.e. maximum available now = 100 - already_done_in_current_stage).
+ *
+ * @param int $lotId
+ * @param int $operationId
+ * @return array [
+ *   'lot_id' => int,
+ *   'operation_id' => int,
+ *   'total_pieces' => int,
+ *   'current_good' => int,
+ *   'pending_balance' => int,
+ *   'predecessor' => array|null,
+ *   'max_available' => int,
+ *   'is_blocked' => bool,
+ *   'suggested_qty' => int
+ * ]
+ */
+function get_lot_stage_sequence_allowance(int $lotId, int $operationId): array {
+    $db = get_db();
+
+    // 1. Get lot total pieces
+    $lotStmt = $db->prepare("SELECT total_pieces FROM lots WHERE id = ?");
+    $lotStmt->execute([$lotId]);
+    $totalPieces = (int)$lotStmt->fetchColumn();
+
+    // 2. Get current operation sequence in this lot
+    $seqStmt = $db->prepare("SELECT sequence FROM lot_workflow_steps WHERE lot_id = ? AND operation_id = ?");
+    $seqStmt->execute([$lotId, $operationId]);
+    $currSeq = $seqStmt->fetchColumn();
+
+    if ($currSeq === false) {
+        // Fallback for sub-operations
+        $subStmt = $db->prepare("SELECT lws.sequence FROM operations o JOIN lot_workflow_steps lws ON o.parent_id = lws.operation_id WHERE o.id = ? AND lws.lot_id = ?");
+        $subStmt->execute([$operationId, $lotId]);
+        $currSeq = $subStmt->fetchColumn();
+        if ($currSeq === false) {
+            $currSeq = (int)$db->query("SELECT sequence FROM operations WHERE id = " . (int)$operationId)->fetchColumn();
+        }
+    }
+    $currSeq = (float)$currSeq;
+
+    // 3. Find preceding workflow steps with sequence < currSeq
+    $prevStepsStmt = $db->prepare("SELECT lws.operation_id, o.name AS op_name, lws.sequence, lws.is_mandatory
+                                   FROM lot_workflow_steps lws
+                                   JOIN operations o ON lws.operation_id = o.id
+                                   WHERE lws.lot_id = ? AND lws.sequence < ?
+                                   ORDER BY lws.sequence DESC");
+    $prevStepsStmt->execute([$lotId, $currSeq]);
+    $prevSteps = $prevStepsStmt->fetchAll();
+
+    // Fallback if no lot_workflow_steps exist
+    if (empty($prevSteps) && $currSeq > 1) {
+        $prevOpsStmt = $db->prepare("SELECT id AS operation_id, name AS op_name, sequence, 1 AS is_mandatory
+                                     FROM operations
+                                     WHERE is_active = 1 AND sequence < ?
+                                     ORDER BY sequence DESC");
+        $prevOpsStmt->execute([$currSeq]);
+        $prevSteps = $prevOpsStmt->fetchAll();
+    }
+
+    // 4. Current stage good done
+    $curGoodStmt = $db->prepare("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = ? AND operation_id = ?");
+    $curGoodStmt->execute([$lotId, $operationId]);
+    $currentGood = (int)$curGoodStmt->fetchColumn();
+    $pendingBalance = max(0, $totalPieces - $currentGood);
+
+    // 5. Predecessor calculations
+    $predecessor = null;
+    if (!empty($prevSteps)) {
+        // Immediate preceding step
+        $chosenPrev = $prevSteps[0];
+        // If immediate preceding step is optional and has 0 output, search for closest preceding mandatory step
+        if (isset($chosenPrev['is_mandatory']) && (int)$chosenPrev['is_mandatory'] === 0) {
+            $chkImmGood = (int)$db->prepare("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = ? AND operation_id = ?")
+                                  ->execute([$lotId, (int)$chosenPrev['operation_id']]) ? $db->query("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = $lotId AND operation_id = {$chosenPrev['operation_id']}")->fetchColumn() : 0;
+            if ($chkImmGood === 0) {
+                foreach ($prevSteps as $ps) {
+                    if (!empty($ps['is_mandatory'])) {
+                        $chosenPrev = $ps;
+                        break;
+                    }
+                }
+            }
+        }
+
+        $prevOpId = (int)$chosenPrev['operation_id'];
+        $prevOpName = $chosenPrev['op_name'];
+        $prevSeq = (float)$chosenPrev['sequence'];
+
+        $pGoodStmt = $db->prepare("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = ? AND operation_id = ?");
+        $pGoodStmt->execute([$lotId, $prevOpId]);
+        $prevGoodDone = (int)$pGoodStmt->fetchColumn();
+
+        $maxAvailable = max(0, $prevGoodDone - $currentGood);
+        $maxAvailable = min($maxAvailable, $pendingBalance);
+
+        $predecessor = [
+            'operation_id' => $prevOpId,
+            'op_name' => $prevOpName,
+            'sequence' => $prevSeq,
+            'good_done' => $prevGoodDone,
+        ];
+    } else {
+        // First stage in workflow (e.g. Knitting/Operator) - available capacity is lot remaining pieces
+        $prevGoodDone = $totalPieces;
+        $maxAvailable = $pendingBalance;
+    }
+
+    $isBlocked = ($maxAvailable <= 0 && $pendingBalance > 0);
+
+    return [
+        'lot_id' => $lotId,
+        'operation_id' => $operationId,
+        'total_pieces' => $totalPieces,
+        'current_good' => $currentGood,
+        'pending_balance' => $pendingBalance,
+        'predecessor' => $predecessor,
+        'max_available' => $maxAvailable,
+        'is_blocked' => $isBlocked,
+        'suggested_qty' => min($pendingBalance, $maxAvailable)
+    ];
+}
+
+/**
  * Calculate allowable pieces per variant and per color for a given workflow stage on a lot.
  * Strictly guarantees that if a color had rejections in a preceding stage (e.g., 1 piece of 1192 rejected in Stitching),
  * subsequent stages automatically restrict that exact color to the passed good quantity (e.g., 49 instead of 50),

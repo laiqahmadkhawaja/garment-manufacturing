@@ -1245,6 +1245,78 @@ $scenario40Passed = (
 assert_test("40. Fast Production Desk & Real-time Row Save", $scenario40Passed, 
     "Worker operations mapped correctly; capacity check blocked 150 > 100; 90+10 completed lot; Rs. 1,200 credited to ledger");
 
+// ------------------------------------------------------------------------
+// Scenario 41: Sequential Workflow Stage Gating & Predecessor Capacity Enforcement
+// ------------------------------------------------------------------------
+echo "\n--- TESTING SCENARIO 41: SEQUENTIAL WORKFLOW STAGE GATING & CAPACITY BALANCE ---\n";
+
+$lotNum41 = 'LOT-TEST-SEQ-' . time();
+$db->prepare("INSERT INTO lots (lot_number, lot_date, product_id, total_pieces, status, created_by) 
+              VALUES (?, CURDATE(), 1, 100, 'In Production', 1)")->execute([$lotNum41]);
+$lotId41 = (int)$db->lastInsertId();
+
+// Attach 3 sequential steps: Seq 1: Knitting (60), Seq 2: Press (13), Seq 3: Katai (8)
+$db->prepare("INSERT INTO lot_workflow_steps (lot_id, operation_id, sequence, is_mandatory, status) VALUES (?, 60, 1, 1, 'Pending')")->execute([$lotId41]);
+$db->prepare("INSERT INTO lot_workflow_steps (lot_id, operation_id, sequence, is_mandatory, status) VALUES (?, 13, 2, 1, 'Pending')")->execute([$lotId41]);
+$db->prepare("INSERT INTO lot_workflow_steps (lot_id, operation_id, sequence, is_mandatory, status) VALUES (?, 8, 3, 1, 'Pending')")->execute([$lotId41]);
+
+// 1. Initially, Seq 1 has 0 done, so Seq 2 and Seq 3 must both have max_available = 0 and is_blocked = true
+$alSeq2_init = get_lot_stage_sequence_allowance($lotId41, 13);
+$alSeq3_init = get_lot_stage_sequence_allowance($lotId41, 8);
+$initialGatingCorrect = ($alSeq2_init['max_available'] === 0 && $alSeq2_init['is_blocked'] === true &&
+                         $alSeq3_init['max_available'] === 0 && $alSeq3_init['is_blocked'] === true);
+
+// 2. Complete 60 pieces in Seq 1 (Operator Knitting)
+$db->prepare("INSERT INTO production_entries (entry_number, entry_date, lot_id, operation_id, worker_id, shift, good_qty, rate, labour_amount, created_by)
+              VALUES ('PE-T41-1', CURDATE(), ?, 60, 1, 'Day Shift', 60, 2.50, 150.00, 1)")->execute([$lotId41]);
+
+// 3. Now Seq 2 (PALAY Press) must have max_available = 60, while Seq 3 (Katai) must still have max_available = 0
+$alSeq2_after1 = get_lot_stage_sequence_allowance($lotId41, 13);
+$alSeq3_after1 = get_lot_stage_sequence_allowance($lotId41, 8);
+$step1UnlockCorrect = ($alSeq2_after1['max_available'] === 60 && $alSeq2_after1['is_blocked'] === false &&
+                       $alSeq3_after1['max_available'] === 0 && $alSeq3_after1['is_blocked'] === true);
+
+// 4. In Seq 2, attempting to record 70 pieces (> 60) must be blocked by allowance check
+$seq2OverBlocked = (70 > $alSeq2_after1['max_available']);
+
+// 5. Record 50 good pieces in Seq 2 (PALAY Press)
+$db->prepare("INSERT INTO production_entries (entry_number, entry_date, lot_id, operation_id, worker_id, shift, good_qty, rate, labour_amount, created_by)
+              VALUES ('PE-T41-2', CURDATE(), ?, 13, 4, 'Day Shift', 50, 10.00, 500.00, 1)")->execute([$lotId41]);
+
+// 6. Now Seq 3 (Katai) must have max_available = 50 (unlocked by Seq 2's 50 good pieces!)
+$alSeq3_after2 = get_lot_stage_sequence_allowance($lotId41, 8);
+$kataiUnlocked50 = ($alSeq3_after2['max_available'] === 50 && $alSeq3_after2['is_blocked'] === false);
+
+// 7. In Seq 3 (Katai), attempting to record 60 pieces (> 50) must be blocked
+$kataiOverBlocked = (60 > $alSeq3_after2['max_available']);
+
+// 8. Record 30 pieces in Seq 3 (Katai)
+$db->prepare("INSERT INTO production_entries (entry_number, entry_date, lot_id, operation_id, worker_id, shift, good_qty, rate, labour_amount, created_by)
+              VALUES ('PE-T41-3', CURDATE(), ?, 8, 6, 'Day Shift', 30, 12.00, 360.00, 1)")->execute([$lotId41]);
+
+// 9. Now Seq 3 remaining available must be 50 - 30 = 20 pieces!
+$alSeq3_after3 = get_lot_stage_sequence_allowance($lotId41, 8);
+$kataiRemainingCorrect = ($alSeq3_after3['max_available'] === 20 && $alSeq3_after3['current_good'] === 30);
+
+// Cleanup test lot
+$db->exec("DELETE FROM worker_ledger WHERE reference_type = 'PRODUCTION_ENTRY' AND lot_id = $lotId41");
+$db->exec("DELETE FROM production_entries WHERE lot_id = $lotId41");
+$db->exec("DELETE FROM lot_operator_element_entries WHERE lot_id = $lotId41");
+$db->exec("DELETE FROM lot_workflow_steps WHERE lot_id = $lotId41");
+$db->exec("DELETE FROM lots WHERE id = $lotId41");
+
+$scenario41Passed = (
+    $initialGatingCorrect && 
+    $step1UnlockCorrect && 
+    $seq2OverBlocked && 
+    $kataiUnlocked50 && 
+    $kataiOverBlocked && 
+    $kataiRemainingCorrect
+);
+
+assert_test("41. Sequential Workflow Stage Gating & Predecessor Capacity", $scenario41Passed, 
+    "Downstream stages strictly gated by predecessor good output; 0 output blocks next; 60 in Seq 1 unlocks 60 in Seq 2; 50 in Seq 2 unlocks exactly 50 in Seq 3; overage blocked");
+
 echo "\n========================================================================\n";
 echo "TEST SUITE SUMMARY: $passCount PASSED, $failCount FAILED\n";
 echo "========================================================================\n";

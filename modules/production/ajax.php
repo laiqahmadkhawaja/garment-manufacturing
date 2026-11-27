@@ -612,7 +612,14 @@ if ($action === 'get_fast_sheet_data') {
             }
 
             // Check if Operator / Cutting elements are present
-            $isOpOrCut = (stripos($opName, 'Cut') !== false || stripos($opName, 'Operator') !== false || stripos($deptName, 'Cut') !== false || stripos($deptName, 'Operator') !== false);
+            $seqAllowance = get_lot_stage_sequence_allowance($lotId, $opId);
+            $maxAvailable = $seqAllowance['max_available'];
+            $isBlocked = $seqAllowance['is_blocked'];
+            $suggestedQty = $seqAllowance['suggested_qty'];
+            $pred = $seqAllowance['predecessor'];
+
+            $isCuttingOp = (stripos($opName, 'Cut') !== false || stripos($opName, 'Katai') !== false || stripos($deptName, 'Cut') !== false || stripos($deptName, 'Katai') !== false);
+            $isOpOrCut = ($isCuttingOp || stripos($opName, 'Operator') !== false || stripos($deptName, 'Operator') !== false);
             $elements = [];
             if ($isOpOrCut) {
                 $elemStmt = $db->prepare("SELECT pe.id, pe.element_name, pe.quantity, pe.multiplier, pe.pieces_per_palla, pe.pallas_per_garment, pe.rate_per_palla,
@@ -627,7 +634,7 @@ if ($action === 'get_fast_sheet_data') {
                 foreach ($elemRows as $er) {
                     $m = (float)($er['quantity'] ?: $er['multiplier'] ?: 1.0);
                     $reqPcs = (int)ceil($m * $totPcs);
-                    $donePcs = (stripos($opName, 'Cut') !== false) ? (int)$er['cut_pieces'] : (int)$er['op_pieces'];
+                    $donePcs = $isCuttingOp ? (int)$er['cut_pieces'] : (int)$er['op_pieces'];
                     $elPending = max(0, $reqPcs - $donePcs);
                     $elements[] = [
                         'id' => (int)$er['id'],
@@ -639,7 +646,7 @@ if ($action === 'get_fast_sheet_data') {
                         'required_pieces' => $reqPcs,
                         'done_pieces' => $donePcs,
                         'pending_pieces' => $elPending,
-                        'suggested_today' => min($elPending, (int)ceil($pendingBal * $m))
+                        'suggested_today' => min($elPending, (int)ceil($maxAvailable * $m))
                     ];
                 }
             }
@@ -655,7 +662,13 @@ if ($action === 'get_fast_sheet_data') {
                 'rejected_done' => $rejDone,
                 'rework_done' => $rewDone,
                 'pending_balance' => $pendingBal,
-                'suggested_qty' => $pendingBal,
+                'max_available' => $maxAvailable,
+                'is_blocked' => $isBlocked,
+                'suggested_qty' => $suggestedQty,
+                'predecessor_op_id' => $pred ? (int)$pred['operation_id'] : null,
+                'predecessor_op_name' => $pred ? $pred['op_name'] : null,
+                'predecessor_sequence' => $pred ? (float)$pred['sequence'] : null,
+                'predecessor_good_done' => $pred ? (int)$pred['good_done'] : $totPcs,
                 'default_rate' => $effRate,
                 'is_operator_or_cutting' => $isOpOrCut,
                 'elements' => $elements
@@ -761,17 +774,34 @@ if ($action === 'save_fast_row_entry') {
         json_response(['status' => 'error', 'message' => 'منتخب کردہ کاریگر موجود نہیں ہے'], 404);
     }
 
-    // Validate Pending Capacity: Good Qty cannot exceed Pending Balance
-    $goodDoneStmt = $db->prepare("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = ? AND operation_id = ?");
-    $goodDoneStmt->execute([$lotId, $operationId]);
-    $currentGood = (int)$goodDoneStmt->fetchColumn();
-    $pendingBalance = max(0, (int)$lot['total_pieces'] - $currentGood);
+    // Validate Sequential Workflow Stage Allowance & Capacity
+    $seqAllowance = get_lot_stage_sequence_allowance($lotId, $operationId);
+    $currentGood = (int)$seqAllowance['current_good'];
+    $pendingBalance = (int)$seqAllowance['pending_balance'];
+    $maxAvailable = (int)$seqAllowance['max_available'];
 
-    if ($goodQty > $pendingBalance) {
-        json_response([
-            'status' => 'error',
-            'message' => "تعداد باقی پینڈنگ پیسز ($pendingBalance) سے زیادہ نہیں ہو سکتی! آپ نے $goodQty درج کی ہے۔"
-        ], 400);
+    if ($goodQty > $maxAvailable) {
+        $pred = $seqAllowance['predecessor'];
+        if ($pred) {
+            $prevOpName = $pred['op_name'];
+            $prevDone = (int)$pred['good_done'];
+            if ($maxAvailable === 0) {
+                json_response([
+                    'status' => 'error',
+                    'message' => "پچھلا مرحلہ ($prevOpName) ابھی زیرِ تکمیل ہے (صرف $prevDone پیسز تیار ہوئے ہیں)۔ جب تک پچھلے مرحلے سے مزید پیسز مکمل نہیں ہوتے، اس مرحلے ({$op['name']}) کی انٹری محفوظ نہیں ہو سکتی۔"
+                ], 400);
+            } else {
+                json_response([
+                    'status' => 'error',
+                    'message' => "پچھلے مرحلے ($prevOpName) میں صرف $prevDone پیسز تیار ہوئے ہیں (اور اس مرحلے میں پہلے سے $currentGood ہو چکے ہیں)! آپ اس وقت زیادہ سے زیادہ $maxAvailable پیسز ہی درج کر سکتے ہیں۔"
+                ], 400);
+            }
+        } else {
+            json_response([
+                'status' => 'error',
+                'message' => "تعداد باقی پینڈنگ پیسز ($pendingBalance) سے زیادہ نہیں ہو سکتی! آپ نے $goodQty درج کی ہے۔"
+            ], 400);
+        }
     }
 
     try {
@@ -864,7 +894,7 @@ if ($action === 'save_fast_row_entry') {
         }
 
         // 8. Elements Sync (for Cutting or Operator stages)
-        $isCutting = (stripos($op['name'], 'Cut') !== false || stripos($op['description'] ?? '', 'Cut') !== false);
+        $isCutting = (stripos($op['name'], 'Cut') !== false || stripos($op['name'], 'Katai') !== false || stripos($op['dept_name'] ?? '', 'Cut') !== false || stripos($op['description'] ?? '', 'Cut') !== false);
         $isOperator = (stripos($op['name'], 'Operator') !== false);
 
         if ($isCutting || $isOperator) {

@@ -857,15 +857,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $isPackingOp = true;
                     }
 
-                    // 1. Stage-level capacity check: cumulative good pieces in this stage cannot exceed lot.total_pieces
-                    $stageGoodStmt = $db->prepare("SELECT COALESCE(SUM(good_qty), 0) FROM production_entries WHERE lot_id = ? AND operation_id = ?");
-                    $stageGoodStmt->execute([$lotId, $operationId]);
-                    $currentStageGood = (int)$stageGoodStmt->fetchColumn();
+                    // 1. Stage-level sequential capacity check: cumulative good pieces cannot exceed predecessor good output
+                    $seqAllowance = get_lot_stage_sequence_allowance($lotId, $operationId);
+                    $currentStageGood = (int)$seqAllowance['current_good'];
+                    $maxSeqAvail = (int)$seqAllowance['max_available'];
 
-                    if (($currentStageGood + $totalGood) > $lotTotalPieces) {
-                        $overPcs = ($currentStageGood + $totalGood) - $lotTotalPieces;
-                        $allowed = max(0, $lotTotalPieces - $currentStageGood);
-                        $error = "Production quantity exceeds lot capacity! Lot #$lotNum allows a maximum of $lotTotalPieces pieces. Already produced: $currentStageGood pcs. Maximum pieces allowed to record now is $allowed pcs (attempted to add: $totalGood pcs, exceeding by $overPcs pcs).";
+                    if ($totalGood > $maxSeqAvail) {
+                        $pred = $seqAllowance['predecessor'];
+                        if ($pred) {
+                            $prevOpName = $pred['op_name'];
+                            $prevDone = (int)$pred['good_done'];
+                            $error = "Production quantity exceeds preceding workflow stage! Preceding stage ($prevOpName) has produced $prevDone pieces (already done in this stage: $currentStageGood). Maximum allowed to enter now is $maxSeqAvail pcs (attempted: $totalGood pcs).";
+                        } else {
+                            $error = "Production quantity exceeds lot capacity of $lotTotalPieces pieces! Maximum allowed is $maxSeqAvail pcs (attempted: $totalGood pcs).";
+                        }
                     } else {
                         // 2. Strict Stage-to-Stage Workflow Variant & Color Capacity Enforcement
                         $allowanceData = get_lot_variant_stage_allowance($lotId, $operationId);
@@ -2761,6 +2766,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
             ops.forEach(op => {
                 const isCompleted = (op.pending_balance <= 0);
+                const isBlocked = !!op.is_blocked;
+                const maxAvail = (typeof op.max_available !== 'undefined') ? op.max_available : op.pending_balance;
+                const suggestedQty = (typeof op.suggested_qty !== 'undefined') ? op.suggested_qty : Math.min(op.pending_balance, maxAvail);
                 const currentShiftVal = deskShiftSelect ? deskShiftSelect.value : 'Day Shift';
 
                 let workerOptionsHtml = `<option value="">-- کاریگر منتخب کریں --</option>`;
@@ -2769,32 +2777,46 @@ document.addEventListener('DOMContentLoaded', function() {
                     workerOptionsHtml += `<option value="${w.id}" data-rate="${w.default_rate}" data-minrate="${w.rate_per_minute}" ${isSelected ? 'selected' : ''}>${escapeHtml(w.name)} (${escapeHtml(w.code)}) - ${escapeHtml(w.department_name || '')}</option>`;
                 });
 
-                const initialLabour = (op.pending_balance * op.default_rate).toFixed(2);
+                const initialLabour = (suggestedQty * op.default_rate).toFixed(2);
 
                 html += `
-                <tr class="op-row ${isCompleted ? 'table-success bg-opacity-25' : ''}" 
+                <tr class="op-row ${isCompleted ? 'table-success bg-opacity-25' : (isBlocked ? 'table-secondary bg-opacity-25' : '')}" 
                     data-lot-id="${lot.lot_id}" 
                     data-op-id="${op.operation_id}" 
                     data-pending="${op.pending_balance}" 
+                    data-max-avail="${maxAvail}"
+                    data-prev-name="${escapeHtml(op.predecessor_op_name || '')}"
+                    data-prev-good="${op.predecessor_good_done || 0}"
                     data-total="${op.required_qty}"
                     data-search-text="${escapeHtml(lot.lot_number + ' ' + lot.product_name + ' ' + (lot.design_number || '') + ' ' + op.op_name + ' ' + (op.dept_name || '')).toLowerCase()}">
                     <td class="text-center fw-bold text-muted">${op.sequence}</td>
                     <td>
                         <div class="fw-bold text-dark">${escapeHtml(op.op_name)}</div>
-                        <span class="badge bg-light text-secondary border small" style="font-size: 0.7rem;">${escapeHtml(op.dept_name || 'عام')}</span>
+                        <div class="d-flex flex-wrap align-items-center gap-1 mt-1">
+                            <span class="badge bg-light text-secondary border small" style="font-size: 0.7rem;">${escapeHtml(op.dept_name || 'عام')}</span>
+                            ${op.predecessor_op_name ? `
+                                <span class="badge bg-light text-dark border small" style="font-size: 0.68rem;" title="پچھلا مرحلہ">
+                                    <i class="bi bi-arrow-left-short text-primary"></i>پچھلا: <strong>${escapeHtml(op.predecessor_op_name)}</strong> (${op.predecessor_good_done} تیار)
+                                </span>
+                            ` : `
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle small" style="font-size: 0.68rem;">
+                                    <i class="bi bi-play-circle-fill me-1"></i>پہلا مرحلہ
+                                </span>
+                            `}
+                        </div>
                         ${(op.is_operator_or_cutting && op.elements && op.elements.length > 0) ? `
-                            <button type="button" class="btn btn-link btn-xs p-0 text-decoration-none text-primary fw-semibold toggle-elements-btn ms-1" style="font-size: 0.72rem;" data-target="elem-drawer-${lot.lot_id}-${op.operation_id}">
+                            <button type="button" class="btn btn-link btn-xs p-0 text-decoration-none text-primary fw-semibold toggle-elements-btn mt-1" style="font-size: 0.72rem;" data-target="elem-drawer-${lot.lot_id}-${op.operation_id}">
                                 <i class="bi bi-puzzle me-1"></i>اعضاء و پلے (${op.elements.length})
                             </button>
                         ` : ''}
                     </td>
                     <td>
-                        <select class="form-select form-select-sm row-worker-select fw-semibold" style="font-size: 0.78rem;" ${isCompleted ? 'disabled' : ''}>
+                        <select class="form-select form-select-sm row-worker-select fw-semibold" style="font-size: 0.78rem;" ${(isCompleted || isBlocked) ? 'disabled' : ''}>
                             ${workerOptionsHtml}
                         </select>
                     </td>
                     <td>
-                        <select class="form-select form-select-sm row-shift-select" style="font-size: 0.78rem;" ${isCompleted ? 'disabled' : ''}>
+                        <select class="form-select form-select-sm row-shift-select" style="font-size: 0.78rem;" ${(isCompleted || isBlocked) ? 'disabled' : ''}>
                             <option value="Day Shift" ${currentShiftVal === 'Day Shift' ? 'selected' : ''}>Day (دن)</option>
                             <option value="Night Shift" ${currentShiftVal === 'Night Shift' ? 'selected' : ''}>Night (رات)</option>
                         </select>
@@ -2810,25 +2832,38 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td class="text-center">
                         <span class="badge ${op.pending_balance > 0 ? 'bg-warning-subtle text-warning-emphasis' : 'bg-success-subtle text-success'} fs-6 cell-pending-bal">${op.pending_balance}</span>
                         <div class="text-muted" style="font-size: 0.65rem;">باقی پینڈنگ</div>
+                        ${(op.pending_balance > 0 && op.predecessor_op_name) ? `
+                            <div class="small fw-semibold mt-1 ${maxAvail > 0 ? 'text-primary' : 'text-danger'}" style="font-size: 0.68rem;" title="پچھلے مرحلے کے مطابق ابھی تیار پیسز">
+                                دستیاب: <span class="row-avail-val">${maxAvail}</span>
+                            </div>
+                        ` : ''}
                     </td>
                     <td class="text-center">
                         <div class="input-group input-group-sm mx-auto" style="max-width: 105px;">
-                            <input type="number" class="form-control form-control-sm text-center fw-bold input-good-qty text-primary fs-6" 
-                                   value="${op.pending_balance}" min="0" max="${op.pending_balance}" step="1" 
-                                   ${isCompleted ? 'disabled' : ''}>
+                            <input type="number" class="form-control form-control-sm text-center fw-bold input-good-qty ${isBlocked ? 'bg-light text-muted' : 'text-primary'} fs-6" 
+                                   value="${suggestedQty}" min="0" max="${maxAvail}" step="1" 
+                                   ${(isCompleted || isBlocked) ? 'disabled' : ''}>
                         </div>
-                        <span class="text-muted d-block validation-hint" style="font-size: 0.65rem;">(میکس: <span class="max-bal-text">${op.pending_balance}</span>)</span>
+                        <div class="validation-hint mt-1" style="font-size: 0.65rem;">
+                            ${isBlocked ? `
+                                <span class="badge bg-secondary-subtle text-secondary border"><i class="bi bi-hourglass-split me-1"></i>پچھلے کا انتظار</span>
+                            ` : (maxAvail < op.pending_balance ? `
+                                <span class="text-primary fw-semibold">(میکس دستیاب: <span class="max-bal-text">${maxAvail}</span>)</span>
+                            ` : `
+                                <span class="text-muted">(میکس: <span class="max-bal-text">${maxAvail}</span>)</span>
+                            `)}
+                        </div>
                     </td>
                     <td class="text-center">
                         <div class="d-flex gap-1 justify-content-center">
-                            <input type="number" class="form-control form-control-sm px-1 text-center input-rej text-danger fw-semibold" placeholder="خراب" title="خراب پیسز (Rejections)" value="0" min="0" style="width: 48px; font-size: 0.75rem;" ${isCompleted ? 'disabled' : ''}>
-                            <input type="number" class="form-control form-control-sm px-1 text-center input-rew text-warning-emphasis fw-semibold" placeholder="ری ورک" title="ری ورک پیسز (Rework)" value="0" min="0" style="width: 48px; font-size: 0.75rem;" ${isCompleted ? 'disabled' : ''}>
+                            <input type="number" class="form-control form-control-sm px-1 text-center input-rej text-danger fw-semibold" placeholder="خراب" title="خراب پیسز (Rejections)" value="0" min="0" style="width: 48px; font-size: 0.75rem;" ${(isCompleted || isBlocked) ? 'disabled' : ''}>
+                            <input type="number" class="form-control form-control-sm px-1 text-center input-rew text-warning-emphasis fw-semibold" placeholder="ری ورک" title="ری ورک پیسز (Rework)" value="0" min="0" style="width: 48px; font-size: 0.75rem;" ${(isCompleted || isBlocked) ? 'disabled' : ''}>
                         </div>
                     </td>
                     <td class="text-end">
                         <div class="d-flex align-items-center justify-content-end gap-1 mb-1">
                             <span class="text-muted small" style="font-size: 0.68rem;">Rs.</span>
-                            <input type="number" step="0.25" class="form-control form-control-sm px-1 text-end fw-bold input-rate" value="${op.default_rate.toFixed(2)}" style="width: 65px; font-size: 0.78rem;" ${isCompleted ? 'disabled' : ''}>
+                            <input type="number" step="0.25" class="form-control form-control-sm px-1 text-end fw-bold input-rate" value="${op.default_rate.toFixed(2)}" style="width: 65px; font-size: 0.78rem;" ${(isCompleted || isBlocked) ? 'disabled' : ''}>
                         </div>
                         <span class="badge bg-success-subtle text-success fw-bold preview-labour-badge" style="font-size: 0.75rem;">
                             Rs. ${initialLabour}
@@ -2837,11 +2872,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td class="text-center">
                         ${isCompleted ? `
                             <span class="badge bg-success text-white py-1 px-2"><i class="bi bi-check-circle-fill me-1"></i> مکمل</span>
+                        ` : (isBlocked ? `
+                            <button type="button" class="btn btn-secondary btn-sm fw-semibold px-2 py-1 btn-waiting-lock" disabled title="پچھلے مرحلے (${escapeHtml(op.predecessor_op_name || '')}) میں پیسز تیار ہونے کا انتظار ہے">
+                                <i class="bi bi-lock-fill me-1"></i> منتظر
+                            </button>
                         ` : `
                             <button type="button" class="btn btn-success btn-sm fw-bold px-2 py-1 btn-save-fast-row shadow-sm">
                                 <i class="bi bi-check2-circle me-1"></i> محفوظ کریں
                             </button>
-                        `}
+                        `)}
                     </td>
                 </tr>
                 `;
@@ -2914,25 +2953,32 @@ document.addEventListener('DOMContentLoaded', function() {
 
             function updateRowCalculations() {
                 if (!inpGood || !inpRate) return;
-                const maxVal = parseInt(row.getAttribute('data-pending'), 10) || 0;
+                const maxAvail = parseInt(row.getAttribute('data-max-avail'), 10);
+                const pendingBal = parseInt(row.getAttribute('data-pending'), 10) || 0;
+                const effectiveMax = isNaN(maxAvail) ? pendingBal : maxAvail;
+                const prevName = row.getAttribute('data-prev-name') || 'پچھلے مرحلے';
                 let goodVal = parseInt(inpGood.value, 10);
                 if (isNaN(goodVal)) goodVal = 0;
 
                 const rateVal = parseFloat(inpRate.value) || 0.00;
 
-                // Capacity check: Cannot exceed pending balance
-                if (goodVal > maxVal) {
+                // Capacity check: Cannot exceed available ready pieces from predecessor
+                if (goodVal > effectiveMax) {
                     inpGood.classList.add('is-invalid');
                     inpGood.classList.add('border-danger');
                     if (validationHint) {
-                        validationHint.innerHTML = `<span class="text-danger fw-bold">⚠️ زیادہ نہیں ہو سکتے! باقی صرف ${maxVal} ہیں</span>`;
+                        validationHint.innerHTML = `<span class="text-danger fw-bold">⚠️ پچھلے مرحلے کے مطابق دستیاب صرف ${effectiveMax} ہیں!</span>`;
                     }
                     if (saveBtn) saveBtn.disabled = true;
                 } else {
                     inpGood.classList.remove('is-invalid');
                     inpGood.classList.remove('border-danger');
                     if (validationHint) {
-                        validationHint.innerHTML = `(میکس: <span class="max-bal-text">${maxVal}</span>)`;
+                        if (effectiveMax < pendingBal) {
+                            validationHint.innerHTML = `<span class="text-primary fw-semibold">(میکس دستیاب: <span class="max-bal-text">${effectiveMax}</span> / کل باقی: ${pendingBal})</span>`;
+                        } else {
+                            validationHint.innerHTML = `(میکس: <span class="max-bal-text">${effectiveMax}</span>)`;
+                        }
                     }
                     if (saveBtn) saveBtn.disabled = false;
                 }
@@ -2985,7 +3031,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         return;
                     }
 
-                    const maxVal = parseInt(row.getAttribute('data-pending'), 10) || 0;
+                    const maxAvail = parseInt(row.getAttribute('data-max-avail'), 10);
+                    const pendingBal = parseInt(row.getAttribute('data-pending'), 10) || 0;
+                    const effectiveMax = isNaN(maxAvail) ? pendingBal : maxAvail;
+                    const prevName = row.getAttribute('data-prev-name') || 'پچھلے مرحلے';
                     const goodVal = parseInt(inpGood ? inpGood.value : 0, 10) || 0;
                     const rejInp = row.querySelector('.input-rej');
                     const rewInp = row.querySelector('.input-rew');
@@ -2995,8 +3044,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     const shiftVal = row.querySelector('.row-shift-select') ? row.querySelector('.row-shift-select').value : 'Day Shift';
                     const entryDateVal = deskEntryDate ? deskEntryDate.value : '';
 
-                    if (goodVal > maxVal) {
-                        alert(`تعداد باقی پینڈنگ پیسز (${maxVal}) سے زیادہ نہیں ہو سکتی!`);
+                    if (goodVal > effectiveMax) {
+                        alert(`تعداد پچھلے مرحلے (${prevName}) کے تیار کردہ پیسز (${effectiveMax}) سے زیادہ نہیں ہو سکتی!`);
                         if (inpGood) inpGood.focus();
                         return;
                     }
@@ -3084,6 +3133,15 @@ document.addEventListener('DOMContentLoaded', function() {
                             }
 
                             showDeskToast('success', res.message, `اجرت: <strong>${res.labour_formatted}</strong> | انٹری نمبر: <code>${res.entry_number}</code>`);
+
+                            // Refresh fast desk sheet so downstream sequential stages unlock newly available pieces!
+                            setTimeout(async () => {
+                                try {
+                                    await loadFastDeskSheet();
+                                } catch (refreshErr) {
+                                    console.error('Error refreshing fast desk:', refreshErr);
+                                }
+                            }, 500);
                         } else {
                             saveBtn.disabled = false;
                             saveBtn.innerHTML = originalBtnContent;
