@@ -107,11 +107,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if (!$hasDayPieces && !$hasNightPieces) {
-                    $error = 'Please enter produced pieces for at least one element or shift (کم از کم ایک حصے یا شفٹ کے پیسز درج کریں).';
+                    $error = 'Please enter produced pieces for at least one element or shift.';
                 } elseif ($hasDayPieces && $dayWorkerId <= 0) {
-                    $error = 'Please select Day Operator for day produced pieces (ڈے آپریٹر منتخب کریں).';
+                    $error = 'Please select Day Operator for day produced pieces.';
                 } elseif ($hasNightPieces && $nightWorkerId <= 0) {
-                    $error = 'Please select Night Operator for night produced pieces (نائٹ آپریٹر منتخب کریں).';
+                    $error = 'Please select Night Operator for night produced pieces.';
                 } elseif ($shiftType !== 'Double Shift' && $dayWorkerId <= 0) {
                     $error = 'Please select Day Operator.';
                 } else {
@@ -216,8 +216,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $dayWTypeStmt = $db->prepare("SELECT worker_type FROM workers WHERE id = ?");
                         $dayWTypeStmt->execute([$dayWorkerId]);
                         $dayWorkerType = (string)($dayWTypeStmt->fetchColumn() ?: 'Minute Rate');
-                        $isDayDaily = (stripos($dayWorkerType, 'daily') !== false || stripos($dayWorkerType, 'یومیہ') !== false);
-                        $isDayMonthly = (stripos($dayWorkerType, 'month') !== false || stripos($dayWorkerType, 'ماہانہ') !== false || stripos($dayWorkerType, 'salary') !== false);
+                        $isDayDaily = (stripos($dayWorkerType, 'daily') !== false || stripos($dayWorkerType, 'day') !== false);
+                        $isDayMonthly = (stripos($dayWorkerType, 'month') !== false || stripos($dayWorkerType, 'month') !== false || stripos($dayWorkerType, 'salary') !== false);
 
                         if ($isDayDaily) {
                             $dayTotalLabour = $dayRate;
@@ -297,8 +297,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $nightWTypeStmt = $db->prepare("SELECT worker_type FROM workers WHERE id = ?");
                             $nightWTypeStmt->execute([$nightWorkerId]);
                             $nightWorkerType = (string)($nightWTypeStmt->fetchColumn() ?: 'Minute Rate');
-                            $isNightDaily = (stripos($nightWorkerType, 'daily') !== false || stripos($nightWorkerType, 'یومیہ') !== false);
-                            $isNightMonthly = (stripos($nightWorkerType, 'month') !== false || stripos($nightWorkerType, 'ماہانہ') !== false || stripos($nightWorkerType, 'salary') !== false);
+                            $isNightDaily = (stripos($nightWorkerType, 'daily') !== false || stripos($nightWorkerType, 'day') !== false);
+                            $isNightMonthly = (stripos($nightWorkerType, 'month') !== false || stripos($nightWorkerType, 'month') !== false || stripos($nightWorkerType, 'salary') !== false);
 
                             if ($isNightDaily) {
                                 $nightTotalLabour = $nightRate;
@@ -451,10 +451,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $msg = "Operator Production recorded: " . (!empty($msgParts) ? implode(' + ', $msgParts) : "Pieces saved");
 
                     if ($stepStatus === 'Completed') {
-                        $msg .= " — تمام اعضاء مکمل ہو گئے! اگلا مرحلہ (کٹنگ) لوڈ ہو گیا۔";
+                        $msg .= " — All elements completed! Next stage (Cutting) loaded.";
                         redirect_next_production_step($lotId, $operationId, $msg, 'cutting');
                     } else {
-                        $msg .= " — جزوی انٹری محفوظ ہو گئی (ابھی $incompleteCount حصے باقی ہیں)";
+                        $msg .= " — Partial entry saved ($incompleteCount elements remaining).";
                         redirect("modules/production/index.php?lot_id=$lotId&operation_id=$operationId&mode=operator_initial", $msg);
                     }
                 } catch (Exception $e) {
@@ -463,7 +463,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (strpos($e->getMessage(), '3105') !== false || stripos($e->getMessage(), 'generated column') !== false) {
                         try {
                             $db->exec("ALTER TABLE lot_operator_element_entries MODIFY COLUMN total_pieces INT NOT NULL DEFAULT 0");
-                            $error = 'ڈیٹابیس کا کالم (total_pieces) خودکار طور پر اپڈیٹ کر دیا گیا ہے۔ براہ کرم "Save" بٹن پر دوبارہ کلک کریں۔ (Database column auto-repaired. Please click Save again.)';
+                            $error = 'Database column auto-repaired. Please click Save again.';
                         } catch (Exception $eFix) {
                             $error = 'Error saving operator entry: ' . $e->getMessage();
                         }
@@ -555,7 +555,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if (isset($elemAvailMap[$elId])) {
                             $avail = $elemAvailMap[$elId]['avail'];
                             if ($cutQty > $avail) {
-                                throw new Exception("کٹنگ تعداد برائے {$elemAvailMap[$elId]['name']} ($cutQty پیسز) آپریٹر کے تیار کردہ پیسز ($avail پیسز) سے زیادہ درج نہیں ہو سکتی۔");
+                                throw new Exception("Cutting quantity for {$elemAvailMap[$elId]['name']} ($cutQty pcs) cannot exceed operator produced output ($avail pcs).");
                             }
                         }
                     }
@@ -573,10 +573,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     if ($matrixCheckGood > 0 && $matrixCheckGood > $maxWholeReadyToCut) {
-                        throw new Exception("رنگ و سائز میٹرکس کٹنگ تعداد ($matrixCheckGood پیسز) آپریٹر کے تیار کردہ پیسز ($maxWholeReadyToCut پیسز) سے زیادہ نہیں ہو سکتی۔");
+                        throw new Exception("Cutting quantity ($matrixCheckGood pcs) cannot exceed operator ready output ($maxWholeReadyToCut pcs).");
                     }
                     if ($matrixCheckGood === 0 && $wholePieces > $maxWholeReadyToCut) {
-                        throw new Exception("مکمل سویٹر کٹنگ تعداد ($wholePieces پیسز) آپریٹر کے تیار کردہ پیسز ($maxWholeReadyToCut پیسز) سے زیادہ نہیں ہو سکتی۔");
+                        throw new Exception("Complete sweater cutting quantity ($wholePieces pcs) cannot exceed operator ready output ($maxWholeReadyToCut pcs).");
                     }
 
                     // Update cut_pieces in lot_operator_element_entries
@@ -683,8 +683,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $cutWTypeStmt = $db->prepare("SELECT worker_type FROM workers WHERE id = ?");
                         $cutWTypeStmt->execute([$workerId]);
                         $cutWorkerWageType = (string)($cutWTypeStmt->fetchColumn() ?: 'Piece Rate');
-                        $isCutDaily = (stripos($cutWorkerWageType, 'daily') !== false || stripos($cutWorkerWageType, 'یومیہ') !== false);
-                        $isCutMonthly = (stripos($cutWorkerWageType, 'month') !== false || stripos($cutWorkerWageType, 'ماہانہ') !== false || stripos($cutWorkerWageType, 'salary') !== false);
+                        $isCutDaily = (stripos($cutWorkerWageType, 'daily') !== false || stripos($cutWorkerWageType, 'day') !== false);
+                        $isCutMonthly = (stripos($cutWorkerWageType, 'month') !== false || stripos($cutWorkerWageType, 'month') !== false || stripos($cutWorkerWageType, 'salary') !== false);
 
                         if ($isCutDaily) {
                             $labourAmount = $rate;
@@ -948,8 +948,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $workerRow = $wQuery->fetch();
                         $workerName = $workerRow['name'] ?? '';
                         $workerWageType = (string)($workerRow['worker_type'] ?? 'Piece Rate');
-                        $isMatDaily = (stripos($workerWageType, 'daily') !== false || stripos($workerWageType, 'یومیہ') !== false);
-                        $isMatMonthly = (stripos($workerWageType, 'month') !== false || stripos($workerWageType, 'ماہانہ') !== false || stripos($workerWageType, 'salary') !== false);
+                        $isMatDaily = (stripos($workerWageType, 'daily') !== false || stripos($workerWageType, 'day') !== false);
+                        $isMatMonthly = (stripos($workerWageType, 'month') !== false || stripos($workerWageType, 'month') !== false || stripos($workerWageType, 'salary') !== false);
 
                         if ($isMatDaily) {
                             $totalLabour = $rate;
@@ -1285,8 +1285,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $wTypeStmt = $db->prepare("SELECT worker_type FROM workers WHERE id = ?");
                 $wTypeStmt->execute([$workerId]);
                 $singleWorkerWageType = (string)($wTypeStmt->fetchColumn() ?: 'Piece Rate');
-                $isSingleDaily = (stripos($singleWorkerWageType, 'daily') !== false || stripos($singleWorkerWageType, 'یومیہ') !== false);
-                $isSingleMonthly = (stripos($singleWorkerWageType, 'month') !== false || stripos($singleWorkerWageType, 'ماہانہ') !== false || stripos($singleWorkerWageType, 'salary') !== false);
+                $isSingleDaily = (stripos($singleWorkerWageType, 'daily') !== false || stripos($singleWorkerWageType, 'day') !== false);
+                $isSingleMonthly = (stripos($singleWorkerWageType, 'month') !== false || stripos($singleWorkerWageType, 'month') !== false || stripos($singleWorkerWageType, 'salary') !== false);
 
                 if ($isSingleDaily) {
                     $labourAmount = $rate;
@@ -1611,15 +1611,15 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             <div class="card-modern-body p-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
                 <div class="btn-group" role="group">
                     <button type="button" class="btn <?= (empty($preselectedMode) && empty($_POST)) ? 'btn-primary' : 'btn-outline-secondary' ?> fw-bold px-3 py-2" id="tabBtnFastDesk">
-                        <i class="bi bi-lightning-charge-fill me-1"></i> ⚡ کاریگر فاسٹ ڈیسک (Worker Fast Desk)
+                        <i class="bi bi-lightning-charge-fill me-1"></i> ⚡ Worker Fast Desk
                     </button>
                     <button type="button" class="btn <?= (!empty($preselectedMode) || !empty($_POST)) ? 'btn-primary' : 'btn-outline-secondary' ?> fw-semibold px-3 py-2" id="tabBtnAdvancedMatrix">
-                        <i class="bi bi-sliders me-1"></i> 📋 تفصیلی میٹرکس فارم (Advanced Matrix Form)
+                        <i class="bi bi-sliders me-1"></i> 📋 Detailed Matrix Form
                     </button>
                 </div>
                 <div class="text-muted small">
                     <span class="badge bg-success-subtle text-success me-1">Real-time</span>
-                    ورکر اور آپریشن منتخب کر کے تمام لاٹس کی پروڈکشن انٹری رو وائز محفوظ کریں
+                    Select worker and operation to record row-wise production entries across active lots
                 </div>
             </div>
         </div>
@@ -1632,13 +1632,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <div class="d-flex align-items-center gap-2">
                         <span class="badge bg-primary p-2 rounded-2"><i class="bi bi-person-lines-fill text-white fs-6"></i></span>
                         <div>
-                            <h6 class="fw-bold mb-0 text-dark">کاریگر اور پروڈکشن فلٹرز (Worker Production Desk)</h6>
-                            <span class="text-muted small" style="font-size: 0.75rem;">ورکر سلیکٹ کریں، اس کے اسائنڈ آپریشنز اور ایکٹیو لاٹس خودکار لوڈ ہو جائیں گی</span>
+                            <h6 class="fw-bold mb-0 text-dark">Worker & Production Filters</h6>
+                            <span class="text-muted small" style="font-size: 0.75rem;">Select worker to automatically load assigned operations and active lots</span>
                         </div>
                     </div>
                     <div class="d-flex align-items-center gap-2">
-                        <button type="button" class="btn btn-sm btn-outline-primary" id="btnDeskReload" title="ریفریش شیٹ">
-                            <i class="bi bi-arrow-clockwise me-1"></i> ریفریش (Refresh)
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="btnDeskReload" title="Refresh Sheet">
+                            <i class="bi bi-arrow-clockwise me-1"></i> Refresh
                         </button>
                     </div>
                 </div>
@@ -1647,13 +1647,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <!-- Filter 1: Worker (Primary) -->
                         <div class="col-12 col-md-3">
                             <label class="form-label fw-bold small text-dark mb-1">
-                                <i class="bi bi-person-fill text-primary me-1"></i> کاریگر منتخب کریں (Worker) *
+                                <i class="bi bi-person-fill text-primary me-1"></i> Select Worker *
                             </label>
                             <select id="deskWorkerSelect" class="form-select form-select-sm fw-bold border-primary shadow-sm">
-                                <option value="">-- تمام فعال کاریگر (All Workers) --</option>
+                                <option value="">-- All Active Workers --</option>
                                 <?php foreach ($workers as $w): ?>
                                     <option value="<?= $w['id'] ?>" data-dept="<?= $w['department_id'] ?>" data-rate="<?= $w['default_rate'] ?>" data-minrate="<?= $w['rate_per_minute'] ?>" data-type="<?= clean($w['worker_type']) ?>">
-                                        <?= clean($w['name']) ?> (<?= clean($w['code']) ?>) — <?= clean($w['department_name'] ?: 'عام') ?> [<?= clean($w['worker_type']) ?>]
+                                        <?= clean($w['name']) ?> (<?= clean($w['code']) ?>) — <?= clean($w['department_name'] ?: 'General') ?> [<?= clean($w['worker_type']) ?>]
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -1662,10 +1662,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <!-- Filter 2: Workflow Step / Operation -->
                         <div class="col-12 col-md-3">
                             <label class="form-label fw-bold small text-dark mb-1">
-                                <i class="bi bi-gear-wide-connected text-secondary me-1"></i> مرحلہ / آپریشن (Operation)
+                                <i class="bi bi-gear-wide-connected text-secondary me-1"></i> Operation
                             </label>
                             <select id="deskOpFilter" class="form-select form-select-sm fw-semibold">
-                                <option value="">-- تمام متعلقہ آپریشنز (All Operations) --</option>
+                                <option value="">-- All Related Operations --</option>
                                 <?php foreach ($operationsList as $op): ?>
                                     <option value="<?= $op['id'] ?>" data-dept="<?= $op['department_id'] ?>" data-rate="<?= $op['default_rate'] ?>" data-mins="<?= $op['estimated_minutes'] ?>" <?= ($preselectedOpId === $op['id']) ? 'selected' : '' ?>>
                                         <?= clean($op['name']) ?> (<?= clean($op['department_name'] ?: 'Dept') ?>)
@@ -1677,10 +1677,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <!-- Filter 3: Lot Filter -->
                         <div class="col-12 col-md-2">
                             <label class="form-label fw-bold small text-dark mb-1">
-                                <i class="bi bi-stack text-secondary me-1"></i> لاٹ فلٹر (Lot #)
+                                <i class="bi bi-stack text-secondary me-1"></i> Lot Filter
                             </label>
                             <select id="deskLotFilter" class="form-select form-select-sm fw-semibold">
-                                <option value="">-- تمام ایکٹیو لاٹس (All Lots) --</option>
+                                <option value="">-- All Active Lots --</option>
                                 <?php foreach ($lots as $l): ?>
                                     <option value="<?= $l['id'] ?>" <?= ($preselectedLotId === $l['id']) ? 'selected' : '' ?>>
                                         LOT #<?= clean($l['lot_number']) ?> (<?= $l['total_pieces'] ?> pcs)
@@ -1692,7 +1692,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <!-- Filter 4: Entry Date -->
                         <div class="col-6 col-md-2">
                             <label class="form-label fw-bold small text-dark mb-1">
-                                <i class="bi bi-calendar-event text-secondary me-1"></i> تاریخ (Date)
+                                <i class="bi bi-calendar-event text-secondary me-1"></i> Date
                             </label>
                             <input type="date" id="deskEntryDate" class="form-control form-control-sm fw-semibold" value="<?= date('Y-m-d') ?>">
                         </div>
@@ -1700,12 +1700,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <!-- Filter 5: Shift -->
                         <div class="col-6 col-md-2">
                             <label class="form-label fw-bold small text-dark mb-1">
-                                <i class="bi bi-sun text-secondary me-1"></i> شفٹ (Shift)
+                                <i class="bi bi-sun text-secondary me-1"></i> Shift
                             </label>
                             <select id="deskShiftSelect" class="form-select form-select-sm fw-semibold">
-                                <option value="Day Shift" selected>Day Shift (دن)</option>
-                                <option value="Night Shift">Night Shift (رات)</option>
-                                <option value="Single Shift">Single Shift (سنگل)</option>
+                                <option value="Day Shift" selected>Day Shift</option>
+                                <option value="Night Shift">Night Shift</option>
+                                <option value="Single Shift">Single Shift</option>
                             </select>
                         </div>
                     </div>
@@ -1715,22 +1715,22 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <div class="col-12 col-md-4">
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                                <input type="text" id="deskQuickSearch" class="form-control form-control-sm border-start-0" placeholder="فوری تلاش (Lot #, Design, Product, Operation)...">
+                                <input type="text" id="deskQuickSearch" class="form-control form-control-sm border-start-0" placeholder="Quick search (Lot #, Design, Product, Operation)...">
                             </div>
                         </div>
                         <div class="col-12 col-md-8 text-md-end">
                             <div class="d-flex flex-wrap align-items-center justify-content-md-end gap-2">
                                 <span class="badge bg-light text-dark border px-2 py-1" id="deskWorkerInfoBadge">
-                                    <i class="bi bi-person me-1"></i> کاریگر: <strong>تمام کاریگر</strong>
+                                    <i class="bi bi-person me-1"></i> Worker: <strong>All Workers</strong>
                                 </span>
                                 <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1" id="deskLotsCountBadge">
-                                    <i class="bi bi-boxes me-1"></i> <strong>0</strong> لاٹس
+                                    <i class="bi bi-boxes me-1"></i> <strong>0</strong> Lots
                                 </span>
                                 <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1" id="deskPendingCountBadge">
-                                    <i class="bi bi-hourglass-split me-1"></i> <strong>0</strong> پینڈنگ مراحل
+                                    <i class="bi bi-hourglass-split me-1"></i> <strong>0</strong> Pending Stages
                                 </span>
                                 <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1" id="deskSavedCountBadge">
-                                    <i class="bi bi-check-circle-fill me-1"></i> <strong>0</strong> محفوظ شدہ انٹریز
+                                    <i class="bi bi-check-circle-fill me-1"></i> <strong>0</strong> Saved Entries
                                 </span>
                             </div>
                         </div>
@@ -1770,13 +1770,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <!-- Mode Switcher -->
                             <div class="btn-group btn-group-sm" role="group">
                                 <button type="button" class="btn btn-primary fw-semibold" id="btnModeOperator">
-                                    <i class="bi bi-person-workspace me-1"></i> 🧵 1. Operator (اعضاء و شفٹ)
+                                    <i class="bi bi-person-workspace me-1"></i> 🧵 1. Operator Knitting & Elements
                                 </button>
                                 <button type="button" class="btn btn-outline-secondary fw-semibold" id="btnModeCutting">
-                                    <i class="bi bi-scissors me-1"></i> ✂️ 2. Cutting (کٹنگ)
+                                    <i class="bi bi-scissors me-1"></i> ✂️ 2. Cutting Master
                                 </button>
                                 <button type="button" class="btn btn-outline-secondary fw-semibold" id="btnModeMatrix">
-                                    <i class="bi bi-grid-3x3-gap-fill me-1"></i> ⚡ 3. Fast Matrix (دیگر مراحل)
+                                    <i class="bi bi-grid-3x3-gap-fill me-1"></i> ⚡ 3. Fast Matrix (Other Stages)
                                 </button>
                                 <button type="button" class="btn btn-outline-secondary fw-semibold" id="btnModeSingle">
                                     <i class="bi bi-list-check me-1"></i> 4. Single Item
@@ -1918,13 +1918,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <!-- SINGLE SHIFT OPERATOR CARD -->
                                     <div id="singleShiftCard" class="card border border-primary-subtle bg-light p-3 rounded-3 mb-3">
                                         <div class="d-flex justify-content-between align-items-center mb-2">
-                                            <span class="fw-bold text-dark"><i class="bi bi-sun-fill text-warning me-1"></i> ☀️ Day Shift Operator (ڈے آپریٹر)</span>
+                                            <span class="fw-bold text-dark"><i class="bi bi-sun-fill text-warning me-1"></i> ☀️ Day Shift Operator</span>
                                             <span class="badge bg-success-subtle text-success border" id="opSingleRateBadge">Rate: Rs. 0.00 / pc</span>
                                         </div>
                                         <div class="row g-3 align-items-center">
                                             <div class="col-12 col-md-6">
                                                 <label class="form-label small fw-semibold text-muted mb-1">
-                                                    <i class="bi bi-person-badge text-primary me-1"></i> Assigned Operator (مشین آپریٹر) *
+                                                    <i class="bi bi-person-badge text-primary me-1"></i> Assigned Operator (Machine Operator) *
                                                 </label>
                                                 <select name="day_worker_id" id="op_single_day_worker" class="form-select fw-semibold" required>
                                                     <option value="">-- Choose Operator --</option>
@@ -1939,17 +1939,17 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                     <?php endforeach; ?>
                                                 </select>
                                                 <div class="text-muted small mt-1">
-                                                    <i class="bi bi-info-circle me-1"></i> تمام پارٹس (Front, Back, Sleeves) کی انٹری، اوقات اور ریٹس نیچے تفصیلی ٹیبل میں درج کریں۔
+                                                    <i class="bi bi-info-circle me-1"></i> Record pieces, times, and rates for all garment parts (Front, Back, Sleeves) in the table below.
                                                 </div>
                                             </div>
                                             <div class="col-12 col-md-6">
                                                 <div class="p-3 bg-light rounded-3 border">
                                                     <div class="d-flex justify-content-between align-items-center mb-1">
-                                                        <span class="text-muted small fw-semibold">Worker Minute Rate (ریٹ فی منٹ):</span>
+                                                        <span class="text-muted small fw-semibold">Worker Minute Rate:</span>
                                                         <span class="badge bg-success-subtle text-success border fw-bold px-2 py-1" id="lblSingleMinRateBadge">Rs. 2.50/m</span>
                                                     </div>
                                                     <div class="d-flex justify-content-between align-items-center pt-2 border-top">
-                                                        <span class="text-dark small fw-bold">Total Earned Labour (آج کی کل کمائی):</span>
+                                                        <span class="text-dark small fw-bold">Total Earned Labour Today:</span>
                                                         <strong class="text-success fs-4" id="lblSingleDayLabour">Rs. 0.00</strong>
                                                     </div>
                                                 </div>
@@ -1974,7 +1974,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                         <span class="badge bg-warning-subtle text-warning-emphasis border" id="lblDoubleDayMinRateBadge">Rs. 2.50/m</span>
                                                     </div>
                                                     <div class="mb-2">
-                                                        <label class="form-label small fw-semibold text-muted mb-1">Day Operator (ڈے آپریٹر) *</label>
+                                                        <label class="form-label small fw-semibold text-muted mb-1">Day Operator *</label>
                                                         <select name="day_worker_id" id="op_double_day_worker" class="form-select fw-semibold">
                                                             <option value="">-- Select Day Operator --</option>
                                                             <?php foreach ($workers as $w): 
@@ -2007,7 +2007,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                         <span class="badge bg-primary-subtle text-primary border" id="lblDoubleNightMinRateBadge">Rs. 2.50/m</span>
                                                     </div>
                                                     <div class="mb-2">
-                                                        <label class="form-label small fw-semibold text-muted mb-1">Night Operator (نائٹ آپریٹر) *</label>
+                                                        <label class="form-label small fw-semibold text-muted mb-1">Night Operator *</label>
                                                         <select name="night_worker_id" id="op_double_night_worker" class="form-select fw-semibold">
                                                             <option value="">-- Select Night Operator --</option>
                                                             <?php foreach ($workers as $w): 
@@ -2046,7 +2046,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                                     <!-- MULTI-SIZE BREAKDOWN (If Lot has multiple sizes) -->
                                     <div id="opMultiSizeSection" class="border rounded-3 p-3 bg-white mb-3 d-none">
-                                        <h6 class="fw-bold mb-2 text-dark"><i class="bi bi-grid-3x3 me-1 text-primary"></i> Multi-Size Operator Distribution (سائز وائز تقسیم)</h6>
+                                        <h6 class="fw-bold mb-2 text-dark"><i class="bi bi-grid-3x3 me-1 text-primary"></i> Multi-Size Operator Distribution</h6>
                                         <div class="table-responsive">
                                             <table class="table table-bordered align-middle text-center mb-0" id="opMultiSizeTable">
                                                 <thead class="table-light">
@@ -2073,7 +2073,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                                             <div>
                                                 <h6 class="fw-bold mb-0 text-dark">
-                                                    <i class="bi bi-puzzle-fill text-primary me-1"></i> Garment Elements Breakdown (حصوں کی تفصیلی انٹری — سویٹر یا الگ الگ حصے)
+                                                    <i class="bi bi-puzzle-fill text-primary me-1"></i> Garment Elements Breakdown (Detailed Parts Entry)
                                                 </h6>
                                                 <span class="text-muted small">Record specific pieces (e.g. only Fronts or Sleeves today) with custom average time & element rates</span>
                                             </div>
@@ -2085,13 +2085,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             <table class="table table-bordered table-hover align-middle text-center mb-0" id="opElementsTable" style="font-size: 0.85rem;">
                                                 <thead class="table-light">
                                                     <tr>
-                                                        <th class="text-start" style="min-width: 140px;">Element (حصہ)</th>
+                                                        <th class="text-start" style="min-width: 140px;">Element (Component)</th>
                                                         <th style="min-width: 75px;">Target</th>
                                                         <th style="min-width: 75px;">Done</th>
                                                         <th style="min-width: 80px;">Pending</th>
                                                         <th id="thOpElDay" style="min-width: 130px;" class="table-primary">☀️ Today Produced *</th>
                                                         <th id="thOpElNight" style="min-width: 130px;" class="table-info d-none">🌙 Night Produced</th>
-                                                        <th style="min-width: 110px;">⏱️ SAM (منٹ)</th>
+                                                        <th style="min-width: 110px;">⏱️ SAM</th>
                                                         <th style="min-width: 95px;">⚡ Min Rate</th>
                                                         <th style="min-width: 115px;">🏷️ Rate / pc</th>
                                                         <th style="min-width: 120px;" class="text-end">💰 Labour</th>
@@ -2103,7 +2103,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 </tbody>
                                                 <tfoot class="table-light fw-bold" id="opElementsTfoot" style="display: none;">
                                                     <tr>
-                                                        <td class="text-start">Total (خلاصہ):</td>
+                                                        <td class="text-start">Total Summary:</td>
                                                         <td id="lblFootTarget" class="text-muted">-</td>
                                                         <td id="lblFootDone" class="text-info-emphasis">-</td>
                                                         <td id="lblFootPending" class="text-warning-emphasis">-</td>
@@ -2120,7 +2120,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                                     <!-- Action Button -->
                                     <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold shadow-sm" id="btnSubmitOperatorEntry">
-                                        <i class="bi bi-check2-circle me-1"></i> Save Operator Production Entry (آپریٹر انٹری محفوظ کریں)
+                                        <i class="bi bi-check2-circle me-1"></i> Save Operator Production Entry
                                     </button>
                                 </div>
                             </div>
@@ -2131,12 +2131,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <div id="cuttingSection" class="mt-2 d-none">
                                 <div class="card border border-warning-subtle bg-light p-3 rounded-3 mb-3 shadow-sm">
                                     <div class="d-flex justify-content-between align-items-center mb-3">
-                                        <span class="fw-bold text-dark fs-6"><i class="bi bi-scissors text-danger me-1"></i> ✂️ Stage 2: Cutting Master Production (کٹنگ ماسٹر کی انٹری)</span>
+                                        <span class="fw-bold text-dark fs-6"><i class="bi bi-scissors text-danger me-1"></i> ✂️ Stage 2: Cutting Master Production</span>
                                         <span class="badge bg-warning-subtle text-warning-emphasis border" id="cutRateBadge">Rate: Rs. 5.00/pc</span>
                                     </div>
                                     <div class="row g-3 align-items-center mb-3">
                                         <div class="col-12 col-md-5">
-                                            <label class="form-label small fw-semibold text-muted mb-1">Cutting Master (کٹنگ ماسٹر) *</label>
+                                            <label class="form-label small fw-semibold text-muted mb-1">Cutting Master *</label>
                                             <select name="cutting_worker_id" id="cut_worker_id" class="form-select fw-semibold">
                                                 <option value="">-- Choose Cutting Master --</option>
                                                 <?php foreach ($cuttingWorkers as $w): 
@@ -2153,7 +2153,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             </select>
                                         </div>
                                         <div class="col-12 col-md-3">
-                                            <label class="form-label small fw-semibold text-muted mb-1">Shift (شفٹ)</label>
+                                            <label class="form-label small fw-semibold text-muted mb-1">Shift (Shift)</label>
                                             <select name="cutting_shift" id="cut_shift" class="form-select fw-semibold">
                                                 <option value="Day Shift">☀️ Day Shift</option>
                                                 <option value="Night Shift">🌙 Night Shift</option>
@@ -2161,13 +2161,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             </select>
                                         </div>
                                         <div class="col-12 col-md-4">
-                                            <label class="form-label small fw-semibold text-muted mb-1">Whole Sweaters Cut (مکمل سویٹر کٹنگ) *</label>
+                                            <label class="form-label small fw-semibold text-muted mb-1">Whole Sweaters Cut *</label>
                                             <div class="input-group">
                                                 <input type="number" name="cutting_whole_pieces" id="cut_whole_pieces" class="form-control form-control-lg fw-bold text-center text-primary fs-4" min="0" placeholder="0">
                                                 <span class="input-group-text fw-bold">pcs</span>
                                             </div>
                                             <div class="small fw-semibold text-primary mt-1" id="lblCutWholeMaxHint">
-                                                ✓ تیار موصولہ پیسز: <strong id="lblCutWholeMaxCount">0</strong> (زیادہ سے زیادہ کٹنگ کی گنجائش)
+                                                ✓ Received ready pieces: <strong id="lblCutWholeMaxCount">0</strong> (Maximum cutting capacity)
                                             </div>
                                         </div>
                                     </div>
@@ -2176,36 +2176,36 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <div class="p-3 bg-white border rounded-2 mb-3 shadow-sm" id="cuttingRateSchemeBox">
                                         <div class="d-flex justify-content-between align-items-center mb-2">
                                             <label class="form-label small fw-bold text-dark mb-0">
-                                                <i class="bi bi-calculator text-primary me-1"></i> Rate & Wage Scheme for Specific Lot (ریئل ٹائم ریٹ و اجرت کا تعین)
+                                                <i class="bi bi-calculator text-primary me-1"></i> Rate & Wage Scheme for Specific Lot
                                             </label>
                                             <span class="badge bg-light text-muted border small" id="lblCutFormula">Minutes × Rate/min = Piece Rate</span>
                                         </div>
                                         <div class="row g-3" id="cuttingRateRow">
                                             <div class="col-12 col-md-4" id="grpCutMinutes">
-                                                <label class="form-label small fw-semibold text-muted mb-1">وقت فی پیس (SAM Minutes)</label>
+                                                <label class="form-label small fw-semibold text-muted mb-1">Time per Piece (SAM Minutes)</label>
                                                 <div class="input-group input-group-sm">
                                                     <input type="number" name="cutting_minutes" id="cut_minutes" class="form-control fw-bold text-center text-primary" step="any" min="0" value="2.0">
                                                     <span class="input-group-text px-2 small text-muted">min</span>
                                                 </div>
-                                                <div class="form-text small" style="font-size: 10px;">لاٹ کٹنگ کا معیاری وقت</div>
+                                                <div class="form-text small" style="font-size: 10px;">Standard lot cutting benchmark time</div>
                                             </div>
                                             <div class="col-12 col-md-4" id="grpCutMinRate">
-                                                <label class="form-label small fw-semibold text-muted mb-1">کاریگر ریٹ فی منٹ (Rs/min)</label>
+                                                <label class="form-label small fw-semibold text-muted mb-1">Worker Rate per minute (Rs/min)</label>
                                                 <div class="input-group input-group-sm">
                                                     <span class="input-group-text px-2 small text-muted">Rs</span>
                                                     <input type="number" name="cutting_min_rate" id="cut_min_rate" class="form-control fw-bold text-center text-success" step="any" min="0" value="2.50">
                                                     <span class="input-group-text px-2 small text-muted">/m</span>
                                                 </div>
-                                                <div class="form-text small" style="font-size: 10px;">ماسٹر پروفائل ریٹ فی منٹ</div>
+                                                <div class="form-text small" style="font-size: 10px;">Master profile minute rate</div>
                                             </div>
                                             <div class="col-12 col-md-4" id="grpCutFinalRate">
-                                                <label class="form-label small fw-semibold text-muted mb-1" id="lblCutRate">فائنل ریٹ (Rate)</label>
+                                                <label class="form-label small fw-semibold text-muted mb-1" id="lblCutRate">Final Rate</label>
                                                 <div class="input-group input-group-sm">
                                                     <span class="input-group-text px-2 small text-muted">Rs</span>
                                                     <input type="number" name="rate" id="cut_rate" class="form-control fw-bold text-end text-dark" step="any" min="0" value="5.00">
                                                     <span class="input-group-text px-2 small text-muted" id="unitCutRate">/pc</span>
                                                 </div>
-                                                <div class="form-text small" id="hintCutRate" style="font-size: 10px;">ریئل ٹائم ریٹ (آپ تبدیل کر سکتے ہیں)</div>
+                                                <div class="form-text small" id="hintCutRate" style="font-size: 10px;">Real-time calculated rate (editable)</div>
                                             </div>
                                         </div>
                                     </div>
@@ -2221,9 +2221,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <div class="card-header bg-warning-subtle border-warning-subtle d-flex flex-wrap justify-content-between align-items-center gap-2 py-2">
                                         <div>
                                             <h6 class="fw-bold mb-0 text-dark">
-                                                <i class="bi bi-grid-3x3-gap-fill text-warning me-1"></i> Color & Size Cutting Distribution (رنگ اور سائز وائز کٹنگ کی گنتی)
+                                                <i class="bi bi-grid-3x3-gap-fill text-warning me-1"></i> Color & Size Cutting Distribution
                                             </h6>
-                                            <span class="small text-muted">🟢 کٹ گئے (Good) | 🔴 خراب پیس (Rejected) | 🟡 ری ورک (Rework)</span>
+                                            <span class="small text-muted">🟢 Cut (Good) | 🔴 Rejected | 🟡 In Rework</span>
                                         </div>
                                         <div class="d-flex align-items-center gap-2">
                                             <button type="button" class="btn btn-sm btn-outline-dark fw-bold" id="btnFillAllCutting">
@@ -2251,7 +2251,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <div class="card border p-3 rounded-3 bg-white mb-3 shadow-sm">
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <h6 class="fw-bold mb-0 text-dark">
-                                            <i class="bi bi-puzzle-fill text-danger me-1"></i> Garment Elements Cutting Progress (اعضاء کی کٹنگ - موصولہ بمقابلہ کٹ گئے)
+                                            <i class="bi bi-puzzle-fill text-danger me-1"></i> Garment Elements Cutting Progress (Received vs Cut)
                                         </h6>
                                         <span class="small text-muted">Enter whole sweaters above OR edit individual parts below</span>
                                     </div>
@@ -2259,11 +2259,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <table class="table table-bordered align-middle text-center mb-0" id="cutElementsTable" style="font-size: 0.85rem;">
                                             <thead class="table-light">
                                                 <tr>
-                                                    <th class="text-start">Element (حصہ)</th>
+                                                    <th class="text-start">Element (Component)</th>
                                                     <th>Ratio</th>
                                                     <th>Ready from Operator</th>
                                                     <th>Already Cut</th>
-                                                    <th style="width: 140px;">Now Cutting (اب کٹ رہے ہیں)</th>
+                                                    <th style="width: 140px;">Now Cutting</th>
                                                     <th>Remaining to Cut</th>
                                                 </tr>
                                             </thead>
@@ -2275,7 +2275,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 </div>
 
                                 <button type="submit" class="btn btn-warning btn-lg w-100 fw-bold shadow-sm" id="btnSubmitCutting">
-                                    <i class="bi bi-scissors me-1"></i> Save Cutting Production Entry (کٹنگ انٹری محفوظ کریں)
+                                    <i class="bi bi-scissors me-1"></i> Save Cutting Production Entry
                                 </button>
                             </div>
 
@@ -2308,12 +2308,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
-                                    <div class="form-text small text-success" style="font-size: 10px;">فنش گودام جہاں اسٹاک جمع ہوگا</div>
+                                    <div class="form-text small text-success" style="font-size: 10px;">Finished goods warehouse destination</div>
                                 </div>
 
                                 <div class="col-12 col-md-7" id="grpDownstreamRateSchemeCol">
                                     <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <label class="form-label fw-semibold mb-0">Rate Calculation Scheme (ریٹ کا حساب)</label>
+                                        <label class="form-label fw-semibold mb-0">Rate Calculation Scheme</label>
                                         <span class="text-success small fw-bold" id="lblFormulaBadge">
                                             <i class="bi bi-calculator me-1"></i>Minutes × Rate/min = Piece Rate
                                         </span>
@@ -2324,7 +2324,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <input type="number" name="minutes_per_piece" id="pe_minutes" class="form-control fw-bold text-center text-primary" step="any" min="0" value="0.0" placeholder="SAM Min" title="Operation Standard Time (SAM Minutes per piece)">
                                                 <span class="input-group-text px-1 small text-muted">min</span>
                                             </div>
-                                            <div class="form-text text-center small" style="font-size: 10px;">وقت فی پیس</div>
+                                            <div class="form-text text-center small" style="font-size: 10px;">Time per piece</div>
                                         </div>
                                         <div class="col-4" id="grpDownstreamMinRate">
                                             <div class="input-group">
@@ -2332,7 +2332,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <input type="number" name="worker_minute_rate" id="pe_min_rate" class="form-control fw-bold text-center text-success" step="any" min="0" value="2.50" placeholder="Rs/min" title="Worker's agreed rate per minute">
                                                 <span class="input-group-text px-1 small text-muted">/m</span>
                                             </div>
-                                            <div class="form-text text-center small" style="font-size: 10px;">ریٹ فی منٹ</div>
+                                            <div class="form-text text-center small" style="font-size: 10px;">Rate per minute</div>
                                         </div>
                                         <div class="col-4" id="grpDownstreamRate">
                                             <div class="input-group">
@@ -2340,7 +2340,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <input type="number" name="rate" id="pe_rate" class="form-control fw-bold text-end text-dark" step="any" min="0" value="0.00" title="Final Rate">
                                                 <span class="input-group-text px-1 small text-muted" id="unitDownstreamRate">/pc</span>
                                             </div>
-                                            <div class="form-text text-center small" id="lblDownstreamRateType" style="font-size: 10px;">ریٹ (Rate)</div>
+                                            <div class="form-text text-center small" id="lblDownstreamRateType" style="font-size: 10px;">Rate</div>
                                         </div>
                                     </div>
                                 </div>
@@ -2351,9 +2351,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <div>
                                             <i class="bi bi-info-circle text-primary me-1"></i>
                                             <span id="rateBreakdownText">
-                                                <span class="fw-bold text-primary" id="lblSamMins">0.0</span> منٹ فی پیس &times; 
-                                                <span class="fw-bold text-success" id="lblWorkerMinRate">Rs. 2.50</span> فی منٹ = 
-                                                <strong class="text-dark fs-6">Rs. <span id="lblCalculatedPieceRate">0.00</span></strong> فی پیس
+                                                <span class="fw-bold text-primary" id="lblSamMins">0.0</span> mins / pc &times; 
+                                                <span class="fw-bold text-success" id="lblWorkerMinRate">Rs. 2.50</span> / min = 
+                                                <strong class="text-dark fs-6">Rs. <span id="lblCalculatedPieceRate">0.00</span></strong> / pc
                                             </span>
                                         </div>
                                         <div class="d-flex align-items-center gap-2">
@@ -2381,7 +2381,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         </button>
                                         <button type="button" id="btnPackSets" class="btn btn-outline-info btn-sm d-flex align-items-center gap-1 shadow-sm d-none" title="Pack assorted color sets (1 of each color per size)">
                                             <i class="bi bi-box-seam-fill"></i>
-                                            <span>📦 Pack Color Sets (سیٹ پیک)</span>
+                                            <span>📦 Pack Color Sets</span>
                                         </button>
                                         <button type="button" id="btnFillAllPending" class="btn btn-primary btn-sm d-flex align-items-center gap-1 shadow-sm">
                                             <i class="bi bi-lightning-fill"></i>
@@ -2495,15 +2495,15 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <!-- Live Stage Balance Pill -->
                                     <div class="col-12 d-none" id="stageBalanceAlert">
                                         <div class="p-3 bg-light border rounded-3 d-flex flex-wrap justify-content-between align-items-center gap-2 small">
-                                            <div>🎯 ہدف (Planned): <strong id="lblPlanned" class="text-dark">0</strong></div>
-                                            <div>✂️ موصولہ تیار (Ready): <strong id="lblAllowable" class="text-primary">0</strong></div>
+                                            <div>🎯 Target (Planned): <strong id="lblPlanned" class="text-dark">0</strong></div>
+                                            <div>✂️ Received Good (Ready): <strong id="lblAllowable" class="text-primary">0</strong></div>
                                             <div id="boxPrevDefects" class="d-flex flex-wrap gap-1">
-                                                <span class="badge bg-danger text-white" id="badgePrevRej">🔴 0 خراب</span>
-                                                <span class="badge bg-warning text-dark" id="badgePrevRew">🟡 0 ری ورک</span>
-                                                <span class="badge bg-secondary text-white" id="badgePrevUnproduced">⏳ 0 غیر تیار</span>
+                                                <span class="badge bg-danger text-white" id="badgePrevRej">🔴 0 Rejected</span>
+                                                <span class="badge bg-warning text-dark" id="badgePrevRew">🟡 0 Rework</span>
+                                                <span class="badge bg-secondary text-white" id="badgePrevUnproduced">⏳ 0 Not Started</span>
                                             </div>
-                                            <div>✅ مکمل (Good Done): <strong id="lblDone" class="text-success">0</strong></div>
-                                            <div>⚡ بقایا (Pending): <strong id="lblPending" class="text-danger fw-bold">0</strong></div>
+                                            <div>✅ Complete (Good Done): <strong id="lblDone" class="text-success">0</strong></div>
+                                            <div>⚡ Pending: <strong id="lblPending" class="text-danger fw-bold">0</strong></div>
                                         </div>
                                     </div>
 
@@ -2645,8 +2645,8 @@ document.addEventListener('DOMContentLoaded', function() {
         fastDeskSheet.innerHTML = `
             <div class="card-modern shadow-sm text-center py-5">
                 <div class="spinner-border text-primary" role="status"></div>
-                <div class="mt-2 text-dark fw-bold">لاٹس اور آپریشنز لوڈ ہو رہے ہیں...</div>
-                <div class="text-muted small">براہ کرم انتظار کریں</div>
+                <div class="mt-2 text-dark fw-bold">Loading lots and operations...</div>
+                <div class="text-muted small">Please wait...</div>
             </div>
         `;
 
@@ -2658,7 +2658,7 @@ document.addEventListener('DOMContentLoaded', function() {
             try {
                 data = JSON.parse(rawText);
             } catch (parseErr) {
-                throw new Error(rawText.substring(0, 150) || 'سرور سے نامکمل جواب موصول ہوا');
+                throw new Error(rawText.substring(0, 150) || 'Incomplete response received from server');
             }
 
             if (data.status !== 'success') {
@@ -2675,7 +2675,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (err) {
             fastDeskSheet.innerHTML = `
                 <div class="alert alert-danger py-3">
-                    <i class="bi bi-exclamation-circle me-2"></i> نیٹ ورک یا سرور کنکشن میں خرابی: ${escapeHtml(err.message)}
+                    <i class="bi bi-exclamation-circle me-2"></i> Network or server connection error: ${escapeHtml(err.message)}
                 </div>
             `;
         }
@@ -2690,9 +2690,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update summary badges
         if (deskWorkerInfoBadge) {
             if (worker) {
-                deskWorkerInfoBadge.innerHTML = `<i class="bi bi-person-check-fill text-success me-1"></i> کاریگر: <strong>${escapeHtml(worker.name)}</strong> (${escapeHtml(worker.department_name || 'عام')}) [${escapeHtml(worker.worker_type)}]`;
+                deskWorkerInfoBadge.innerHTML = `<i class="bi bi-person-check-fill text-success me-1"></i> Worker: <strong>${escapeHtml(worker.name)}</strong> (${escapeHtml(worker.department_name || 'General')}) [${escapeHtml(worker.worker_type)}]`;
             } else {
-                deskWorkerInfoBadge.innerHTML = `<i class="bi bi-people me-1"></i> کاریگر: <strong>تمام کاریگر (All Workers)</strong>`;
+                deskWorkerInfoBadge.innerHTML = `<i class="bi bi-people me-1"></i> Worker: <strong>All Workers</strong>`;
             }
         }
 
@@ -2702,18 +2702,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         if (deskLotsCountBadge) {
-            deskLotsCountBadge.innerHTML = `<i class="bi bi-boxes me-1"></i> <strong>${lots.length}</strong> لاٹس`;
+            deskLotsCountBadge.innerHTML = `<i class="bi bi-boxes me-1"></i> <strong>${lots.length}</strong> Lots`;
         }
         if (deskPendingCountBadge) {
-            deskPendingCountBadge.innerHTML = `<i class="bi bi-hourglass-split me-1"></i> <strong>${totalPendingStages}</strong> باقی مراحل`;
+            deskPendingCountBadge.innerHTML = `<i class="bi bi-hourglass-split me-1"></i> <strong>${totalPendingStages}</strong> Remaining Stages`;
         }
 
         if (lots.length === 0) {
             fastDeskSheet.innerHTML = `
                 <div class="card-modern shadow-sm text-center py-5">
                     <i class="bi bi-check-circle-fill text-success fs-1 mb-2"></i>
-                    <h5 class="fw-bold text-dark">کوئی پینڈنگ کام نہیں ملا</h5>
-                    <p class="text-muted small mb-0">منتخب کردہ فلٹرز کے لیے تمام کام مکمل ہے یا کوئی فعال لاٹ موجود نہیں ہے۔</p>
+                    <h5 class="fw-bold text-dark">No Pending Work Found</h5>
+                    <p class="text-muted small mb-0">All operations are complete for the selected filters or no active lot exists.</p>
                 </div>
             `;
             return;
@@ -2736,10 +2736,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         <span class="badge bg-secondary-subtle text-secondary">${escapeHtml(lot.single_size_name || 'Standard Size')}</span>
                     </div>
                     <div class="d-flex align-items-center gap-2">
-                        <span class="badge bg-dark fs-6 px-2 py-1">ٹوٹل لاٹ: ${lot.total_pieces} pcs</span>
+                        <span class="badge bg-dark fs-6 px-2 py-1">Total Lot: ${lot.total_pieces} pcs</span>
                         <span class="badge ${lot.lot_status === 'In Production' ? 'bg-primary' : 'bg-secondary'}">${escapeHtml(lot.lot_status)}</span>
                         <a href="${BASE_URL}modules/lots/view.php?id=${lot.lot_id}" target="_blank" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size: 0.72rem;">
-                            <i class="bi bi-box-arrow-up-right me-1"></i> لاٹ فائل
+                            <i class="bi bi-box-arrow-up-right me-1"></i> Lot Details
                         </a>
                     </div>
                 </div>
@@ -2748,17 +2748,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         <table class="table table-hover align-middle mb-0">
                             <thead class="table-light">
                                 <tr class="small text-muted text-uppercase" style="font-size: 0.75rem;">
-                                    <th style="width: 45px;" class="text-center">ترتیب</th>
-                                    <th>مرحلہ / آپریشن (Operation)</th>
-                                    <th style="min-width: 160px;">کاریگر (Worker)</th>
-                                    <th style="width: 100px;">شفٹ</th>
-                                    <th class="text-center" style="width: 85px;">ٹوٹل لاٹ</th>
-                                    <th class="text-center" style="width: 85px;">پہلے شدہ</th>
-                                    <th class="text-center" style="width: 85px;">باقی پینڈنگ</th>
-                                    <th class="text-center" style="min-width: 130px;">آج کے پیس (Good Pcs)</th>
-                                    <th class="text-center" style="width: 110px;">خراب / ری ورک</th>
-                                    <th class="text-end" style="min-width: 120px;">ریٹ اور اجرت</th>
-                                    <th class="text-center" style="width: 125px;">محفوظ کریں</th>
+                                    <th style="width: 45px;" class="text-center">#</th>
+                                    <th>Operation</th>
+                                    <th style="min-width: 160px;">Worker</th>
+                                    <th style="width: 100px;">Shift</th>
+                                    <th class="text-center" style="width: 85px;">Total Lot</th>
+                                    <th class="text-center" style="width: 85px;">Previous Good</th>
+                                    <th class="text-center" style="width: 85px;">Pending</th>
+                                    <th class="text-center" style="min-width: 130px;">Today Good Pcs</th>
+                                    <th class="text-center" style="width: 110px;">Defects / Rework</th>
+                                    <th class="text-end" style="min-width: 120px;">Rate & Labour</th>
+                                    <th class="text-center" style="width: 125px;">Save</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -2771,7 +2771,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const suggestedQty = (typeof op.suggested_qty !== 'undefined') ? op.suggested_qty : Math.min(op.pending_balance, maxAvail);
                 const currentShiftVal = deskShiftSelect ? deskShiftSelect.value : 'Day Shift';
 
-                let workerOptionsHtml = `<option value="">-- کاریگر منتخب کریں --</option>`;
+                let workerOptionsHtml = `<option value="">-- Select Worker --</option>`;
                 allWorkers.forEach(w => {
                     const isSelected = selectedWorkerId > 0 ? (w.id === selectedWorkerId) : (worker && w.id === worker.id);
                     workerOptionsHtml += `<option value="${w.id}" data-rate="${w.default_rate}" data-minrate="${w.rate_per_minute}" ${isSelected ? 'selected' : ''}>${escapeHtml(w.name)} (${escapeHtml(w.code)}) - ${escapeHtml(w.department_name || '')}</option>`;
@@ -2791,24 +2791,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     data-search-text="${escapeHtml(lot.lot_number + ' ' + lot.product_name + ' ' + (lot.design_number || '') + ' ' + op.op_name + ' ' + (op.dept_name || '')).toLowerCase()}">
                     <td class="text-center fw-bold text-muted">${op.sequence}</td>
                     <td>
-                        <div class="fw-bold text-dark ${(op.is_operator_or_cutting && op.elements && op.elements.length > 0) ? 'toggle-elements-btn cursor-pointer' : ''}" ${(op.is_operator_or_cutting && op.elements && op.elements.length > 0) ? `data-target="elem-drawer-${lot.lot_id}-${op.operation_id}" role="button" title="اعضاء و پلے کا اندراج کھولنے کے لیے کلک کریں"` : ''}>
+                        <div class="fw-bold text-dark ${(op.is_operator_or_cutting && op.elements && op.elements.length > 0) ? 'toggle-elements-btn cursor-pointer' : ''}" ${(op.is_operator_or_cutting && op.elements && op.elements.length > 0) ? `data-target="elem-drawer-${lot.lot_id}-${op.operation_id}" role="button" title="Click to open Element and Palla breakdown entry"` : ''}>
                             ${escapeHtml(op.op_name)}
                         </div>
                         <div class="d-flex flex-wrap align-items-center gap-1 mt-1">
-                            <span class="badge bg-light text-secondary border small" style="font-size: 0.7rem;">${escapeHtml(op.dept_name || 'عام')}</span>
+                            <span class="badge bg-light text-secondary border small" style="font-size: 0.7rem;">${escapeHtml(op.dept_name || 'General')}</span>
                             ${op.predecessor_op_name ? `
-                                <span class="badge bg-light text-dark border small" style="font-size: 0.68rem;" title="پچھلا مرحلہ">
-                                    <i class="bi bi-arrow-left-short text-primary"></i>پچھلا: <strong>${escapeHtml(op.predecessor_op_name)}</strong> (${op.predecessor_good_done} تیار)
+                                <span class="badge bg-light text-dark border small" style="font-size: 0.68rem;" title="Previous Stage">
+                                    <i class="bi bi-arrow-left-short text-primary"></i>Prev: <strong>${escapeHtml(op.predecessor_op_name)}</strong> (${op.predecessor_good_done} done)
                                 </span>
                             ` : `
                                 <span class="badge bg-primary-subtle text-primary border border-primary-subtle small" style="font-size: 0.68rem;">
-                                    <i class="bi bi-play-circle-fill me-1"></i>پہلا مرحلہ
+                                    <i class="bi bi-play-circle-fill me-1"></i>First Stage
                                 </span>
                             `}
                         </div>
                         ${(op.is_operator_or_cutting && op.elements && op.elements.length > 0) ? `
                             <button type="button" class="btn btn-outline-primary btn-xs py-0 px-2 fw-semibold toggle-elements-btn mt-1 shadow-sm" style="font-size: 0.72rem; border-radius: 4px;" data-target="elem-drawer-${lot.lot_id}-${op.operation_id}">
-                                <i class="bi bi-puzzle me-1"></i>اعضاء و پلے اندراج (${op.elements.length})
+                                <i class="bi bi-puzzle me-1"></i>Element Breakdown (${op.elements.length})
                             </button>
                         ` : ''}
                     </td>
@@ -2819,24 +2819,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     </td>
                     <td>
                         <select class="form-select form-select-sm row-shift-select" style="font-size: 0.78rem;" ${(isCompleted || isBlocked) ? 'disabled' : ''}>
-                            <option value="Day Shift" ${currentShiftVal === 'Day Shift' ? 'selected' : ''}>Day (دن)</option>
-                            <option value="Night Shift" ${currentShiftVal === 'Night Shift' ? 'selected' : ''}>Night (رات)</option>
+                            <option value="Day Shift" ${currentShiftVal === 'Day Shift' ? 'selected' : ''}>Day (Day)</option>
+                            <option value="Night Shift" ${currentShiftVal === 'Night Shift' ? 'selected' : ''}>Night (Night)</option>
                         </select>
                     </td>
                     <td class="text-center">
                         <span class="fw-bold text-secondary">${op.required_qty}</span>
-                        <div class="text-muted" style="font-size: 0.65rem;">ٹوٹل اتنے ہیں</div>
+                        <div class="text-muted" style="font-size: 0.65rem;">Total Required</div>
                     </td>
                     <td class="text-center">
                         <span class="fw-bold text-success fs-6 cell-good-done">${op.good_done}</span>
-                        <div class="text-muted" style="font-size: 0.65rem;">پہلے شدہ</div>
+                        <div class="text-muted" style="font-size: 0.65rem;">Previous Good</div>
                     </td>
                     <td class="text-center">
                         <span class="badge ${op.pending_balance > 0 ? 'bg-warning-subtle text-warning-emphasis' : 'bg-success-subtle text-success'} fs-6 cell-pending-bal">${op.pending_balance}</span>
-                        <div class="text-muted" style="font-size: 0.65rem;">باقی پینڈنگ</div>
+                        <div class="text-muted" style="font-size: 0.65rem;">Pending</div>
                         ${(op.pending_balance > 0 && op.predecessor_op_name) ? `
-                            <div class="small fw-semibold mt-1 ${maxAvail > 0 ? 'text-primary' : 'text-danger'}" style="font-size: 0.68rem;" title="پچھلے مرحلے کے مطابق ابھی تیار پیسز">
-                                دستیاب: <span class="row-avail-val">${maxAvail}</span>
+                            <div class="small fw-semibold mt-1 ${maxAvail > 0 ? 'text-primary' : 'text-danger'}" style="font-size: 0.68rem;" title="Available pieces ready from previous stage">
+                                Available: <span class="row-avail-val">${maxAvail}</span>
                             </div>
                         ` : ''}
                     </td>
@@ -2848,18 +2848,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                         <div class="validation-hint mt-1" style="font-size: 0.65rem;">
                             ${isBlocked ? `
-                                <span class="badge bg-secondary-subtle text-secondary border"><i class="bi bi-hourglass-split me-1"></i>پچھلے کا انتظار</span>
+                                <span class="badge bg-secondary-subtle text-secondary border"><i class="bi bi-hourglass-split me-1"></i>Waiting for Previous</span>
                             ` : (maxAvail < op.pending_balance ? `
-                                <span class="text-primary fw-semibold">(میکس دستیاب: <span class="max-bal-text">${maxAvail}</span>)</span>
+                                <span class="text-primary fw-semibold">(Max Available: <span class="max-bal-text">${maxAvail}</span>)</span>
                             ` : `
-                                <span class="text-muted">(میکس: <span class="max-bal-text">${maxAvail}</span>)</span>
+                                <span class="text-muted">(Max: <span class="max-bal-text">${maxAvail}</span>)</span>
                             `)}
                         </div>
                     </td>
                     <td class="text-center">
                         <div class="d-flex gap-1 justify-content-center">
-                            <input type="number" class="form-control form-control-sm px-1 text-center input-rej text-danger fw-semibold" placeholder="خراب" title="خراب پیسز (Rejections)" value="0" min="0" style="width: 48px; font-size: 0.75rem;" ${(isCompleted || isBlocked) ? 'disabled' : ''}>
-                            <input type="number" class="form-control form-control-sm px-1 text-center input-rew text-warning-emphasis fw-semibold" placeholder="ری ورک" title="ری ورک پیسز (Rework)" value="0" min="0" style="width: 48px; font-size: 0.75rem;" ${(isCompleted || isBlocked) ? 'disabled' : ''}>
+                            <input type="number" class="form-control form-control-sm px-1 text-center input-rej text-danger fw-semibold" placeholder="Rejected" title="Rejected Pieces" value="0" min="0" style="width: 48px; font-size: 0.75rem;" ${(isCompleted || isBlocked) ? 'disabled' : ''}>
+                            <input type="number" class="form-control form-control-sm px-1 text-center input-rew text-warning-emphasis fw-semibold" placeholder="Rework" title="Rework Pieces" value="0" min="0" style="width: 48px; font-size: 0.75rem;" ${(isCompleted || isBlocked) ? 'disabled' : ''}>
                         </div>
                     </td>
                     <td class="text-end">
@@ -2873,14 +2873,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     </td>
                     <td class="text-center">
                         ${isCompleted ? `
-                            <span class="badge bg-success text-white py-1 px-2"><i class="bi bi-check-circle-fill me-1"></i> مکمل</span>
+                            <span class="badge bg-success text-white py-1 px-2"><i class="bi bi-check-circle-fill me-1"></i> Complete</span>
                         ` : (isBlocked ? `
-                            <button type="button" class="btn btn-secondary btn-sm fw-semibold px-2 py-1 btn-waiting-lock" disabled title="پچھلے مرحلے (${escapeHtml(op.predecessor_op_name || '')}) میں پیسز تیار ہونے کا انتظار ہے">
-                                <i class="bi bi-lock-fill me-1"></i> منتظر
+                            <button type="button" class="btn btn-secondary btn-sm fw-semibold px-2 py-1 btn-waiting-lock" disabled title="Waiting for previous stage (${escapeHtml(op.predecessor_op_name || '')}) to produce pieces">
+                                <i class="bi bi-lock-fill me-1"></i> Waiting
                             </button>
                         ` : `
                             <button type="button" class="btn btn-success btn-sm fw-bold px-2 py-1 btn-save-fast-row shadow-sm">
-                                <i class="bi bi-check2-circle me-1"></i> محفوظ کریں
+                                <i class="bi bi-check2-circle me-1"></i> Save
                             </button>
                         `)}
                     </td>
@@ -2905,15 +2905,15 @@ document.addEventListener('DOMContentLoaded', function() {
                             <div class="card border-primary border-opacity-25 shadow-sm rounded-3">
                                 <div class="card-header bg-primary bg-opacity-10 py-2 px-3 d-flex flex-wrap justify-content-between align-items-center">
                                     <div class="d-flex align-items-center gap-2">
-                                        <span class="badge bg-primary fs-7"><i class="bi bi-puzzle-fill me-1"></i> اعضاء اور پلے اندراج (Element Breakdown Entry) &mdash; ${escapeHtml(op.op_name)}</span>
-                                        <span class="small text-muted">ہر حصے کے تیار شدہ پیسز نیچے فیلڈز میں الگ الگ درج کریں</span>
+                                        <span class="badge bg-primary fs-7"><i class="bi bi-puzzle-fill me-1"></i> Element Breakdown Entry &mdash; ${escapeHtml(op.op_name)}</span>
+                                        <span class="small text-muted">Enter completed pieces for each part separately below</span>
                                     </div>
                                     <div class="d-flex align-items-center gap-2">
-                                        <button type="button" class="btn btn-xs btn-outline-primary fw-semibold sync-el-from-main-btn" data-lot="${lot.lot_id}" data-op="${op.operation_id}" title="مین فیلڈ کے پیسز کے مطابق تمام اعضاء کو دوبارہ سیٹ کریں">
-                                            <i class="bi bi-arrow-repeat me-1"></i> مین پیسز (${suggestedQty}) سے سب فیلڈز سیٹ کریں
+                                        <button type="button" class="btn btn-xs btn-outline-primary fw-semibold sync-el-from-main-btn" data-lot="${lot.lot_id}" data-op="${op.operation_id}" title="Reset all element fields to match main pieces">
+                                            <i class="bi bi-arrow-repeat me-1"></i> Set all from Main Pcs (${suggestedQty})
                                         </button>
                                         <button type="button" class="btn btn-xs btn-outline-secondary close-elem-drawer-btn" data-target="elem-drawer-${lot.lot_id}-${op.operation_id}">
-                                            <i class="bi bi-x-lg"></i> بند کریں
+                                            <i class="bi bi-x-lg"></i> Close
                                         </button>
                                     </div>
                                 </div>
@@ -2923,15 +2923,15 @@ document.addEventListener('DOMContentLoaded', function() {
                                             <thead class="table-light">
                                                 <tr class="text-muted small">
                                                     <th style="width: 38px;">#</th>
-                                                    <th class="text-start" style="min-width: 170px;">عضو / پلہ کا نام (Element)</th>
-                                                    <th style="width: 85px;">نسبت / پلہ</th>
-                                                    <th style="width: 80px;">کل مطلوب</th>
-                                                    <th style="width: 80px;">پہلے شدہ</th>
-                                                    <th style="width: 80px;">باقی پینڈنگ</th>
-                                                    <th style="min-width: 145px;" class="bg-primary bg-opacity-10 text-primary fw-bold">آج کے پیسز (Today Pcs)</th>
-                                                    <th style="width: 105px;">پلے تعداد</th>
-                                                    <th style="width: 100px;">ریٹ</th>
-                                                    <th class="text-end" style="min-width: 110px;">اجرت (Labour)</th>
+                                                    <th class="text-start" style="min-width: 170px;">Part / Element Name</th>
+                                                    <th style="width: 85px;">Ratio / Palla</th>
+                                                    <th style="width: 80px;">Total Required</th>
+                                                    <th style="width: 80px;">Previous Good</th>
+                                                    <th style="width: 80px;">Pending</th>
+                                                    <th style="min-width: 145px;" class="bg-primary bg-opacity-10 text-primary fw-bold">Today Pieces</th>
+                                                    <th style="width: 105px;">Pallas Qty</th>
+                                                    <th style="width: 100px;">Rate</th>
+                                                    <th class="text-end" style="min-width: 110px;">Labour</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -2958,7 +2958,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                                             <span class="badge bg-light text-secondary border ms-1" style="font-size: 0.68rem;">×${el.multiplier}</span>
                                                         </td>
                                                         <td>
-                                                            ${ppp > 1 ? `<span class="badge bg-info-subtle text-info-emphasis border small" style="font-size: 0.70rem;">${ppp} pcs/پلہ</span>` : `<span class="text-muted small">1:1</span>`}
+                                                            ${ppp > 1 ? `<span class="badge bg-info-subtle text-info-emphasis border small" style="font-size: 0.70rem;">${ppp} pcs/Palla</span>` : `<span class="text-muted small">1:1</span>`}
                                                         </td>
                                                         <td class="fw-bold text-secondary">${el.required_pieces}</td>
                                                         <td class="fw-semibold text-success">${el.done_pieces}</td>
@@ -2979,13 +2979,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                                                        step="1"
                                                                        ${(isCompleted || isBlocked) ? 'disabled' : ''}>
                                                             </div>
-                                                            <span class="text-muted d-block el-hint-text" style="font-size: 0.65rem;">(میکس باقی: <span class="el-max-text">${el.pending_pieces}</span>)</span>
+                                                            <span class="text-muted d-block el-hint-text" style="font-size: 0.65rem;">(Max Remaining: <span class="el-max-text">${el.pending_pieces}</span>)</span>
                                                         </td>
                                                         <td class="small text-muted el-palla-calc-cell">
-                                                            ${ppp > 1 ? `<span class="fw-semibold text-dark el-pallas-val">${suggPallas}</span> پلے` : `<span class="text-muted">-</span>`}
+                                                            ${ppp > 1 ? `<span class="fw-semibold text-dark el-pallas-val">${suggPallas}</span> Pallas` : `<span class="text-muted">-</span>`}
                                                         </td>
                                                         <td class="small text-muted">
-                                                            ${rpp > 0 ? `Rs. ${rpp.toFixed(2)}/پلہ` : `Rs. ${elRate.toFixed(2)}/pc`}
+                                                            ${rpp > 0 ? `Rs. ${rpp.toFixed(2)}/Palla` : `Rs. ${elRate.toFixed(2)}/pc`}
                                                         </td>
                                                         <td class="text-end fw-bold text-success el-row-labour">
                                                             Rs. ${elLabour}
@@ -2997,12 +2997,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                             <tfoot class="table-light fw-bold" style="font-size: 0.8rem;">
                                                 <tr>
                                                     <td colspan="6" class="text-start px-3 text-muted">
-                                                        <i class="bi bi-calculator me-1"></i> مجموعہ اعضاء (Total Elements Sum):
+                                                        <i class="bi bi-calculator me-1"></i> Total Elements Sum:
                                                     </td>
                                                     <td class="text-center text-primary el-total-pcs-sum">
                                                         ${totalSuggestedElPcs} pcs
                                                     </td>
-                                                    <td colspan="2" class="text-end text-muted">کل اجرت:</td>
+                                                    <td colspan="2" class="text-end text-muted">Total Labour:</td>
                                                     <td class="text-end text-success fs-7 el-total-labour-sum">
                                                         Rs. ${initialDrawerLabour.toFixed(2)}
                                                     </td>
@@ -3115,10 +3115,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         if (elVal > elPend) {
                             this.classList.add('is-invalid');
-                            if (hintText) hintText.innerHTML = `<span class="text-danger fw-bold">⚠️ باقی صرف ${elPend} ہیں!</span>`;
+                            if (hintText) hintText.innerHTML = `<span class="text-danger fw-bold">⚠️ Remaining only ${elPend}!</span>`;
                         } else {
                             this.classList.remove('is-invalid');
-                            if (hintText) hintText.innerHTML = `(میکس باقی: <span class="el-max-text">${elPend}</span>)`;
+                            if (hintText) hintText.innerHTML = `(Max Remaining: <span class="el-max-text">${elPend}</span>)`;
                         }
 
                         // Update pallas
@@ -3159,7 +3159,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const maxAvail = parseInt(row.getAttribute('data-max-avail'), 10);
                 const pendingBal = parseInt(row.getAttribute('data-pending'), 10) || 0;
                 const effectiveMax = isNaN(maxAvail) ? pendingBal : maxAvail;
-                const prevName = row.getAttribute('data-prev-name') || 'پچھلے مرحلے';
+                const prevName = row.getAttribute('data-prev-name') || 'previous stage';
                 let goodVal = parseInt(inpGood.value, 10);
                 if (isNaN(goodVal)) goodVal = 0;
 
@@ -3170,7 +3170,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     inpGood.classList.add('is-invalid');
                     inpGood.classList.add('border-danger');
                     if (validationHint) {
-                        validationHint.innerHTML = `<span class="text-danger fw-bold">⚠️ پچھلے مرحلے کے مطابق دستیاب صرف ${effectiveMax} ہیں!</span>`;
+                        validationHint.innerHTML = `<span class="text-danger fw-bold">⚠️ Available from previous stage is only ${effectiveMax}!</span>`;
                     }
                     if (saveBtn) saveBtn.disabled = true;
                 } else {
@@ -3178,9 +3178,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     inpGood.classList.remove('border-danger');
                     if (validationHint) {
                         if (effectiveMax < pendingBal) {
-                            validationHint.innerHTML = `<span class="text-primary fw-semibold">(میکس دستیاب: <span class="max-bal-text">${effectiveMax}</span> / کل باقی: ${pendingBal})</span>`;
+                            validationHint.innerHTML = `<span class="text-primary fw-semibold">(Max Available: <span class="max-bal-text">${effectiveMax}</span> / Total Remaining: ${pendingBal})</span>`;
                         } else {
-                            validationHint.innerHTML = `(میکس: <span class="max-bal-text">${effectiveMax}</span>)`;
+                            validationHint.innerHTML = `(Max: <span class="max-bal-text">${effectiveMax}</span>)`;
                         }
                     }
                     if (saveBtn) saveBtn.disabled = false;
@@ -3256,7 +3256,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     e.preventDefault();
                     const workerId = workerSelect ? parseInt(workerSelect.value, 10) : 0;
                     if (!workerId) {
-                        alert('براہ کرم کاریگر منتخب کریں (Please select a worker)');
+                        alert('Please select a worker');
                         if (workerSelect) workerSelect.focus();
                         return;
                     }
@@ -3264,7 +3264,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const maxAvail = parseInt(row.getAttribute('data-max-avail'), 10);
                     const pendingBal = parseInt(row.getAttribute('data-pending'), 10) || 0;
                     const effectiveMax = isNaN(maxAvail) ? pendingBal : maxAvail;
-                    const prevName = row.getAttribute('data-prev-name') || 'پچھلے مرحلے';
+                    const prevName = row.getAttribute('data-prev-name') || 'previous stage';
                     const goodVal = parseInt(inpGood ? inpGood.value : 0, 10) || 0;
                     const rejInp = row.querySelector('.input-rej');
                     const rewInp = row.querySelector('.input-rew');
@@ -3275,13 +3275,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     const entryDateVal = deskEntryDate ? deskEntryDate.value : '';
 
                     if (goodVal > effectiveMax) {
-                        alert(`تعداد پچھلے مرحلے (${prevName}) کے تیار کردہ پیسز (${effectiveMax}) سے زیادہ نہیں ہو سکتی!`);
+                        alert(`Quantity cannot exceed pieces ready from previous stage (${prevName}) (${effectiveMax})!`);
                         if (inpGood) inpGood.focus();
                         return;
                     }
 
                     if (goodVal <= 0 && rejVal <= 0 && rewVal <= 0) {
-                        alert('براہ کرم کم از کم 1 پیس درج کریں');
+                        alert('Please enter at least 1 piece');
                         if (inpGood) inpGood.focus();
                         return;
                     }
@@ -3303,7 +3303,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Disable button and show spinner
                     const originalBtnContent = saveBtn.innerHTML;
                     saveBtn.disabled = true;
-                    saveBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status"></span> محفوظ ہو رہا ہے...`;
+                    saveBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status"></span> Saving...`;
 
                     try {
                         const formData = new FormData();
@@ -3330,13 +3330,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         try {
                             res = JSON.parse(rawText);
                         } catch (parseErr) {
-                            throw new Error(rawText.substring(0, 150) || 'سرور سے نامکمل یا غیر متوقع جواب موصول ہوا');
+                            throw new Error(rawText.substring(0, 150) || 'Incomplete or unexpected response received from server');
                         }
 
                         if (res.status === 'success') {
                             savedEntriesCount++;
                             if (deskSavedCountBadge) {
-                                deskSavedCountBadge.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> <strong>${savedEntriesCount}</strong> محفوظ شدہ انٹریز`;
+                                deskSavedCountBadge.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> <strong>${savedEntriesCount}</strong> Saved Entries`;
                             }
 
                             // Update row indicators
@@ -3360,7 +3360,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 if (inpRate) inpRate.disabled = true;
                                 if (workerSelect) workerSelect.disabled = true;
 
-                                saveBtn.outerHTML = `<span class="badge bg-success text-white py-1 px-2"><i class="bi bi-check-circle-fill me-1"></i> مکمل</span>`;
+                                saveBtn.outerHTML = `<span class="badge bg-success text-white py-1 px-2"><i class="bi bi-check-circle-fill me-1"></i> Complete</span>`;
                             } else {
                                 if (inpGood) {
                                     inpGood.value = res.new_pending;
@@ -3372,14 +3372,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
                                 saveBtn.disabled = false;
                                 saveBtn.className = 'btn btn-outline-success btn-sm fw-bold px-2 py-1 btn-save-fast-row shadow-sm';
-                                saveBtn.innerHTML = `<i class="bi bi-check-all me-1"></i> محفوظ شد! اگلا درج کریں`;
+                                saveBtn.innerHTML = `<i class="bi bi-check-all me-1"></i> Saved! Record Next`;
                                 setTimeout(() => {
                                     saveBtn.className = 'btn btn-success btn-sm fw-bold px-2 py-1 btn-save-fast-row shadow-sm';
-                                    saveBtn.innerHTML = `<i class="bi bi-check2-circle me-1"></i> محفوظ کریں`;
+                                    saveBtn.innerHTML = `<i class="bi bi-check2-circle me-1"></i> Save`;
                                 }, 3000);
                             }
 
-                            showDeskToast('success', res.message, `اجرت: <strong>${res.labour_formatted}</strong> | انٹری نمبر: <code>${res.entry_number}</code>`);
+                            showDeskToast('success', res.message, `Labour: <strong>${res.labour_formatted}</strong> | Entry #: <code>${res.entry_number}</code>`);
 
                             // Refresh fast desk sheet so downstream sequential stages unlock newly available pieces!
                             setTimeout(async () => {
@@ -3392,12 +3392,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         } else {
                             saveBtn.disabled = false;
                             saveBtn.innerHTML = originalBtnContent;
-                            showDeskToast('danger', 'انٹری محفوظ نہ ہو سکی', res.message || 'Error occurred');
+                            showDeskToast('danger', 'Entry could not be saved', res.message || 'Error occurred');
                         }
                     } catch (err) {
                         saveBtn.disabled = false;
                         saveBtn.innerHTML = originalBtnContent;
-                        showDeskToast('danger', 'کنکشن کی خرابی', err.message);
+                        showDeskToast('danger', 'Connection Error', err.message);
                     }
                 });
             }
@@ -3586,9 +3586,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const effR = parseFloat(opt.dataset.rate || opt.getAttribute('data-rate')) || 0.00;
 
         const lower = rawType.toLowerCase();
-        const isDaily = lower.includes('daily') || lower.includes('یومیہ') || lower.includes('day');
-        const isMonthly = lower.includes('month') || lower.includes('ماہانہ') || lower.includes('salary');
-        const isMinute = lower.includes('minute') || lower.includes('منٹ');
+        const isDaily = lower.includes('daily') || lower.includes('day');
+        const isMonthly = lower.includes('month') || lower.includes('salary');
+        const isMinute = lower.includes('minute') || lower.includes('mins');
         const isPiece = !isDaily && !isMonthly && !isMinute;
 
         return {
@@ -3822,11 +3822,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         <input type="hidden" name="elements[${el.id}][previous_done]" value="${done}">
                         <span class="text-primary me-1">🧵</span> ${el.element_name} 
                         <span class="badge bg-light text-muted border">×${mult}</span>
-                        ${ppp > 1 ? `<span class="badge bg-light text-primary border ms-1" style="font-size: 0.70rem;">1 پلہ = ${ppp} پیس</span>` : ''}
+                        ${ppp > 1 ? `<span class="badge bg-light text-primary border ms-1" style="font-size: 0.70rem;">1 Palla = ${ppp} pcs</span>` : ''}
                     </td>
                     <td class="fw-bold text-muted">
                         ${req}
-                        ${ppp > 1 ? `<div class="text-muted" style="font-size: 0.70rem;">${(req / ppp).toFixed(1)} پلے</div>` : ''}
+                        ${ppp > 1 ? `<div class="text-muted" style="font-size: 0.70rem;">${(req / ppp).toFixed(1)} Pallas</div>` : ''}
                     </td>
                     <td class="fw-semibold text-info-emphasis">${done}</td>
                     <td class="fw-bold text-warning-emphasis">${pending}</td>
@@ -4091,7 +4091,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     now = 0;
                 }
                 if (now > avail) {
-                    alert('اس حصہ کے صرف ' + avail + ' پیس آپریٹر سے تیار موصول ہوئے ہیں۔ آپ ' + avail + ' سے زیادہ کٹنگ درج نہیں کر سکتے۔');
+                    alert('Only ' + avail + ' pieces ready from Operator for this component. You cannot enter more than ' + avail + ' cutting.');
                     this.value = avail;
                     now = avail;
                 }
@@ -4156,10 +4156,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (grpMinutes) grpMinutes.classList.add('d-none');
             if (grpMinRate) grpMinRate.classList.add('d-none');
             if (grpFinalRate) grpFinalRate.className = 'col-12 col-md-6';
-            if (lblCutRate) lblCutRate.textContent = 'Daily Wage Rate (یومیہ اجرت فی دن / شفٹ) *';
+            if (lblCutRate) lblCutRate.textContent = 'Daily Wage Rate (Per Day / Shift) *';
             if (unitCutRate) unitCutRate.textContent = '/day';
-            if (hintCutRate) hintCutRate.textContent = 'ورکر پروفائل کی طے شدہ یومیہ اجرت، آپ ریل ٹائم میں تبدیل کر سکتے ہیں۔';
-            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-calendar-check me-1"></i>Daily Wage Scheme (یومیہ اجرت - فکسڈ فی شفٹ)';
+            if (hintCutRate) hintCutRate.textContent = 'Fixed wage from worker profile, editable in real time.';
+            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-calendar-check me-1"></i>Daily Wage Scheme (Fixed per Shift)';
 
             if (!fromDirectRate && cutRateInput) {
                 cutRateInput.value = (wInfo.dailyRate > 0 ? wInfo.dailyRate : 300.00).toFixed(2);
@@ -4167,7 +4167,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const currentRate = parseFloat(cutRateInput ? cutRateInput.value : 0) || (wInfo.dailyRate > 0 ? wInfo.dailyRate : 300.00);
             if (cutRateBadge) {
                 cutRateBadge.className = 'badge bg-info-subtle text-info-emphasis border';
-                cutRateBadge.innerHTML = `<i class="bi bi-calendar-check me-1"></i>Rate: Rs. ${currentRate.toFixed(2)}/day (Daily Wage — یومیہ اجرت)`;
+                cutRateBadge.innerHTML = `<i class="bi bi-calendar-check me-1"></i>Rate: Rs. ${currentRate.toFixed(2)}/day (Daily Wage)`;
             }
             if (lblCutLabour) {
                 lblCutLabour.textContent = 'Rs. ' + currentRate.toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -4176,10 +4176,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (grpMinutes) grpMinutes.classList.add('d-none');
             if (grpMinRate) grpMinRate.classList.add('d-none');
             if (grpFinalRate) grpFinalRate.className = 'col-12 col-md-6';
-            if (lblCutRate) lblCutRate.textContent = 'Piece Rate (ریٹ فی پیس) *';
+            if (lblCutRate) lblCutRate.textContent = 'Piece Rate *';
             if (unitCutRate) unitCutRate.textContent = '/pc';
-            if (hintCutRate) hintCutRate.textContent = 'ورکر پروفائل سے طے شدہ ریٹ، آپ ریل ٹائم میں تبدیل کر سکتے ہیں۔';
-            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-tag-fill me-1"></i>Piece Rate Scheme (طے شدہ فی پیس ریٹ)';
+            if (hintCutRate) hintCutRate.textContent = 'Fixed piece rate from worker profile, editable in real time.';
+            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-tag-fill me-1"></i>Piece Rate Scheme (Fixed / pc rate)';
 
             if (!fromDirectRate && cutRateInput) {
                 cutRateInput.value = (wInfo.pieceRate > 0 ? wInfo.pieceRate : (wInfo.rate > 0 ? wInfo.rate : 5.00)).toFixed(2);
@@ -4187,7 +4187,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const currentRate = parseFloat(cutRateInput ? cutRateInput.value : 0) || (wInfo.pieceRate > 0 ? wInfo.pieceRate : 5.00);
             if (cutRateBadge) {
                 cutRateBadge.className = 'badge bg-primary-subtle text-primary border';
-                cutRateBadge.innerHTML = `<i class="bi bi-tag-fill me-1"></i>Rate: Rs. ${currentRate.toFixed(2)}/pc (Piece Rate — پر پیس ریٹ)`;
+                cutRateBadge.innerHTML = `<i class="bi bi-tag-fill me-1"></i>Rate: Rs. ${currentRate.toFixed(2)}/pc (Piece Rate)`;
             }
             if (lblCutLabour) {
                 lblCutLabour.textContent = 'Rs. ' + (whole * currentRate).toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -4196,10 +4196,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (grpMinutes) grpMinutes.classList.add('d-none');
             if (grpMinRate) grpMinRate.classList.add('d-none');
             if (grpFinalRate) grpFinalRate.className = 'col-12 col-md-6';
-            if (lblCutRate) lblCutRate.textContent = 'Monthly Fixed Salary (ماہانہ تنخواہ) *';
+            if (lblCutRate) lblCutRate.textContent = 'Monthly Fixed Salary *';
             if (unitCutRate) unitCutRate.textContent = '/mo';
-            if (hintCutRate) hintCutRate.textContent = 'ماہانہ فکسڈ بنیادی تنخواہ۔';
-            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-briefcase me-1"></i>Monthly Salary (ماہانہ تنخواہ)';
+            if (hintCutRate) hintCutRate.textContent = 'Fixed monthly salary.';
+            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-briefcase me-1"></i>Monthly Salary';
 
             if (!fromDirectRate && cutRateInput) {
                 cutRateInput.value = (wInfo.pieceRate > 0 ? wInfo.pieceRate : 0.00).toFixed(2);
@@ -4207,7 +4207,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const currentRate = parseFloat(cutRateInput ? cutRateInput.value : 0);
             if (cutRateBadge) {
                 cutRateBadge.className = 'badge bg-secondary-subtle text-secondary border';
-                cutRateBadge.innerHTML = `<i class="bi bi-briefcase me-1"></i>Salary: Rs. ${currentRate.toFixed(2)}/mo (Monthly Salary)`;
+                cutRateBadge.innerHTML = `<i class="bi bi-briefcase me-1"></i>Salary: Rs. ${currentRate.toFixed(2)}/mo`;
             }
             if (lblCutLabour) {
                 lblCutLabour.textContent = 'Rs. 0.00 (Fixed Monthly Salary)';
@@ -4217,9 +4217,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (grpMinutes) grpMinutes.classList.remove('d-none');
             if (grpMinRate) grpMinRate.classList.remove('d-none');
             if (grpFinalRate) grpFinalRate.className = 'col-12 col-md-4';
-            if (lblCutRate) lblCutRate.textContent = 'فائنل پیس ریٹ (Piece Rate) *';
+            if (lblCutRate) lblCutRate.textContent = 'Final Piece Rate *';
             if (unitCutRate) unitCutRate.textContent = '/pc';
-            if (hintCutRate) hintCutRate.textContent = 'ریئل ٹائم خودکار حساب (SAM × Rate/min)';
+            if (hintCutRate) hintCutRate.textContent = 'Real-time automatic calculation (SAM × Rate/min)';
             if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-calculator me-1"></i>Minutes × Rate/min = Piece Rate';
 
             if (cutMinRateInput && !cutMinRateInput.dataset.userEdited) {
@@ -4234,7 +4234,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const currentRate = parseFloat(cutRateInput ? cutRateInput.value : 0) || (mins * minRate);
             if (cutRateBadge) {
                 cutRateBadge.className = 'badge bg-success-subtle text-success border';
-                cutRateBadge.innerHTML = `<i class="bi bi-stopwatch me-1"></i>Rate: Rs. ${currentRate.toFixed(2)}/pc (${mins.toFixed(1)}m @ Rs. ${minRate.toFixed(2)}/m — منٹ ریٹ)`;
+                cutRateBadge.innerHTML = `<i class="bi bi-stopwatch me-1"></i>Rate: Rs. ${currentRate.toFixed(2)}/pc (${mins.toFixed(1)}m @ Rs. ${minRate.toFixed(2)}/m — SAM Rate)`;
             }
             if (lblCutLabour) {
                 lblCutLabour.textContent = 'Rs. ' + (whole * currentRate).toLocaleString('en-PK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -4269,7 +4269,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 whole = 0;
             }
             if (whole > maxWhole) {
-                alert('آپریٹر سے صرف ' + maxWhole + ' پیس تیار موصول ہوئے ہیں۔ آپ ' + maxWhole + ' سے زیادہ کٹنگ درج نہیں کر سکتے۔');
+                alert('Only ' + maxWhole + ' pieces received ready from Operator. You cannot enter more than ' + maxWhole + ' cutting.');
                 this.value = maxWhole;
                 whole = maxWhole;
             }
@@ -4306,7 +4306,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        let thHtml = '<tr><th class="text-start py-2 px-3" style="min-width: 150px;">Color (رنگ و کوڈ)</th>';
+        let thHtml = '<tr><th class="text-start py-2 px-3" style="min-width: 150px;">Color (Color & Code)</th>';
         sizes.forEach(sz => {
             thHtml += `<th class="py-2 px-2" style="min-width: 140px;">${sz.name} (${sz.code})</th>`;
         });
@@ -4375,12 +4375,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (line) {
                     if (r > 0 || w > 0 || unmade > 0) {
                         line.innerHTML = `
-                            ${r > 0 ? `<span class="badge bg-danger-subtle text-danger px-1">🔴 ${r} خراب</span> ` : ''}
-                            ${w > 0 ? `<span class="badge bg-warning-subtle text-warning-emphasis px-1">🟡 ${w} ری ورک</span> ` : ''}
-                            ${unmade > 0 ? `<span class="badge bg-secondary-subtle text-secondary px-1">⏳ ${unmade} غیر کٹ</span>` : ''}
+                            ${r > 0 ? `<span class="badge bg-danger-subtle text-danger px-1">🔴 ${r} Rejected</span> ` : ''}
+                            ${w > 0 ? `<span class="badge bg-warning-subtle text-warning-emphasis px-1">🟡 ${w} Rework</span> ` : ''}
+                            ${unmade > 0 ? `<span class="badge bg-secondary-subtle text-secondary px-1">⏳ ${unmade} uncut</span>` : ''}
                         `;
                     } else {
-                        line.innerHTML = `<span class="text-success small">✓ مکمل کٹنگ</span>`;
+                        line.innerHTML = `<span class="text-success small">✓ Complete Cutting</span>`;
                     }
                 }
             }
@@ -4461,7 +4461,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         if (maxWhole > 0 && grandGood > maxWhole) {
-            alert('کل کٹنگ تعداد (' + grandGood + ' pcs) آپریٹر کے تیار کردہ پیسز (' + maxWhole + ' pcs) سے زیادہ نہیں ہو سکتی۔');
+            alert('Total Cut quantity (' + grandGood + ' pcs) cannot exceed Operator finished pieces (' + maxWhole + ' pcs).');
             if (document.activeElement && document.activeElement.classList.contains('cut-cell-good')) {
                 const excess = grandGood - maxWhole;
                 document.activeElement.value = Math.max(0, (parseInt(document.activeElement.value) || 0) - excess);
@@ -4551,8 +4551,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (grpMinRate) grpMinRate.classList.add('d-none');
             if (grpRate) grpRate.className = 'col-12';
             if (unitRate) unitRate.textContent = '/day';
-            if (lblRateType) lblRateType.textContent = 'یومیہ اجرت (Daily Wage)';
-            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-calendar-check me-1"></i>Daily Wage Scheme (یومیہ اجرت فی دن)';
+            if (lblRateType) lblRateType.textContent = 'Daily Wage';
+            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-calendar-check me-1"></i>Daily Wage Scheme (Daily wage per Day)';
 
             if (!fromDirectRate && rateInput) {
                 rateInput.value = (wInfo.dailyRate > 0 ? wInfo.dailyRate : 300.00).toFixed(2);
@@ -4560,15 +4560,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const currentRate = parseFloat(rateInput ? rateInput.value : 0) || (wInfo.dailyRate > 0 ? wInfo.dailyRate : 300.00);
 
             if (rateBreakdownContainer) {
-                rateBreakdownContainer.innerHTML = `<span class="badge bg-info-subtle text-info-emphasis px-2 py-1"><i class="bi bi-calendar-check me-1"></i>یومیہ اجرت: Rs. ${currentRate.toFixed(2)} / دن (Daily Wage) — آپ ریل ٹائم میں تبدیل کر سکتے ہیں</span>`;
+                rateBreakdownContainer.innerHTML = `<span class="badge bg-info-subtle text-info-emphasis px-2 py-1"><i class="bi bi-calendar-check me-1"></i>Daily Wage: Rs. ${currentRate.toFixed(2)} / Day — Editable in real time</span>`;
             }
         } else if (wInfo.isPiece) {
             if (grpMin) grpMin.classList.add('d-none');
             if (grpMinRate) grpMinRate.classList.add('d-none');
             if (grpRate) grpRate.className = 'col-12';
             if (unitRate) unitRate.textContent = '/pc';
-            if (lblRateType) lblRateType.textContent = 'پیس ریٹ (Piece Rate)';
-            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-tag-fill me-1"></i>Piece Rate Scheme (طے شدہ پیس ریٹ)';
+            if (lblRateType) lblRateType.textContent = 'Piece Rate';
+            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-tag-fill me-1"></i>Piece Rate Scheme (Agreed piece rate)';
 
             if (!fromDirectRate && rateInput) {
                 rateInput.value = (wInfo.pieceRate > 0 ? wInfo.pieceRate : (wInfo.rate > 0 ? wInfo.rate : 5.00)).toFixed(2);
@@ -4576,22 +4576,22 @@ document.addEventListener('DOMContentLoaded', function() {
             const currentRate = parseFloat(rateInput ? rateInput.value : 0) || (wInfo.pieceRate > 0 ? wInfo.pieceRate : 5.00);
 
             if (rateBreakdownContainer) {
-                rateBreakdownContainer.innerHTML = `<span class="badge bg-primary px-2 py-1"><i class="bi bi-tag-fill me-1"></i>طے شدہ پیس ریٹ: Rs. ${currentRate.toFixed(2)} / پیس (Piece Rate) — آپ ریل ٹائم میں تبدیل کر سکتے ہیں</span>`;
+                rateBreakdownContainer.innerHTML = `<span class="badge bg-primary px-2 py-1"><i class="bi bi-tag-fill me-1"></i>Standard piece rate: Rs. ${currentRate.toFixed(2)} / pc — Editable in real time</span>`;
             }
         } else if (wInfo.isMonthly) {
             if (grpMin) grpMin.classList.add('d-none');
             if (grpMinRate) grpMinRate.classList.add('d-none');
             if (grpRate) grpRate.className = 'col-12';
             if (unitRate) unitRate.textContent = '/mo';
-            if (lblRateType) lblRateType.textContent = 'ماہانہ تنخواہ (Fixed Salary)';
-            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-briefcase me-1"></i>Monthly Salary (ماہانہ تنخواہ)';
+            if (lblRateType) lblRateType.textContent = 'Monthly Salary';
+            if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-briefcase me-1"></i>Monthly Salary';
 
             if (!fromDirectRate && rateInput) {
                 rateInput.value = (wInfo.pieceRate > 0 ? wInfo.pieceRate : 0.00).toFixed(2);
             }
             const currentRate = parseFloat(rateInput ? rateInput.value : 0);
             if (rateBreakdownContainer) {
-                rateBreakdownContainer.innerHTML = `<span class="badge bg-secondary-subtle text-secondary px-2 py-1"><i class="bi bi-briefcase me-1"></i>ماہانہ تنخواہ: Rs. ${currentRate.toFixed(2)} / ماہ (Monthly Fixed Salary)</span>`;
+                rateBreakdownContainer.innerHTML = `<span class="badge bg-secondary-subtle text-secondary px-2 py-1"><i class="bi bi-briefcase me-1"></i>Monthly Salary: Rs. ${currentRate.toFixed(2)} / Month</span>`;
             }
         } else {
             // Minute Rate
@@ -4599,7 +4599,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (grpMinRate) grpMinRate.classList.remove('d-none');
             if (grpRate) grpRate.className = 'col-4';
             if (unitRate) unitRate.textContent = '/pc';
-            if (lblRateType) lblRateType.textContent = 'پیس ریٹ (Piece Rate)';
+            if (lblRateType) lblRateType.textContent = 'Piece Rate';
             if (lblFormula) lblFormula.innerHTML = '<i class="bi bi-calculator me-1"></i>Minutes × Rate/min = Piece Rate';
 
             if (!fromDirectRate && rateInput) {
@@ -4610,9 +4610,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const currentRate = parseFloat(rateInput ? rateInput.value : 0) || (mins * minRate);
             if (rateBreakdownContainer) {
                 if (mins > 0) {
-                    rateBreakdownContainer.innerHTML = `<span class="fw-bold text-primary">${mins.toFixed(1)}</span> منٹ فی پیس &times; <span class="fw-bold text-success">Rs. ${minRate.toFixed(2)}</span> فی منٹ = <strong class="text-dark fs-6">Rs. ${currentRate.toFixed(2)}</strong> فی پیس (Minute Rate)`;
+                    rateBreakdownContainer.innerHTML = `<span class="fw-bold text-primary">${mins.toFixed(1)}</span> mins / pc &times; <span class="fw-bold text-success">Rs. ${minRate.toFixed(2)}</span> / min = <strong class="text-dark fs-6">Rs. ${currentRate.toFixed(2)}</strong> / pc`;
                 } else {
-                    rateBreakdownContainer.innerHTML = `<span class="badge bg-primary px-2 py-1"><i class="bi bi-tag-fill me-1"></i>طے شدہ ریٹ: Rs. ${currentRate.toFixed(2)} / پیس</span>`;
+                    rateBreakdownContainer.innerHTML = `<span class="badge bg-primary px-2 py-1"><i class="bi bi-tag-fill me-1"></i>Standard rate: Rs. ${currentRate.toFixed(2)} / pc</span>`;
                 }
             }
         }
@@ -5015,20 +5015,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         const minRateTxt = parseFloat(w.rate_per_minute || 2.50).toFixed(2);
                         const pieceRate = parseFloat(w.default_rate || w.piece_rate || 0);
-                        const basisBadge = w.rate_basis === 'element_wise' ? ' [اعضاء]' : ' [سویٹر]';
+                        const basisBadge = w.rate_basis === 'element_wise' ? ' [Elements]' : ' [Sweater]';
                         const isMinuteRate = (w.worker_type === 'Minute Rate');
 
                         let rateLabel = '';
                         if (w.worker_type === 'Daily Wage') {
-                            rateLabel = ' — Rs. ' + pieceRate.toFixed(2) + '/day (Daily Wage)';
+                            rateLabel = ' — Rs. ' + pieceRate.toFixed(2) + '/day';
                         } else if (isMinuteRate) {
-                            rateLabel = ' — Rs. ' + minRateTxt + '/m (Minute Rate)';
+                            rateLabel = ' — Rs. ' + minRateTxt + '/m';
                         } else if (w.worker_type === 'Monthly Salary') {
-                            rateLabel = ' — Rs. ' + pieceRate.toFixed(2) + '/mo (Monthly Salary)';
+                            rateLabel = ' — Rs. ' + pieceRate.toFixed(2) + '/mo';
                         } else if (w.worker_type === 'Contractor' || w.worker_type === 'Contract') {
                             rateLabel = ' — Rs. ' + pieceRate.toFixed(2) + '/pc (Contractor)';
                         } else if (pieceRate > 0) {
-                            rateLabel = ' — Rs. ' + pieceRate.toFixed(2) + '/pc (Piece Rate)';
+                            rateLabel = ' — Rs. ' + pieceRate.toFixed(2) + '/pc';
                         } else if (parseFloat(w.effective_rate) > 0) {
                             rateLabel = ' — Rs. ' + parseFloat(w.effective_rate).toFixed(2) + '/pc';
                         } else {
@@ -5065,7 +5065,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     workerBadge.innerHTML = `<i class="bi bi-briefcase me-1"></i>Monthly Salary (Rs. ${wInfo.pieceRate.toFixed(2)}/mo)`;
                     workerBadge.className = 'badge bg-secondary-subtle text-secondary border small';
                 } else if (wInfo.isPiece) {
-                    const basisBadge = (wInfo.rateBasis === 'element_wise') ? ' [اعضاء]' : ' [سویٹر]';
+                    const basisBadge = (wInfo.rateBasis === 'element_wise') ? ' [Elements]' : ' [Sweater]';
                     workerBadge.innerHTML = `<i class="bi bi-tag-fill me-1"></i>Piece Rate ${basisBadge} (Rs. ${wInfo.pieceRate.toFixed(2)}/pc)`;
                     workerBadge.className = 'badge bg-primary-subtle text-primary border small';
                 } else {
@@ -5170,15 +5170,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     const bRew = document.getElementById('badgePrevRew');
                     const bUnmade = document.getElementById('badgePrevUnproduced');
                     if (bRej) {
-                        bRej.textContent = '🔴 ' + (data.prev_rejected || 0) + ' خراب';
+                        bRej.textContent = '🔴 ' + (data.prev_rejected || 0) + ' Rejected';
                         bRej.classList.toggle('d-none', (data.prev_rejected || 0) <= 0);
                     }
                     if (bRew) {
-                        bRew.textContent = '🟡 ' + (data.prev_rework || 0) + ' ری ورک';
+                        bRew.textContent = '🟡 ' + (data.prev_rework || 0) + ' Rework';
                         bRew.classList.toggle('d-none', (data.prev_rework || 0) <= 0);
                     }
                     if (bUnmade) {
-                        bUnmade.textContent = '⏳ ' + (data.prev_unproduced || 0) + ' بنے ہی نہیں';
+                        bUnmade.textContent = '⏳ ' + (data.prev_unproduced || 0) + ' Unmade';
                         bUnmade.classList.toggle('d-none', (data.prev_unproduced || 0) <= 0);
                     }
 
@@ -5329,7 +5329,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="d-flex align-items-center gap-2">
                     <i class="bi bi-check-circle-fill text-success fs-3"></i>
                     <div>
-                        <div class="fw-bold text-dark">Stage 100% Completed (مرحلہ مکمل ہو چکا ہے)</div>
+                        <div class="fw-bold text-dark">Stage 100% Completed</div>
                         <div class="small text-muted">All ${totals.allowable} available pieces for this stage have been produced. Further production entries are restricted.</div>
                     </div>
                 </div>
@@ -5351,7 +5351,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <i class="bi bi-hourglass-split text-warning fs-3"></i>
                     <div>
                         <div class="fw-bold text-dark">Waiting for Preceding Stage (${data.prev_operation_name})</div>
-                        <div class="small text-muted">پچھلے مرحلے (<strong>${data.prev_operation_name}</strong>) سے ابھی کوئی پیس تیار ہو کر موصول نہیں ہوا۔ پہلے پچھلا مرحلہ مکمل کریں۔</div>
+                        <div class="small text-muted">No pieces have been produced from previous stage (<strong>${data.prev_operation_name}</strong>) yet. Please complete previous stage first.</div>
                     </div>
                 </div>
                 <span class="badge bg-secondary fs-6 px-3 py-2">0 Available</span>
@@ -5377,16 +5377,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div>
                         <div class="fw-bold text-dark">Preceding Stage Reconciliation: ${data.prev_operation_name} (${totals.allowable} Pcs Available)</div>
                         <div class="small text-muted mb-2">
-                            سابقہ مرحلہ (<strong>${data.prev_operation_name}</strong>) سے ${totals.allowable} پیس موصول ہوئے۔ پچھلے خراب یا زیرِ اصلاح پیسز اگلے مرحلے میں شامل نہیں ہو سکتے۔
+                            Received ${totals.allowable} pcs from previous stage (<strong>${data.prev_operation_name}</strong>). Previously rejected or rework pieces cannot proceed to next stage.
                         </div>
                         <div class="d-flex flex-wrap gap-2 small">
-                            <span class="badge bg-white text-dark border">🎯 کل ہدف: <strong>${totals.planned} pcs</strong></span>
-                            <span class="badge bg-primary text-white">✂️ موصولہ تیار: <strong>${totals.allowable} pcs</strong></span>
-                            ${prevRej > 0 ? `<span class="badge bg-danger text-white">🔴 خراب: <strong>${prevRej} pcs</strong></span>` : ''}
-                            ${prevRew > 0 ? `<span class="badge bg-warning text-dark">🟡 ری ورک: <strong>${prevRew} pcs</strong></span>` : ''}
-                            ${prevUnmade > 0 ? `<span class="badge bg-secondary text-white">⏳ بنے ہی نہیں: <strong>${prevUnmade} pcs</strong></span>` : ''}
-                            <span class="badge bg-success text-white">✅ اس مرحلے میں مکمل: <strong>${totals.good_done} pcs</strong></span>
-                            <span class="badge bg-warning-subtle text-warning-emphasis border">⚡ بقایا کام: <strong>${totals.pending} pcs</strong></span>
+                            <span class="badge bg-white text-dark border">🎯 Total Target: <strong>${totals.planned} pcs</strong></span>
+                            <span class="badge bg-primary text-white">✂️ Received Good: <strong>${totals.allowable} pcs</strong></span>
+                            ${prevRej > 0 ? `<span class="badge bg-danger text-white">🔴 Rejected: <strong>${prevRej} pcs</strong></span>` : ''}
+                            ${prevRew > 0 ? `<span class="badge bg-warning text-dark">🟡 Rework: <strong>${prevRew} pcs</strong></span>` : ''}
+                            ${prevUnmade > 0 ? `<span class="badge bg-secondary text-white">⏳ Unmade: <strong>${prevUnmade} pcs</strong></span>` : ''}
+                            <span class="badge bg-success text-white">✅ Completed in this stage: <strong>${totals.good_done} pcs</strong></span>
+                            <span class="badge bg-warning-subtle text-warning-emphasis border">⚡ Pending Balance: <strong>${totals.pending} pcs</strong></span>
                         </div>
                     </div>
                 </div>
@@ -5501,9 +5501,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <span class="badge bg-light text-secondary border">Pending: <strong>${cell.pending}</strong>/${effectiveAllowable}</span>
                                 ${(cell.prev_rejected > 0 || cell.prev_rework > 0 || cell.prev_unproduced > 0) ? `
                                     <div class="d-flex flex-wrap gap-1 mt-1 justify-content-center" style="font-size: 9px;">
-                                        ${cell.prev_rejected > 0 ? `<span class="badge bg-danger text-white px-1" title="پچھلے مرحلے میں خراب پیسز">🔴 ${cell.prev_rejected} Rej</span>` : ''}
-                                        ${cell.prev_rework > 0 ? `<span class="badge bg-warning text-dark px-1" title="ری ورک میں موجود">🟡 ${cell.prev_rework} Rew</span>` : ''}
-                                        ${cell.prev_unproduced > 0 ? `<span class="badge bg-secondary text-white px-1" title="پچھلے مرحلے میں بنے ہی نہیں">⏳ ${cell.prev_unproduced} Unmade</span>` : ''}
+                                        ${cell.prev_rejected > 0 ? `<span class="badge bg-danger text-white px-1" title="Rejected pieces in previous stage">🔴 ${cell.prev_rejected} Rej</span>` : ''}
+                                        ${cell.prev_rework > 0 ? `<span class="badge bg-warning text-dark px-1" title="In rework">🟡 ${cell.prev_rework} Rew</span>` : ''}
+                                        ${cell.prev_unproduced > 0 ? `<span class="badge bg-secondary text-white px-1" title="Unmade in previous stage">⏳ ${cell.prev_unproduced} Unmade</span>` : ''}
                                     </div>
                                 ` : ''}
                             </div>
@@ -5883,21 +5883,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 const curMR = parseFloat(opSingleMinRate ? opSingleMinRate.value : wInfo.minRate) || 0;
                 if (wInfo.isDaily) {
                     opSingleRateBadge.className = 'badge bg-info-subtle text-info-emphasis border';
-                    opSingleRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/day (Daily Wage — یومیہ اجرت)`;
+                    opSingleRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/day (Daily Wage)`;
                 } else if (wInfo.isPiece) {
                     opSingleRateBadge.className = 'badge bg-primary-subtle text-primary border';
-                    opSingleRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/pc (Piece Rate — پر پیس ریٹ)`;
+                    opSingleRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/pc (Piece Rate)`;
                 } else {
                     opSingleRateBadge.className = 'badge bg-success-subtle text-success border';
-                    opSingleRateBadge.textContent = curM > 0 ? `Rate: Rs. ${curR.toFixed(2)}/pc (${curM}m × Rs. ${curMR.toFixed(2)}/m — منٹ ریٹ)` : `Rate: Rs. ${curR.toFixed(2)}/pc (Direct Rate)`;
+                    opSingleRateBadge.textContent = curM > 0 ? `Rate: Rs. ${curR.toFixed(2)}/pc (${curM}m × Rs. ${curMR.toFixed(2)}/m — SAM Rate)` : `Rate: Rs. ${curR.toFixed(2)}/pc (Direct Rate)`;
                 }
             }
 
             if (document.getElementById('lblSingleMinRateBadge')) {
                 if (wInfo.isDaily) {
-                    document.getElementById('lblSingleMinRateBadge').textContent = `Rs. ${pieceRate.toFixed(2)}/day (Daily Wage)`;
+                    document.getElementById('lblSingleMinRateBadge').textContent = `Rs. ${pieceRate.toFixed(2)}/day`;
                 } else if (wInfo.isPiece) {
-                    document.getElementById('lblSingleMinRateBadge').textContent = `Rs. ${pieceRate.toFixed(2)}/pc (Piece Rate)`;
+                    document.getElementById('lblSingleMinRateBadge').textContent = `Rs. ${pieceRate.toFixed(2)}/pc`;
                 } else {
                     document.getElementById('lblSingleMinRateBadge').textContent = `Rs. ${wInfo.minRate.toFixed(2)}/m`;
                 }
@@ -5946,18 +5946,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (document.getElementById('lblDoubleDayMinRateBadge')) {
                 if (dayInfo.isDaily) {
-                    document.getElementById('lblDoubleDayMinRateBadge').textContent = `Rs. ${dayPieceRate.toFixed(2)}/day (Daily Wage)`;
+                    document.getElementById('lblDoubleDayMinRateBadge').textContent = `Rs. ${dayPieceRate.toFixed(2)}/day`;
                 } else if (dayInfo.isPiece) {
-                    document.getElementById('lblDoubleDayMinRateBadge').textContent = `Rs. ${dayPieceRate.toFixed(2)}/pc (Piece Rate)`;
+                    document.getElementById('lblDoubleDayMinRateBadge').textContent = `Rs. ${dayPieceRate.toFixed(2)}/pc`;
                 } else {
                     document.getElementById('lblDoubleDayMinRateBadge').textContent = `Rs. ${dayInfo.minRate.toFixed(2)}/m`;
                 }
             }
             if (document.getElementById('lblDoubleNightMinRateBadge')) {
                 if (nightInfo.isDaily) {
-                    document.getElementById('lblDoubleNightMinRateBadge').textContent = `Rs. ${nightPieceRate.toFixed(2)}/day (Daily Wage)`;
+                    document.getElementById('lblDoubleNightMinRateBadge').textContent = `Rs. ${nightPieceRate.toFixed(2)}/day`;
                 } else if (nightInfo.isPiece) {
-                    document.getElementById('lblDoubleNightMinRateBadge').textContent = `Rs. ${nightPieceRate.toFixed(2)}/pc (Piece Rate)`;
+                    document.getElementById('lblDoubleNightMinRateBadge').textContent = `Rs. ${nightPieceRate.toFixed(2)}/pc`;
                 } else {
                     document.getElementById('lblDoubleNightMinRateBadge').textContent = `Rs. ${nightInfo.minRate.toFixed(2)}/m`;
                 }
@@ -5976,9 +5976,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const curM = parseFloat(opDoubleDayMinutes ? opDoubleDayMinutes.value : finalMins) || 0;
                 const curMR = parseFloat(opDoubleDayMinRate ? opDoubleDayMinRate.value : dayInfo.minRate) || 0;
                 if (dayInfo.isDaily) {
-                    opDoubleDayRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/day (Daily Wage)`;
+                    opDoubleDayRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/day`;
                 } else if (dayInfo.isPiece) {
-                    opDoubleDayRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/pc (Piece Rate)`;
+                    opDoubleDayRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/pc`;
                 } else {
                     opDoubleDayRateBadge.textContent = curM > 0 ? `Rate: Rs. ${curR.toFixed(2)}/pc (${curM}m @ ${curMR.toFixed(2)}/m)` : `Rs. ${curR.toFixed(2)}/pc`;
                 }
@@ -5988,9 +5988,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const curM = parseFloat(opDoubleNightMinutes ? opDoubleNightMinutes.value : finalMins) || 0;
                 const curMR = parseFloat(opDoubleNightMinRate ? opDoubleNightMinRate.value : nightInfo.minRate) || 0;
                 if (nightInfo.isDaily) {
-                    opDoubleNightRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/day (Daily Wage)`;
+                    opDoubleNightRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/day`;
                 } else if (nightInfo.isPiece) {
-                    opDoubleNightRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/pc (Piece Rate)`;
+                    opDoubleNightRateBadge.textContent = `Rate: Rs. ${curR.toFixed(2)}/pc`;
                 } else {
                     opDoubleNightRateBadge.textContent = curM > 0 ? `Rate: Rs. ${curR.toFixed(2)}/pc (${curM}m @ ${curMR.toFixed(2)}/m)` : `Rs. ${curR.toFixed(2)}/pc`;
                 }
@@ -6254,7 +6254,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (thDay) thDay.innerHTML = '<i class="bi bi-sun-fill text-warning me-1"></i> ☀️ Day Operator Pieces';
             } else {
                 thNight.classList.add('d-none');
-                if (thDay) thDay.innerHTML = '<i class="bi bi-person-badge me-1"></i> ☀️ Pieces Produced (تیار شدہ پیسز)';
+                if (thDay) thDay.innerHTML = '<i class="bi bi-person-badge me-1"></i> ☀️ Pieces Produced';
             }
         }
 
@@ -6363,7 +6363,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 if (!dayW && !nightW) {
                     e.preventDefault();
-                    alert('Please select at least one Operator (Day or Night). کم از کم ایک آپریٹر منتخب کریں۔');
+                    alert('Please select at least one Operator (Day or Night).');
                     if (opDoubleDayWorker) opDoubleDayWorker.focus();
                     return;
                 }
@@ -6381,7 +6381,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 if (!dayHasPcs && !nightHasPcs) {
                     e.preventDefault();
-                    alert('Please enter produced pieces for at least one element or shift. کم از کم ایک حصے کے پیسز درج کریں۔');
+                    alert('Please enter produced pieces for at least one element or shift.');
                     return;
                 }
             } else {
@@ -6414,7 +6414,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const maxWhole = getMaxWholeReadyToCut();
             if (maxWhole > 0 && whole > maxWhole) {
                 e.preventDefault();
-                alert('کل کٹنگ تعداد (' + whole + ' pcs) آپریٹر کے تیار کردہ پیسز (' + maxWhole + ' pcs) سے زیادہ درج نہیں ہو سکتی۔');
+                alert('Total Cut quantity (' + whole + ' pcs) cannot exceed Operator finished pieces (' + maxWhole + ' pcs).');
                 if (cutWholePcs) cutWholePcs.focus();
                 return;
             }
@@ -6430,7 +6430,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             if (elExceeded) {
                 e.preventDefault();
-                alert('کچھ اعضاء کی کٹنگ تعداد آپریٹر کے تیار کردہ پیسز سے زیادہ ہے۔ برائے مہربانی درست کریں۔');
+                alert('Some element cutting quantities exceed Operator finished pieces. Please correct.');
                 return;
             }
             return;

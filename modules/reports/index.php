@@ -37,22 +37,22 @@ $lowStockMaterials = (int)$db->query("SELECT COUNT(*) FROM materials WHERE curre
 // Report definitions
 $reportTitles = [
     // Financial
-    'batch_costing' => 'Lot Costing & Profitability Register (لاٹ پروڈکشن لاگت اور منافع رپورٹ)',
-    'cash_flow' => 'Cash & Bank Liquidity Flow Statement (کیش بک اور بینک فنڈز فلو سٹیٹمنٹ)',
-    'customer_receivables' => 'Customer Receivables & Outstanding Aging (کسٹمر واجبات و بقایا جات رپورٹ)',
-    'supplier_payables' => 'Supplier Purchases & Payables Register (سپلائر خریداری اور ادائیگیاں)',
-    'expense_breakdown' => 'Factory Overheads & Operational Expenses (فیکٹری متفرق اخراجات کی تفصیل)',
-    'worker_performance' => 'Artisan Labour Earnings & Net Payables (ورکرز اجرت اور ادائیگی بیلنس)',
+    'batch_costing' => 'Lot Costing & Profitability Register',
+    'cash_flow' => 'Cash & Bank Liquidity Flow Statement',
+    'customer_receivables' => 'Customer Receivables & Outstanding Aging',
+    'supplier_payables' => 'Supplier Purchases & Payables Register',
+    'expense_breakdown' => 'Factory Overheads & Operational Expenses',
+    'worker_performance' => 'Artisan Labour Earnings & Net Payables',
     
     // Operational
-    'lot_register' => 'Complete Production Lot Master Register (مکمل لاٹ پروڈکشن رجسٹر)',
-    'operator_output' => 'Flat Machine Knitting Operator Output (مشین نٹنگ آپریٹرز کارکردگی رپورٹ)',
-    'cutting_report' => 'Cutting Department Output & Component Analysis (کٹنگ ڈیپارٹمنٹ رپورٹ)',
-    'quality_rejections' => 'Quality Control & Defect Rejection Analysis (کوالٹی کنٹرول اور ریجیکشنز)',
-    'material_stock' => 'Raw Material Stock & Reorder Levels (خام مال اسٹاک اور ری آرڈر وارننگ)',
-    'finished_goods' => 'Finished Goods Warehouse Stock by Variant (تیار مال گودام اسٹاک رپورٹ)',
-    'dispatch_report' => 'Customer Dispatches & Delivery Register (کسٹمر ڈسپیچ و ڈیلیوری رجسٹر)',
-    'pending_work' => 'Factory Bottlenecks & Pending Operations (زیر التواء کام اور ورک فلو رکاوٹیں)'
+    'lot_register' => 'Complete Production Lot Master Register',
+    'operator_output' => 'Flat Machine Knitting Operator Output',
+    'cutting_report' => 'Cutting Department Output & Component Analysis',
+    'quality_rejections' => 'Quality Control & Defect Rejection Analysis',
+    'material_stock' => 'Raw Material Stock & Reorder Levels',
+    'finished_goods' => 'Finished Goods Warehouse Stock by Variant',
+    'dispatch_report' => 'Customer Dispatches & Delivery Register',
+    'pending_work' => 'Factory Bottlenecks & Pending Operations'
 ];
 
 $isFinancial = in_array($reportType, ['batch_costing', 'cash_flow', 'customer_receivables', 'supplier_payables', 'expense_breakdown', 'worker_performance']);
@@ -76,7 +76,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             <div class="d-flex align-items-center gap-2">
                 <button onclick="window.print()" class="btn btn-outline-dark btn-sm d-flex align-items-center gap-1 shadow-xs">
                     <i class="bi bi-printer-fill"></i>
-                    <span>Print Report (پرنٹ)</span>
+                    <span>Print Report</span>
                 </button>
                 <a href="<?= BASE_URL ?>modules/reports/export_csv.php?type=<?= urlencode($reportType) ?>&date_from=<?= urlencode($dateFrom) ?>&date_to=<?= urlencode($dateTo) ?>&worker_id=<?= $filterWorker ?>&lot_id=<?= $filterLot ?>" class="btn btn-success btn-sm d-flex align-items-center gap-1 shadow-xs fw-semibold">
                     <i class="bi bi-file-earmark-excel-fill"></i>
@@ -153,41 +153,41 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             <div class="card-modern-body py-3">
                 <form method="GET" action="" class="row g-2 align-items-center">
                     <div class="col-12 col-md-4">
-                        <label class="form-label small fw-bold mb-1">Select Report (رپورٹ منتخب کریں)</label>
+                        <label class="form-label small fw-bold mb-1">Select Report</label>
                         <select name="type" class="form-select form-select-sm fw-semibold" onchange="this.form.submit()">
-                            <optgroup label="📊 Financial Reports (مالیاتی رپورٹس)">
-                                <option value="batch_costing" <?= $reportType === 'batch_costing' ? 'selected' : '' ?>>Lot Costing & Profitability (لاٹ لاگت و منافع)</option>
-                                <option value="cash_flow" <?= $reportType === 'cash_flow' ? 'selected' : '' ?>>Cash & Bank Flow Statement (کیش و بینک سٹیٹمنٹ)</option>
-                                <option value="customer_receivables" <?= $reportType === 'customer_receivables' ? 'selected' : '' ?>>Customer Receivables (کسٹمر واجبات و بقایا جات)</option>
-                                <option value="supplier_payables" <?= $reportType === 'supplier_payables' ? 'selected' : '' ?>>Supplier Payables (سپلائر واجب الادا رقم)</option>
-                                <option value="expense_breakdown" <?= $reportType === 'expense_breakdown' ? 'selected' : '' ?>>Factory Expenses Breakdown (فیکٹری متفرق اخراجات)</option>
-                                <option value="worker_performance" <?= $reportType === 'worker_performance' ? 'selected' : '' ?>>Worker Labour & Payments (ورکرز اجرت و ادائیگیاں)</option>
+                            <optgroup label="📊 Financial Reports">
+                                <option value="batch_costing" <?= $reportType === 'batch_costing' ? 'selected' : '' ?>>Lot Costing & Profitability</option>
+                                <option value="cash_flow" <?= $reportType === 'cash_flow' ? 'selected' : '' ?>>Cash & Bank Flow Statement</option>
+                                <option value="customer_receivables" <?= $reportType === 'customer_receivables' ? 'selected' : '' ?>>Customer Receivables</option>
+                                <option value="supplier_payables" <?= $reportType === 'supplier_payables' ? 'selected' : '' ?>>Supplier Payables</option>
+                                <option value="expense_breakdown" <?= $reportType === 'expense_breakdown' ? 'selected' : '' ?>>Factory Expenses Breakdown</option>
+                                <option value="worker_performance" <?= $reportType === 'worker_performance' ? 'selected' : '' ?>>Worker Labour & Payments</option>
                             </optgroup>
-                            <optgroup label="⚙️ Production & Operational Reports (پروڈکشن و آپریشنل رپورٹس)">
-                                <option value="lot_register" <?= $reportType === 'lot_register' ? 'selected' : '' ?>>Complete Lot Register (مکمل لاٹ ماسٹر رجسٹر)</option>
-                                <option value="operator_output" <?= $reportType === 'operator_output' ? 'selected' : '' ?>>Knitting Operator Output (مشین نٹنگ آپریٹرز کارکردگی)</option>
-                                <option value="cutting_report" <?= $reportType === 'cutting_report' ? 'selected' : '' ?>>Cutting Operations Report (کٹنگ ڈیپارٹمنٹ رپورٹ)</option>
-                                <option value="quality_rejections" <?= $reportType === 'quality_rejections' ? 'selected' : '' ?>>Quality & Rejections Analysis (کوالٹی کنٹرول و ریجیکشنز)</option>
-                                <option value="material_stock" <?= $reportType === 'material_stock' ? 'selected' : '' ?>>Raw Material Stock & Reorder (خام مال اسٹاک و ری آرڈر)</option>
-                                <option value="finished_goods" <?= $reportType === 'finished_goods' ? 'selected' : '' ?>>Finished Goods Inventory (تیار مال گودام اسٹاک)</option>
-                                <option value="dispatch_report" <?= $reportType === 'dispatch_report' ? 'selected' : '' ?>>Customer Dispatches (کسٹمر ڈسپیچ و ڈیلیوری)</option>
-                                <option value="pending_work" <?= $reportType === 'pending_work' ? 'selected' : '' ?>>Pending Work & Bottlenecks (زیر التواء کام اور رکاوٹیں)</option>
+                            <optgroup label="⚙️ Production & Operational Reports">
+                                <option value="lot_register" <?= $reportType === 'lot_register' ? 'selected' : '' ?>>Complete Lot Register</option>
+                                <option value="operator_output" <?= $reportType === 'operator_output' ? 'selected' : '' ?>>Knitting Operator Output</option>
+                                <option value="cutting_report" <?= $reportType === 'cutting_report' ? 'selected' : '' ?>>Cutting Operations Report</option>
+                                <option value="quality_rejections" <?= $reportType === 'quality_rejections' ? 'selected' : '' ?>>Quality & Rejections Analysis</option>
+                                <option value="material_stock" <?= $reportType === 'material_stock' ? 'selected' : '' ?>>Raw Material Stock & Reorder</option>
+                                <option value="finished_goods" <?= $reportType === 'finished_goods' ? 'selected' : '' ?>>Finished Goods Inventory</option>
+                                <option value="dispatch_report" <?= $reportType === 'dispatch_report' ? 'selected' : '' ?>>Customer Dispatches</option>
+                                <option value="pending_work" <?= $reportType === 'pending_work' ? 'selected' : '' ?>>Pending Work & Bottlenecks</option>
                             </optgroup>
                         </select>
                     </div>
 
                     <div class="col-6 col-md-2">
-                        <label class="form-label small fw-bold mb-1">From Date (شروع تاریخ)</label>
+                        <label class="form-label small fw-bold mb-1">From Date</label>
                         <input type="date" name="date_from" class="form-control form-control-sm" value="<?= clean($dateFrom) ?>">
                     </div>
 
                     <div class="col-6 col-md-2">
-                        <label class="form-label small fw-bold mb-1">To Date (آخری تاریخ)</label>
+                        <label class="form-label small fw-bold mb-1">To Date</label>
                         <input type="date" name="date_to" class="form-control form-control-sm" value="<?= clean($dateTo) ?>">
                     </div>
 
                     <div class="col-12 col-md-2">
-                        <label class="form-label small fw-bold mb-1">Filter by Lot (لاٹ)</label>
+                        <label class="form-label small fw-bold mb-1">Filter by Lot</label>
                         <select name="lot_id" class="form-select form-select-sm">
                             <option value="">-- All Lots --</option>
                             <?php foreach ($lots as $l): ?>
@@ -197,7 +197,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     </div>
 
                     <div class="col-8 col-md-2">
-                        <label class="form-label small fw-bold mb-1">Worker (ورکر)</label>
+                        <label class="form-label small fw-bold mb-1">Worker</label>
                         <select name="worker_id" class="form-select form-select-sm">
                             <option value="">-- All Workers --</option>
                             <?php foreach ($workers as $w): ?>
@@ -435,7 +435,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <th class="text-end">Opening Balance</th>
                                     <th class="text-end">Total Billed</th>
                                     <th class="text-end">Total Received</th>
-                                    <th class="text-end">Net Receivable (باقی رقم)</th>
+                                    <th class="text-end">Net Receivable</th>
                                     <th class="text-center">Status</th>
                                 </tr>
                             </thead>
@@ -507,7 +507,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <th class="text-end">Opening Balance</th>
                                     <th class="text-end">Total Purchased</th>
                                     <th class="text-end">Total Paid</th>
-                                    <th class="text-end">Balance Payable (واجب الادا)</th>
+                                    <th class="text-end">Balance Payable</th>
                                     <th class="text-center">Action</th>
                                 </tr>
                             </thead>
@@ -681,7 +681,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <td class="text-end fw-semibold text-secondary"><?= format_currency($paid) ?></td>
                                         <td class="text-end fw-bold <?= $net > 0 ? 'text-danger fs-6' : 'text-success' ?>">
                                             <?= format_currency(abs($net)) ?>
-                                            <span class="small d-block fw-normal" style="font-size: 10px;"><?= $net > 0 ? 'Payable (واجب الادا)' : 'Advance (ایڈوانس)' ?></span>
+                                            <span class="small d-block fw-normal" style="font-size: 10px;"><?= $net > 0 ? 'Payable' : 'Advance' ?></span>
                                         </td>
                                         <td class="text-center">
                                             <a href="<?= BASE_URL ?>modules/workers/statement.php?worker_id=<?= $r['id'] ?>" class="btn btn-sm btn-outline-dark py-0 px-2 small">
@@ -979,7 +979,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <td class="text-end fw-bold text-dark"><?= format_currency($r['stock_value']) ?></td>
                                         <td class="text-center">
                                             <?php if ($isLow): ?>
-                                                <span class="badge bg-danger text-white"><i class="bi bi-exclamation-triangle-fill me-1"></i> Low Stock (کمی ہے)</span>
+                                                <span class="badge bg-danger text-white"><i class="bi bi-exclamation-triangle-fill me-1"></i> Low Stock</span>
                                             <?php else: ?>
                                                 <span class="badge bg-success-subtle text-success border border-success-subtle">Healthy</span>
                                             <?php endif; ?>

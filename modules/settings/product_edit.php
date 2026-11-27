@@ -213,7 +213,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <div class="card-modern-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                     <div>
                         <h6 class="fw-bold mb-0 text-dark">
-                            <i class="bi bi-puzzle-fill text-warning me-2"></i>Garment Structural Elements (کٹنگ اور سلائی کے اجزاء)
+                            <i class="bi bi-puzzle-fill text-warning me-2"></i>Garment Structural Elements
                         </h6>
                         <span class="text-muted small">Specify garment pieces per unit (e.g. 1 Front, 1 Back, 2 Sleeves, 2 Pockets, 1 Collar) for cutting masters and tailors</span>
                     </div>
@@ -224,7 +224,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <button type="button" class="btn btn-sm btn-outline-primary" id="btnPresetJacket" title="Standard Jacket with sleeves & pockets">
                             🧥 Jacket
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-warning" id="btnPresetVest" title="Sleeveless Vest / کوٹی">
+                        <button type="button" class="btn btn-sm btn-outline-warning" id="btnPresetVest" title="Sleeveless Vest">
                             🦺 Sleeveless Vest
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-info" id="btnPresetSweater" title="Full-sleeve Knit Sweater">
@@ -246,32 +246,32 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <span class="small text-muted">Click any chip to add immediately</span>
                         </div>
                         <div class="d-flex flex-wrap gap-2" id="quickChipsContainer">
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Front Panel (سامنے کا پلہ)" data-qty="1" data-ppp="1" data-ppg="1" data-sam="3.5" data-rpp="20" data-notes="1 panel = 1 front body">
-                                + Front / سامنے کا پلہ (1 پلہ)
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Front Panel" data-qty="1" data-ppp="1" data-ppg="1" data-sam="3.5" data-rpp="20" data-notes="1 panel = 1 front body">
+                                + Front Panel (1 Palla)
                             </button>
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Back Panel (پچھلا پلہ)" data-qty="1" data-ppp="1" data-ppg="1" data-sam="3.5" data-rpp="20" data-notes="1 panel = 1 back body">
-                                + Back / پچھلا پلہ (1 پلہ)
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Back Panel" data-qty="1" data-ppp="1" data-ppg="1" data-sam="3.5" data-rpp="20" data-notes="1 panel = 1 back body">
+                                + Back Panel (1 Palla)
                             </button>
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Bazo / Sleeves (بازو)" data-qty="2" data-ppp="2" data-ppg="1" data-sam="4.0" data-rpp="20" data-notes="1 panel yields 2 sleeves">
-                                + Bazo / بازو (1 پلے سے 2 بازو · 1 پلہ)
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Bazo / Sleeves" data-qty="2" data-ppp="2" data-ppg="1" data-sam="4.0" data-rpp="20" data-notes="1 panel yields 2 sleeves">
+                                + Sleeves (2 pcs · 1 Palla)
                             </button>
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Bazo (3 per Palla) (بازو 3)" data-qty="2" data-ppp="3" data-ppg="0.67" data-sam="4.0" data-rpp="20" data-notes="1 panel yields 3 sleeves">
-                                + Bazo / بازو (1 پلے سے 3 بازو · 0.67 پلہ)
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Sleeves (3 per Palla)" data-qty="2" data-ppp="3" data-ppg="0.67" data-sam="4.0" data-rpp="20" data-notes="1 panel yields 3 sleeves">
+                                + Sleeves (3 pcs · 0.67 Palla)
                             </button>
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Pockets / پاکٹ" data-qty="2" data-ppp="4" data-ppg="0.5" data-sam="0.5" data-rpp="20" data-notes="1 panel yields 4 pockets (0.5 پلہ)">
-                                + Pockets / پاکٹ (1 پلے سے 4 پاکٹ · 0.5 پلہ)
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Pockets" data-qty="2" data-ppp="4" data-ppg="0.5" data-sam="0.5" data-rpp="20" data-notes="1 panel yields 4 pockets (0.5 Palla)">
+                                + Pockets (4 pcs/Palla · 0.5 Palla)
                             </button>
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Pocket (Single / ایک پاکٹ)" data-qty="1" data-ppp="2" data-ppg="0.5" data-sam="0.5" data-rpp="20" data-notes="1 panel yields 2 pockets (0.5 پلہ)">
-                                + Single Pocket (1 پلے سے 2 پاکٹ · 0.5 پلہ)
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Single Pocket" data-qty="1" data-ppp="2" data-ppg="0.5" data-sam="0.5" data-rpp="20" data-notes="1 panel yields 2 pockets (0.5 Palla)">
+                                + Single Pocket (2 pcs · 0.5 Palla)
                             </button>
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Gol Gala (گول گلا)" data-qty="1" data-ppp="1" data-ppg="1" data-sam="1.5" data-rpp="10" data-notes="Ribbed collar / stand neck">
-                                + Gol Gala / گول گلا (1 پلہ)
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Gol Gala" data-qty="1" data-ppp="1" data-ppg="1" data-sam="1.5" data-rpp="10" data-notes="Ribbed collar / stand neck">
+                                + Round Neck (1 Palla)
                             </button>
                             <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Bon" data-qty="2" data-ppp="2" data-ppg="1" data-sam="2.0" data-rpp="15" data-notes="Ribbed bon">
-                                + Bon (2 pcs · 1 پلہ)
+                                + Bon (2 pcs · 1 Palla)
                             </button>
-                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Moday Tape (موڈھے)" data-qty="2" data-ppp="2" data-ppg="1" data-sam="1.0" data-rpp="10" data-notes="Armhole tape">
-                                + Moday / موڈھے (2 pcs · 1 پلہ)
+                            <button type="button" class="btn btn-sm btn-white border shadow-xs quick-add-chip" data-name="Moday Tape" data-qty="2" data-ppp="2" data-ppg="1" data-sam="1.0" data-rpp="10" data-notes="Armhole tape">
+                                + Armhole Tape (2 pcs · 1 Palla)
                             </button>
                         </div>
                     </div>
@@ -283,11 +283,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <tr>
                                     <th style="width: 40px;" class="text-center">#</th>
                                     <th style="min-width: 180px;">Element / Component Name *</th>
-                                    <th style="width: 125px;" class="text-center" title="Number of cut pieces required per finished garment">Pcs / Garment *<br><span class="text-muted fw-normal" style="font-size: 0.72rem;">(پیس فی سوٹ)</span></th>
-                                    <th style="width: 135px;" class="text-center" title="How many cut pieces yielded from 1 knitted panel (ایک پلے سے کتنے پیس نکلتے ہیں)">Pcs / Palla *<br><span class="text-muted fw-normal" style="font-size: 0.72rem;">(1 پلے سے پیس)</span></th>
-                                    <th style="width: 130px;" class="text-center" title="Knitted panels required per garment = Pcs ÷ Yield (پلے فی گارمنٹ)">Pallas / Garment<br><span class="text-muted fw-normal" style="font-size: 0.72rem;">(پلے فی گارمنٹ)</span></th>
-                                    <th style="width: 140px;" class="text-center" title="Knitting operator rate per Palla (پلے کا ریٹ)">Rate / Palla (Rs.)<br><span class="text-muted fw-normal" style="font-size: 0.72rem;">(پلے کا ریٹ)</span></th>
-                                    <th style="width: 105px;" class="text-center">⏱️ Est. SAM<br><span class="text-muted fw-normal" style="font-size: 0.72rem;">(منٹ)</span></th>
+                                    <th style="width: 125px;" class="text-center" title="Number of cut pieces required per finished garment">Pcs / Garment *<br><span class="text-muted fw-normal" style="font-size: 0.72rem;">(Pcs / Garment)</span></th>
+                                    <th style="width: 135px;" class="text-center" title="How many cut pieces yielded from 1 knitted panel (Yield pieces per Palla)">Pcs / Palla *<br><span class="text-muted fw-normal" style="font-size: 0.72rem;">(Yield / Palla)</span></th>
+                                    <th style="width: 130px;" class="text-center" title="Knitted panels required per garment = Pcs ÷ Yield">Pallas / Garment<br><span class="text-muted fw-normal" style="font-size: 0.72rem;">(Pallas / Garment)</span></th>
+                                    <th style="width: 140px;" class="text-center" title="Knitting operator rate per Palla">Rate / Palla (Rs.)<br><span class="text-muted fw-normal" style="font-size: 0.72rem;">(Rate / Palla)</span></th>
+                                    <th style="width: 105px;" class="text-center">⏱️ Est. SAM<br><span class="text-muted fw-normal" style="font-size: 0.72rem;">(mins)</span></th>
                                     <th>Specifications & Notes</th>
                                     <th style="width: 60px;" class="text-center">Action</th>
                                 </tr>
@@ -323,7 +323,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             <td>
                                                 <div class="input-group input-group-sm">
                                                     <input type="number" step="any" min="0" name="pallas_per_garment[]" class="form-control text-center fw-bold text-primary bg-light el-ppg-input" value="<?= round($ppgVal, 3) ?>" placeholder="1.0" title="Pallas required per garment">
-                                                    <span class="input-group-text px-1 small text-primary fw-bold">پلہ</span>
+                                                    <span class="input-group-text px-1 small text-primary fw-bold">Palla</span>
                                                 </div>
                                             </td>
                                             <td>
@@ -384,7 +384,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             </div>
                             <div class="vr"></div>
                             <div class="text-muted small">
-                                Pallas/Garment (کل پلے): <strong id="lblTotalPallas" class="text-dark fw-bold fs-6">0.0 پلہ</strong>
+                                Pallas/Garment: <strong id="lblTotalPallas" class="text-dark fw-bold fs-6">0.0 Palla</strong>
                             </div>
                             <div class="vr"></div>
                             <div class="text-muted small">
@@ -484,7 +484,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <td>
                 <div class="input-group input-group-sm">
                     <input type="number" step="any" min="0" name="pallas_per_garment[]" class="form-control text-center fw-bold text-primary bg-light el-ppg-input" value="${ppg}" placeholder="1.0" title="Pallas required per garment">
-                    <span class="input-group-text px-1 small text-primary fw-bold">پلہ</span>
+                    <span class="input-group-text px-1 small text-primary fw-bold">Palla</span>
                 </div>
             </td>
             <td>
@@ -610,7 +610,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (lblElements) lblElements.textContent = count;
         if (lblPieces) lblPieces.textContent = (Math.round(totalQty * 100) / 100) + ' pcs';
-        if (lblPallas) lblPallas.textContent = (Math.round(totalPallas * 100) / 100) + ' پلہ';
+        if (lblPallas) lblPallas.textContent = (Math.round(totalPallas * 100) / 100) + ' Palla';
         if (lblPallaCost) lblPallaCost.textContent = 'Rs. ' + totalPallaCost.toFixed(2);
         if (lblSam) lblSam.textContent = totalSam.toFixed(1) + ' mins';
 
@@ -649,7 +649,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (btnEmptyAdd) {
         btnEmptyAdd.addEventListener('click', function() {
-            createRow('Front Panel (سامنے کا پلہ)', 1, 'Main front body', 3.5, 1.0, 1.0, 20.0);
+            createRow('Front Panel', 1, 'Main front body', 3.5, 1.0, 1.0, 20.0);
         });
     }
 
@@ -679,32 +679,32 @@ document.addEventListener('DOMContentLoaded', function() {
     btnJacket.addEventListener('click', function() {
         if (tbody.children.length > 0 && !confirm('Replace current components with Jacket preset?')) return;
         tbody.innerHTML = '';
-        createRow('Front Panel (سامنے کا پلہ)', 1, '1 panel = 1 front', 3.5, 1.0, 1.0, 20.0);
-        createRow('Back Panel (پچھلا پلہ)', 1, '1 panel = 1 back', 3.5, 1.0, 1.0, 20.0);
-        createRow('Bazo / Sleeves (بازو)', 2, '1 panel yields 2 sleeves', 4.0, 2.0, 1.0, 20.0);
-        createRow('Pockets (پاکٹ)', 2, '1 panel yields 4 pockets (0.5 پلہ)', 0.5, 4.0, 0.5, 20.0);
+        createRow('Front Panel', 1, '1 panel = 1 front', 3.5, 1.0, 1.0, 20.0);
+        createRow('Back Panel', 1, '1 panel = 1 back', 3.5, 1.0, 1.0, 20.0);
+        createRow('Bazo / Sleeves', 2, '1 panel yields 2 sleeves', 4.0, 2.0, 1.0, 20.0);
+        createRow('Pockets', 2, '1 panel yields 4 pockets (0.5 Palla)', 0.5, 4.0, 0.5, 20.0);
         createRow('Bon', 2, 'Ribbed bon finish', 2.0, 2.0, 1.0, 15.0);
-        createRow('Gol Gala (گول گلا)', 1, 'Ribbed neck collar', 1.5, 1.0, 1.0, 10.0);
+        createRow('Gol Gala', 1, 'Ribbed neck collar', 1.5, 1.0, 1.0, 10.0);
     });
 
     btnVest.addEventListener('click', function() {
         if (tbody.children.length > 0 && !confirm('Replace current components with Sleeveless Vest preset?')) return;
         tbody.innerHTML = '';
-        createRow('Front Panel (سامنے کا پلہ)', 1, '1 panel = 1 front', 3.5, 1.0, 1.0, 20.0);
-        createRow('Back Panel (پچھلا پلہ)', 1, '1 panel = 1 back', 3.5, 1.0, 1.0, 20.0);
-        createRow('Pockets (پاکٹ)', 2, '1 panel yields 4 pockets (0.5 پلہ)', 0.5, 4.0, 0.5, 20.0);
-        createRow('Gol Gala (گول گلا)', 1, 'V-neck / round collar', 1.5, 1.0, 1.0, 10.0);
-        createRow('Moday Tape (موڈھے)', 2, 'Armhole ribs', 1.0, 2.0, 1.0, 10.0);
+        createRow('Front Panel', 1, '1 panel = 1 front', 3.5, 1.0, 1.0, 20.0);
+        createRow('Back Panel', 1, '1 panel = 1 back', 3.5, 1.0, 1.0, 20.0);
+        createRow('Pockets', 2, '1 panel yields 4 pockets (0.5 Palla)', 0.5, 4.0, 0.5, 20.0);
+        createRow('Gol Gala', 1, 'V-neck / round collar', 1.5, 1.0, 1.0, 10.0);
+        createRow('Moday Tape', 2, 'Armhole ribs', 1.0, 2.0, 1.0, 10.0);
     });
 
     btnSweater.addEventListener('click', function() {
         if (tbody.children.length > 0 && !confirm('Replace current components with Sweater preset?')) return;
         tbody.innerHTML = '';
-        createRow('Front Panel (سامنے کا پلہ)', 1, '1 panel = 1 front', 3.5, 1.0, 1.0, 20.0);
-        createRow('Back Panel (پچھلا پلہ)', 1, '1 panel = 1 back', 3.5, 1.0, 1.0, 20.0);
-        createRow('Bazo / Sleeves (بازو)', 2, '1 panel yields 2 sleeves', 4.0, 2.0, 1.0, 20.0);
-        createRow('Gol Gala (گول گلا)', 1, 'Round neck rib', 1.5, 1.0, 1.0, 10.0);
-        createRow('Bottom Hem (دامن پٹی)', 1, 'Elasticated waist rib', 1.0, 1.0, 1.0, 10.0);
+        createRow('Front Panel', 1, '1 panel = 1 front', 3.5, 1.0, 1.0, 20.0);
+        createRow('Back Panel', 1, '1 panel = 1 back', 3.5, 1.0, 1.0, 20.0);
+        createRow('Bazo / Sleeves', 2, '1 panel yields 2 sleeves', 4.0, 2.0, 1.0, 20.0);
+        createRow('Gol Gala', 1, 'Round neck rib', 1.5, 1.0, 1.0, 10.0);
+        createRow('Bottom Hem', 1, 'Elasticated waist rib', 1.0, 1.0, 1.0, 10.0);
     });
 });
 </script>

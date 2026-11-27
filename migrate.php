@@ -242,7 +242,7 @@ $dbVersion = $db->query("SELECT VERSION()")->fetchColumn();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ڈیٹا بیس مائیگریشن اور اپڈیٹ - Garment ERP</title>
+    <title>Database Migration & Auto-Repair - Garment ERP</title>
     <link rel="stylesheet" href="assets/css/bootstrap.min.css">
     <link rel="stylesheet" href="assets/css/bootstrap-icons.css">
     <style>
@@ -285,11 +285,11 @@ $dbVersion = $db->query("SELECT VERSION()")->fetchColumn();
     <div class="migration-card">
         <div class="migration-header d-flex flex-wrap justify-content-between align-items-center gap-3">
             <div>
-                <h4 class="fw-bold mb-1"><i class="bi bi-database-check text-success me-2"></i>ڈیٹا بیس مائیگریشن و مرمت (Schema Migration & Auto-Repair)</h4>
-                <div class="small text-light opacity-75">Garment ERP Production Suite — لائیو سرور ڈیٹا بیس اسکیما اپڈیٹر</div>
+                <h4 class="fw-bold mb-1"><i class="bi bi-database-check text-success me-2"></i>Database Schema Migration & Auto-Repair</h4>
+                <div class="small text-light opacity-75">Garment ERP Production Suite — Live Server Database Schema Updater</div>
             </div>
             <div>
-                <span class="badge bg-success px-3 py-2 fs-6"><i class="bi bi-check-circle-fill me-1"></i> اپڈیٹ مکمل</span>
+                <span class="badge bg-success px-3 py-2 fs-6"><i class="bi bi-check-circle-fill me-1"></i> Update Completed</span>
             </div>
         </div>
 
@@ -320,23 +320,23 @@ $dbVersion = $db->query("SELECT VERSION()")->fetchColumn();
             <div class="alert alert-success d-flex align-items-center gap-3 mb-4 p-3 rounded-3 shadow-sm" role="alert">
                 <i class="bi bi-patch-check-fill fs-2 text-success"></i>
                 <div>
-                    <h6 class="fw-bold mb-1">MySQL Error 3105 (Generated Column) کامیابی سے حل ہو گیا ہے!</h6>
+                    <h6 class="fw-bold mb-1">MySQL Error 3105 (Generated Column) resolved successfully!</h6>
                     <div class="small text-dark opacity-90">
-                        ٹیبل <code>lot_operator_element_entries</code> کا کالم <code>total_pieces</code> اب ایک باقاعدہ اسٹینڈرڈ کالم بن چکا ہے۔ اب آپریٹر انٹری محفوظ کرتے وقت کسی قسم کا ایرر نہیں آئے گا۔
+                        Table <code>lot_operator_element_entries</code> column <code>total_pieces</code> is now a standard column. No errors will occur when saving operator entries.
                     </div>
                 </div>
             </div>
 
             <!-- Migration Log Table -->
-            <h6 class="fw-bold text-dark mb-3"><i class="bi bi-list-check text-primary me-2"></i>تفصیلی مائیگریشن لاگ (Applied Migrations):</h6>
+            <h6 class="fw-bold text-dark mb-3"><i class="bi bi-list-check text-primary me-2"></i>Detailed Applied Migrations Log:</h6>
             <div class="table-responsive border rounded-3 mb-4">
                 <table class="table table-hover table-striped align-middle mb-0 table-log">
                     <thead class="table-dark">
                         <tr>
                             <th style="width: 5%;">#</th>
-                            <th style="width: 30%;">مرحلہ / کالم (Component)</th>
-                            <th style="width: 15%; text-align: center;">حالت (Status)</th>
-                            <th style="width: 50%;">تفصیل (Description)</th>
+                            <th style="width: 30%;">Stage / Column (Component)</th>
+                            <th style="width: 15%; text-align: center;">Status</th>
+                            <th style="width: 50%;">Description</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -358,13 +358,13 @@ $dbVersion = $db->query("SELECT VERSION()")->fetchColumn();
 
             <!-- Actions -->
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 pt-2 border-top">
-                <span class="text-muted small"><i class="bi bi-shield-check text-success me-1"></i> تمام تبدیلیاں محفوظ ہیں اور ڈیٹا کو کوئی نقصان نہیں پہنچا ہے۔</span>
+                <span class="text-muted small"><i class="bi bi-shield-check text-success me-1"></i> All changes are safe and data integrity is preserved.</span>
                 <div class="d-flex gap-2">
                     <a href="migrate.php" class="btn btn-outline-secondary btn-sm">
-                        <i class="bi bi-arrow-clockwise me-1"></i> دوبارہ چیک کریں (Re-run Check)
+                        <i class="bi bi-arrow-clockwise me-1"></i> Re-run Check
                     </a>
                     <a href="modules/production/index.php" class="btn btn-primary btn-sm fw-bold px-3">
-                        <i class="bi bi-box-arrow-up-right me-1"></i> پروڈکشن انٹری پر جائیں (Go to Production Entry)
+                        <i class="bi bi-box-arrow-up-right me-1"></i> Go to Production Entry
                     </a>
                 </div>
             </div>

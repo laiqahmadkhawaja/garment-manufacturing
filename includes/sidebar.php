@@ -59,7 +59,7 @@ $activeNav = $activeNav ?? 'dashboard';
         </a>
         <a href="<?= BASE_URL ?>modules/payments/weekly.php" class="nav-link <?= $activeNav === 'weekly_payments' ? 'active' : '' ?>">
             <i class="bi bi-calendar2-week-fill text-warning"></i>
-            <span>Weekly Payments (ویکلی پیمنٹس)</span>
+            <span>Weekly Payments</span>
         </a>
         <a href="<?= BASE_URL ?>modules/payments/index.php" class="nav-link <?= $activeNav === 'payments' ? 'active' : '' ?>">
             <i class="bi bi-cash-stack"></i>
@@ -146,7 +146,7 @@ $activeNav = $activeNav ?? 'dashboard';
         <div class="nav-section-title">Administration</div>
         <a href="<?= BASE_URL ?>modules/settings/warehouses.php" class="nav-link <?= $activeNav === 'settings_wh' ? 'active' : '' ?>">
             <i class="bi bi-building"></i>
-            <span>Warehouses (گودام)</span>
+            <span>Warehouses</span>
         </a>
         <a href="<?= BASE_URL ?>modules/settings/operations.php" class="nav-link <?= $activeNav === 'settings_ops' ? 'active' : '' ?>">
             <i class="bi bi-gear-wide-connected"></i>
@@ -162,7 +162,7 @@ $activeNav = $activeNav ?? 'dashboard';
         </a>
         <a href="<?= BASE_URL ?>modules/settings/garment_types.php" class="nav-link <?= $activeNav === 'settings_garment_types' ? 'active' : '' ?>">
             <i class="bi bi-scissors"></i>
-            <span>Garment Types (کٹائی اقسام)</span>
+            <span>Garment Types</span>
         </a>
         <a href="<?= BASE_URL ?>modules/settings/index.php" class="nav-link <?= $activeNav === 'settings' ? 'active' : '' ?>">
             <i class="bi bi-sliders"></i>

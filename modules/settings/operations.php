@@ -153,7 +153,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                             <div class="row g-3">
                                 <div class="col-12 col-md-3">
-                                    <label class="form-label fw-semibold">Parent Stage (مین آپریشن)</label>
+                                    <label class="form-label fw-semibold">Parent Stage</label>
                                     <select name="parent_id" id="parent_id" class="form-select">
                                         <option value="">-- Main Primary Operation (No Parent) --</option>
                                         <?php foreach ($parentOperations as $pop): ?>
@@ -172,11 +172,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                                 <div class="col-12 col-sm-6 col-md-3">
                                     <label class="form-label fw-semibold">Operation / Part Name *</label>
-                                    <input type="text" name="name" class="form-control" placeholder="e.g. Attach Sleeves (بازو لگانا)" required>
+                                    <input type="text" name="name" class="form-control" placeholder="e.g. Attach Sleeves" required>
                                 </div>
 
                                 <div class="col-12 col-md-4">
-                                    <label class="form-label fw-semibold">Detail / Description (تفصیل)</label>
+                                    <label class="form-label fw-semibold">Detail / Description</label>
                                     <input type="text" name="description" class="form-control" placeholder="e.g. Cut Shawl Label / shawl dori / Moti Fancy">
                                 </div>
 
@@ -196,7 +196,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <input type="number" name="estimated_minutes" id="estimated_minutes" class="form-control fw-bold text-primary" step="any" min="0" value="2.0" required>
                                         <span class="input-group-text">min</span>
                                     </div>
-                                    <div class="form-text small" style="font-size: 11px;">وقت منٹوں میں (فی پیس)</div>
+                                    <div class="form-text small" style="font-size: 11px;">Time in minutes (per piece)</div>
                                 </div>
 
                                 <div class="col-12 col-sm-4 col-md-2">
@@ -205,7 +205,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <span class="input-group-text">Rs.</span>
                                         <input type="number" name="default_rate" id="default_rate" class="form-control fw-bold text-success" step="any" min="0" value="5.00" required>
                                     </div>
-                                    <div class="form-text small" style="font-size: 11px;">منٹس × 2.50 روپے یا مینوئل ریٹ</div>
+                                    <div class="form-text small" style="font-size: 11px;">Minutes × Rs. 2.50 or manual rate</div>
                                 </div>
 
                                 <div class="col-12 col-sm-4 col-md-2">
@@ -216,11 +216,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <div class="col-12 col-sm-6 col-md-3">
                                     <label class="form-label fw-semibold">Rate Unit</label>
                                     <select name="rate_unit" class="form-select">
-                                        <option value="Per piece">Per piece (فی پیس)</option>
-                                        <option value="Per minute">Per minute (فی منٹ)</option>
-                                        <option value="Per pala">Per pala (فی پلہ)</option>
-                                        <option value="Per operation">Per operation (فی آپریشن)</option>
-                                        <option value="Per dozen">Per dozen (فی درجن)</option>
+                                        <option value="Per piece">Per piece</option>
+                                        <option value="Per minute">Per minute</option>
+                                        <option value="Per pala">Per palla</option>
+                                        <option value="Per operation">Per operation</option>
+                                        <option value="Per dozen">Per dozen</option>
                                     </select>
                                 </div>
 

@@ -82,7 +82,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-4">
             <div>
                 <h4 class="fw-bold mb-1 text-dark">Warehouses & Storage Locations</h4>
-                <p class="text-muted small mb-0">Configure dynamic factory warehouses, storage sections, finished goods depots & branch locations (گودام و اسٹوریج کا نظام)</p>
+                <p class="text-muted small mb-0">Configure dynamic factory warehouses, storage sections, finished goods depots & branch locations</p>
             </div>
             <div class="d-flex align-items-center gap-2">
                 <a href="<?= BASE_URL ?>modules/inventory/transfer.php" class="btn btn-outline-primary btn-sm d-flex align-items-center gap-1 shadow-sm">
@@ -137,7 +137,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <h6 class="fw-bold mb-0 text-dark">
                     <i class="bi bi-building text-primary me-2"></i> Factory Storage Locations & Depots (<?= count($warehouses) ?>)
                 </h6>
-                <span class="text-muted small">پیکنگ اور کسٹمر ڈسپیچ کے دوران ان میں سے کسی بھی گودام کا انتخاب کیا جا سکتا ہے</span>
+                <span class="text-muted small">Any of these warehouses can be selected during packing and customer dispatch</span>
             </div>
             <div class="card-modern-body p-0">
                 <div class="table-responsive">
@@ -159,7 +159,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <tr>
                                     <td colspan="8" class="text-center py-5 text-muted">
                                         <div class="mb-2"><i class="bi bi-building-slash fs-1 text-secondary opacity-50"></i></div>
-                                        <div class="fw-semibold text-dark">No warehouses or storage locations found (کوئی گودام موجود نہیں)</div>
+                                        <div class="fw-semibold text-dark">No warehouses or storage locations found</div>
                                         <div class="small text-muted mb-3">Add factory floors, finished goods stores, or branch depots to start managing inventory.</div>
                                         <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAddWarehouse">
                                             <i class="bi bi-plus-circle me-1"></i> Add New Warehouse
@@ -243,15 +243,15 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 </div>
                 <div class="mb-3">
                     <label class="form-label small fw-semibold text-muted">Warehouse Name *</label>
-                    <input type="text" name="name" class="form-control fw-bold" placeholder="e.g. City Showroom Depot (شہر کا شوروم)" required>
+                    <input type="text" name="name" class="form-control fw-bold" placeholder="e.g. City Showroom Depot" required>
                 </div>
                 <div class="mb-3">
                     <label class="form-label small fw-semibold text-muted">Location / Floor / Address</label>
-                    <input type="text" name="location" class="form-control" placeholder="e.g. Building B, 2nd Floor / Anarkali Market Lahore">
+                    <input type="text" name="location" class="form-control" placeholder="e.g. Building B, 2nd Floor / Main Market">
                 </div>
                 <div class="form-check form-switch mt-2">
                     <input class="form-check-input" type="checkbox" name="is_active" id="add_is_active" value="1" checked>
-                    <label class="form-check-label fw-semibold text-dark small" for="add_is_active">Active Warehouse (فعال گودام)</label>
+                    <label class="form-check-label fw-semibold text-dark small" for="add_is_active">Active Warehouse</label>
                 </div>
             </div>
             <div class="modal-footer">
@@ -290,7 +290,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 </div>
                 <div class="form-check form-switch mt-2">
                     <input class="form-check-input" type="checkbox" name="is_active" id="edit_is_active" value="1">
-                    <label class="form-check-label fw-semibold text-dark small" for="edit_is_active">Active Warehouse (فعال گودام)</label>
+                    <label class="form-check-label fw-semibold text-dark small" for="edit_is_active">Active Warehouse</label>
                 </div>
             </div>
             <div class="modal-footer">

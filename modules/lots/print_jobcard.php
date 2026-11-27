@@ -1,6 +1,6 @@
 <?php
 /**
- * Garment Manufacturing ERP - Printable Job Card (لاٹ جاب کارڈ پرچہ)
+ * Garment Manufacturing ERP - Printable Job Card
  * Exact digital and physical reproduction of the factory handwritten Excel Job Card:
  * 1. Order & Product Details + Anatomy Color Multiplier Table
  * 2. Operator Element Table (Hashim / Adnan / Molu with dynamic 1 or 2 operator columns & pending highlights)
@@ -87,11 +87,11 @@ $peStmt->execute([$lot['product_id']]);
 $productElements = $peStmt->fetchAll();
 if (empty($productElements)) {
     $productElements = [
-        ['id' => 1, 'element_name' => 'Front (فرنٹ)', 'quantity' => 1, 'rate_per_piece' => 28.50],
-        ['id' => 2, 'element_name' => 'Back (بیک)', 'quantity' => 1, 'rate_per_piece' => 20.00],
-        ['id' => 3, 'element_name' => 'Bazo (بازو)', 'quantity' => 2, 'rate_per_piece' => 12.00],
-        ['id' => 4, 'element_name' => 'Pocket (پاکٹ)', 'quantity' => 2, 'rate_per_piece' => 6.00],
-        ['id' => 5, 'element_name' => 'Gol Gala (گول گلا)', 'quantity' => 1, 'rate_per_piece' => 3.00],
+        ['id' => 1, 'element_name' => 'Front', 'quantity' => 1, 'rate_per_piece' => 28.50],
+        ['id' => 2, 'element_name' => 'Back', 'quantity' => 1, 'rate_per_piece' => 20.00],
+        ['id' => 3, 'element_name' => 'Bazo', 'quantity' => 2, 'rate_per_piece' => 12.00],
+        ['id' => 4, 'element_name' => 'Pocket', 'quantity' => 2, 'rate_per_piece' => 6.00],
+        ['id' => 5, 'element_name' => 'Gol Gala', 'quantity' => 1, 'rate_per_piece' => 3.00],
     ];
 }
 
@@ -130,8 +130,8 @@ if (empty($operatorEntries)) {
 }
 
 $isDoubleShift = ($lot['shift_type'] === 'Double Shift' || !empty($lot['night_operator_name']));
-$op1DisplayName = $lot['operator_name'] ?: 'ہاشم (Op 1)';
-$op2DisplayName = $lot['night_operator_name'] ?: 'عدنان / علی (Op 2)';
+$op1DisplayName = $lot['operator_name'] ?: 'Hashim (Op 1)';
+$op2DisplayName = $lot['night_operator_name'] ?: 'Adnan / Ali (Op 2)';
 
 // Cutting details
 $cutStmt = $db->prepare("SELECT pe.*, w.name AS cutter_name 
@@ -143,7 +143,7 @@ $cutStmt = $db->prepare("SELECT pe.*, w.name AS cutter_name
 $cutStmt->execute([$lotId]);
 $cuttingEntry = $cutStmt->fetch();
 
-$cuttingMasterName = $cuttingEntry['cutter_name'] ?? 'علی رضا (کٹنگ ماسٹر)';
+$cuttingMasterName = $cuttingEntry['cutter_name'] ?? 'Ali Raza (Cutting Master)';
 $cuttingDate = !empty($cuttingEntry['entry_date']) ? format_date($cuttingEntry['entry_date']) : date('d/m/Y');
 $cutDoneTotal = (int)$db->query("SELECT COALESCE(SUM(pe.good_qty), 0) FROM production_entries pe JOIN operations o ON pe.operation_id = o.id WHERE pe.lot_id = $lotId AND (o.code = 'OP-CUT' OR o.name LIKE '%Cut%')")->fetchColumn();
 
@@ -208,7 +208,7 @@ foreach ($wRows as $wr) {
 <html lang="ur" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>جاب کارڈ پرچہ (Job Card Sheet) - Lot #<?= clean($lot['lot_number']) ?></title>
+    <title>Job Card Sheet - Lot #<?= clean($lot['lot_number']) ?></title>
     <link rel="stylesheet" href="<?= BASE_URL ?>assets/css/bootstrap.min.css">
     <link rel="stylesheet" href="<?= BASE_URL ?>assets/css/bootstrap-icons.css">
     <style>
@@ -389,12 +389,12 @@ foreach ($wRows as $wr) {
 <!-- Top Navigation Bar (Hidden on Print) -->
 <div class="no-print-bar">
     <div class="d-flex align-items-center gap-3">
-        <h5 class="mb-0 fw-bold"><i class="bi bi-card-checklist me-2"></i>جاب کارڈ پرچہ (Factory Job Card Sheet)</h5>
+        <h5 class="mb-0 fw-bold"><i class="bi bi-card-checklist me-2"></i>Job Card Sheet</h5>
         <span class="badge bg-primary fs-6 font-monospace" dir="ltr">#<?= clean($lot['lot_number']) ?></span>
     </div>
     <div class="d-flex align-items-center gap-2">
         <button onclick="window.print()" class="btn btn-success btn-sm fw-bold px-3">
-            <i class="bi bi-printer-fill me-1"></i> پرنٹ جاب کارڈ (Print Job Card)
+            <i class="bi bi-printer-fill me-1"></i> Print Job Card (Print Job Card)
         </button>
         <a href="<?= BASE_URL ?>modules/lots/jobcard.php?id=<?= $lotId ?>" class="btn btn-outline-light btn-sm">
             <i class="bi bi-laptop me-1"></i> Digital Job Card View
@@ -420,10 +420,10 @@ foreach ($wRows as $wr) {
             <div class="col-7">
                 <div class="d-flex justify-content-between align-items-center px-1 mb-1">
                     <span class="fw-bold" style="font-size: 12px;">
-                        <i class="bi bi-cpu me-1"></i> آپریٹر سیکشن (Operator Production)
+                        <i class="bi bi-cpu me-1"></i> Operator Section
                     </span>
                     <span class="text-muted small">
-                        آپریٹر: <strong class="text-dark"><?= clean($op1DisplayName) ?></strong>
+                        Operator: <strong class="text-dark"><?= clean($op1DisplayName) ?></strong>
                         <?php if ($isDoubleShift): ?> / <strong class="text-dark"><?= clean($op2DisplayName) ?></strong><?php endif; ?>
                     </span>
                 </div>
@@ -431,14 +431,14 @@ foreach ($wRows as $wr) {
                 <table class="tbl-jc">
                     <thead>
                         <tr>
-                            <th style="width: 14%;">لاٹ #</th>
-                            <th style="width: 26%;">آئٹم (Item)</th>
-                            <th style="width: 15%;">آپریٹر 1</th>
+                            <th style="width: 14%;">Lot #</th>
+                            <th style="width: 26%;">Item</th>
+                            <th style="width: 15%;">Operator 1</th>
                             <?php if ($isDoubleShift): ?>
-                                <th style="width: 15%;">آپریٹر 2</th>
+                                <th style="width: 15%;">Operator 2</th>
                             <?php endif; ?>
-                            <th style="width: 15%;">ٹوٹل</th>
-                            <th style="width: 15%;">ریٹ / منٹ</th>
+                            <th style="width: 15%;">Total</th>
+                            <th style="width: 15%;">Rate / mins</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -460,7 +460,7 @@ foreach ($wRows as $wr) {
                                         $ppp = (float)($oe['pieces_per_palla'] ?? 1);
                                     ?>
                                     <?php if ($ppp != 1): ?>
-                                        <span style="font-size: 8.5px; color: #555; font-weight: normal;">(1 پلہ=<?= $ppp ?>)</span>
+                                        <span style="font-size: 8.5px; color: #555; font-weight: normal;">(1 Palla=<?= $ppp ?>)</span>
                                     <?php endif; ?>
                                 </td>
                                 <td class="font-monospace fw-bold" dir="ltr"><?= $p1 > 0 ? $p1 : '—' ?></td>
@@ -469,7 +469,7 @@ foreach ($wRows as $wr) {
                                 <?php endif; ?>
                                 <td class="font-monospace fw-bold <?= $bal > 0 ? 'cell-pending' : 'cell-done' ?>" dir="ltr">
                                     <?= $tot > 0 ? $tot : '0' ?>
-                                    <?php if ($bal > 0): ?><span style="font-size: 9px; display: block;">(<?= $bal ?> باقی)</span><?php endif; ?>
+                                    <?php if ($bal > 0): ?><span style="font-size: 9px; display: block;">(<?= $bal ?> Remaining)</span><?php endif; ?>
                                 </td>
                                 <td class="font-monospace" dir="ltr">
                                     <?= !empty($oe['rate_per_piece']) ? ('Rs.' . number_format($oe['rate_per_piece'], 2)) : clean($oe['minutes_spent']) . 'm' ?>
@@ -480,7 +480,7 @@ foreach ($wRows as $wr) {
                 </table>
                 <div class="px-1 mt-1 d-flex justify-content-between align-items-center" style="font-size: 9px; color: #555;">
                     <span>⚠️ <strong>if pending highlight:</strong> this work is pending —</span>
-                    <span>12 کوٹی بازو والی | 12 جیکٹ</span>
+                    <span>12 Vest Sleeves | 12 Jacket</span>
                 </div>
             </div>
 
@@ -488,28 +488,28 @@ foreach ($wRows as $wr) {
             <div class="col-5">
                 <table class="tbl-jc mb-1">
                     <tr>
-                        <td style="width: 35%; background: #f8fafc;" class="fw-bold">لاٹ نمبر:</td>
+                        <td style="width: 35%; background: #f8fafc;" class="fw-bold">Lot #:</td>
                         <td style="width: 65%; text-align: right;" class="pe-2">
                             <span class="badge-lot-dark font-monospace" dir="ltr"><?= clean($lot['lot_number']) ?></span>
                         </td>
                     </tr>
                     <tr>
-                        <td class="fw-bold">ڈیزائن نمبر:</td>
+                        <td class="fw-bold">Design No:</td>
                         <td class="pe-2 font-monospace fw-bold" dir="ltr"><?= clean($lot['design_number'] ?: '901') ?></td>
                     </tr>
                     <tr>
-                        <td class="fw-bold">تفصیل (Detail):</td>
+                        <td class="fw-bold">Detail:</td>
                         <td class="pe-2"><?= clean($lot['product_name']) ?> (<?= clean($lot['yarn_type'] ?? 'Wool') ?>)</td>
                     </tr>
                     <tr>
-                        <td class="fw-bold">سائز (Size):</td>
+                        <td class="fw-bold">Size (Size):</td>
                         <td class="pe-2 font-monospace fw-bold" dir="ltr"><?= clean($sizeDisplay) ?></td>
                     </tr>
                     <tr>
-                        <td class="fw-bold">کل تعداد:</td>
+                        <td class="fw-bold">Total Quantity:</td>
                         <td class="pe-2">
                             <strong class="badge-boxed font-monospace" dir="ltr"><?= (int)$lot['total_pieces'] ?> Pcs</strong>
-                            <span class="badge bg-light text-dark border ms-1 font-monospace"><?= $totalColorsCount ?> رنگ</span>
+                            <span class="badge bg-light text-dark border ms-1 font-monospace"><?= $totalColorsCount ?> Color</span>
                         </td>
                     </tr>
                 </table>
@@ -518,35 +518,35 @@ foreach ($wRows as $wr) {
                 <table class="tbl-jc" style="font-size: 10px;">
                     <thead>
                         <tr>
-                            <th style="width: 28%;">عضو</th>
-                            <th style="width: 52%;">حساب ضرب (Calculation)</th>
-                            <th style="width: 20%;">چیک</th>
+                            <th style="width: 28%;">Part</th>
+                            <th style="width: 52%;">Calculation</th>
+                            <th style="width: 20%;">Cheque</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td class="fw-bold">فرنٹ</td>
-                            <td dir="ltr" class="font-monospace fw-semibold"><?= $pcsPerColor ?> &times; <?= $totalColorsCount ?> رنگ = <?= (int)$lot['total_pieces'] ?></td>
+                            <td class="fw-bold">Front</td>
+                            <td dir="ltr" class="font-monospace fw-semibold"><?= $pcsPerColor ?> &times; <?= $totalColorsCount ?> Color = <?= (int)$lot['total_pieces'] ?></td>
                             <td><input type="checkbox" checked style="transform: scale(0.85);"></td>
                         </tr>
                         <tr>
-                            <td class="fw-bold">بیک</td>
-                            <td dir="ltr" class="font-monospace fw-semibold"><?= $pcsPerColor ?> &times; <?= $totalColorsCount ?> رنگ = <?= (int)$lot['total_pieces'] ?></td>
+                            <td class="fw-bold">Back</td>
+                            <td dir="ltr" class="font-monospace fw-semibold"><?= $pcsPerColor ?> &times; <?= $totalColorsCount ?> Color = <?= (int)$lot['total_pieces'] ?></td>
                             <td><input type="checkbox" checked style="transform: scale(0.85);"></td>
                         </tr>
                         <tr>
-                            <td class="fw-bold">بازو</td>
-                            <td dir="ltr" class="font-monospace fw-semibold"><?= $pcsPerColor * 2 ?> &times; <?= $totalColorsCount ?> رنگ = <?= (int)$lot['total_pieces'] * 2 ?></td>
+                            <td class="fw-bold">Sleeves</td>
+                            <td dir="ltr" class="font-monospace fw-semibold"><?= $pcsPerColor * 2 ?> &times; <?= $totalColorsCount ?> Color = <?= (int)$lot['total_pieces'] * 2 ?></td>
                             <td><input type="checkbox" checked style="transform: scale(0.85);"></td>
                         </tr>
                         <tr>
-                            <td class="fw-bold">پاکٹ</td>
-                            <td dir="ltr" class="font-monospace fw-semibold"><?= $pcsPerColor * 2 ?> &times; <?= $totalColorsCount ?> رنگ = <?= (int)$lot['total_pieces'] * 2 ?></td>
+                            <td class="fw-bold">Pocket</td>
+                            <td dir="ltr" class="font-monospace fw-semibold"><?= $pcsPerColor * 2 ?> &times; <?= $totalColorsCount ?> Color = <?= (int)$lot['total_pieces'] * 2 ?></td>
                             <td><input type="checkbox" checked style="transform: scale(0.85);"></td>
                         </tr>
                         <tr>
-                            <td class="fw-bold">گول گلا</td>
-                            <td dir="ltr" class="font-monospace fw-semibold"><?= $pcsPerColor ?> &times; <?= $totalColorsCount ?> رنگ = <?= (int)$lot['total_pieces'] ?></td>
+                            <td class="fw-bold">Round Gala</td>
+                            <td dir="ltr" class="font-monospace fw-semibold"><?= $pcsPerColor ?> &times; <?= $totalColorsCount ?> Color = <?= (int)$lot['total_pieces'] ?></td>
                             <td><input type="checkbox" checked style="transform: scale(0.85);"></td>
                         </tr>
                     </tbody>
@@ -557,17 +557,17 @@ foreach ($wRows as $wr) {
     </div>
 
     <!-- ======================================================================= -->
-    <!-- 2. MIDDLE SECTION: CUTTING MASTER BOX (علی رضا - کٹائی ماسٹر)          -->
+    <!-- 2. MIDDLE SECTION: CUTTING MASTER BOX (Ali Raza - Cutting Master)          -->
     <!-- ======================================================================= -->
     <div class="section-box p-1">
         <table class="tbl-jc">
             <thead>
                 <tr>
-                    <th style="width: 22%;">کٹائی ماسٹر (Cutting)</th>
-                    <th style="width: 14%;">تاریخ</th>
-                    <th style="width: 14%;">ٹوٹل کٹنگ</th>
-                    <th style="width: 16%;">ٹائم (Time per mint)</th>
-                    <th style="width: 34%;">سائز بریک ڈاؤن (Cutting Size Breakdown)</th>
+                    <th style="width: 22%;">Cutting Master</th>
+                    <th style="width: 14%;">Date</th>
+                    <th style="width: 14%;">Total Cutting</th>
+                    <th style="width: 16%;">Time (Time per mint)</th>
+                    <th style="width: 34%;">Size Breakdown</th>
                 </tr>
             </thead>
             <tbody>
@@ -593,15 +593,15 @@ foreach ($wRows as $wr) {
     </div>
 
     <!-- ======================================================================= -->
-    <!-- 3. LOWER SECTION: WORKER OPERATION MATRIX (عارف، اسد، بلال، لطیف لاگ)  -->
+    <!-- 3. LOWER SECTION: WORKER OPERATION MATRIX (Worker Log)  -->
     <!-- ======================================================================= -->
     <div class="section-box p-1" style="flex: 1 1 auto; display: flex; flex-direction: column;">
         <div class="d-flex justify-content-between align-items-center px-1 mb-1">
             <span class="fw-bold" style="font-size: 12.5px;">
-                <i class="bi bi-people-fill me-1"></i> کاریگروں کا کام اور کھاتہ لاگ (Worker Operation Matrix)
+                <i class="bi bi-people-fill me-1"></i> Worker Operation Matrix & Log
             </span>
             <span class="text-muted small">
-                تمام ٹیلرنگ، سیفٹی، بٹن و پیکنگ انٹریاں اس جدول میں درج ہوں گی۔
+                All Tailor, Safety, Button and Packing entries will be recorded in this table.
             </span>
         </div>
 
@@ -609,17 +609,17 @@ foreach ($wRows as $wr) {
             <thead>
                 <tr>
                     <th style="width: 4%;">✓</th>
-                    <th style="width: 10%;">تاریخ</th>
-                    <th style="width: 16%; text-align: start; padding-right: 6px;">نام (Worker)</th>
-                    <th style="width: 8%;">گلا</th>
-                    <th style="width: 8%;">پاکٹ</th>
-                    <th style="width: 8%;">سیفٹی</th>
-                    <th style="width: 8%;">ٹانکے</th>
-                    <th style="width: 8%;">بٹن</th>
-                    <th style="width: 8%;">کاج</th>
-                    <th style="width: 9%;">مال پریس</th>
-                    <th style="width: 9%;">پیکنگ</th>
-                    <th style="width: 10%;">ٹوٹل</th>
+                    <th style="width: 10%;">Date</th>
+                    <th style="width: 16%; text-align: start; padding-right: 6px;">Name</th>
+                    <th style="width: 8%;">Gala</th>
+                    <th style="width: 8%;">Pocket</th>
+                    <th style="width: 8%;">Safety</th>
+                    <th style="width: 8%;">Taanke</th>
+                    <th style="width: 8%;">Button</th>
+                    <th style="width: 8%;">Button Hole</th>
+                    <th style="width: 9%;">Pressing</th>
+                    <th style="width: 9%;">Packing</th>
+                    <th style="width: 10%;">Total</th>
                 </tr>
             </thead>
             <tbody>
@@ -679,12 +679,12 @@ foreach ($wRows as $wr) {
                 <!-- 2. Standard Ruled Blank Rows for Factory Pen Writing (matching physical Excel card) -->
                 <?php 
                 $standardWorkerSlots = [
-                    ['name' => 'عارف (Arif)', 'shade_gala' => false, 'shade_pocket' => false],
-                    ['name' => 'اسد (Asad)', 'shade_gala' => false, 'shade_pocket' => false],
-                    ['name' => 'بلال (Bilal - Safety)', 'shade_safety' => false],
-                    ['name' => 'لطیف (Latif - Taanke & Button)', 'shade_taanke' => false, 'shade_button' => false],
-                    ['name' => 'پریس مین (Pressing)', 'shade_press' => false],
-                    ['name' => 'پیکنگ ورکر (Packing)', 'shade_packing' => false],
+                    ['name' => 'Arif', 'shade_gala' => false, 'shade_pocket' => false],
+                    ['name' => 'Asad', 'shade_gala' => false, 'shade_pocket' => false],
+                    ['name' => 'Bilal', 'shade_safety' => false],
+                    ['name' => 'Latif', 'shade_taanke' => false, 'shade_button' => false],
+                    ['name' => 'Press Man', 'shade_press' => false],
+                    ['name' => 'Packing Worker', 'shade_packing' => false],
                 ];
 
                 $blankRowsNeeded = max(4, 9 - $rowCount);
@@ -711,7 +711,7 @@ foreach ($wRows as $wr) {
             </tbody>
             <tfoot>
                 <tr class="table-light fw-bold" style="background: #f1f3f5 !important;">
-                    <td colspan="3" class="text-start pe-3">کل مجموعہ (Total Progress):</td>
+                    <td colspan="3" class="text-start pe-3">Total Progress:</td>
                     <td class="font-monospace" dir="ltr"><?= $sumGala > 0 ? $sumGala : '' ?></td>
                     <td class="font-monospace" dir="ltr"><?= $sumPocket > 0 ? $sumPocket : '' ?></td>
                     <td class="font-monospace" dir="ltr"><?= $sumSafety > 0 ? $sumSafety : '' ?></td>

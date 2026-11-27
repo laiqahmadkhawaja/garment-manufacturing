@@ -206,7 +206,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         </td>
                                         <td class="text-end">
                                             <div class="btn-group">
-                                                <a href="<?= BASE_URL ?>modules/inventory/transfer.php?stock_id=<?= $s['id'] ?>" class="btn btn-sm btn-outline-secondary py-1 px-2" title="Transfer to Another Warehouse (گودام ٹرانسفر)">
+                                                <a href="<?= BASE_URL ?>modules/inventory/transfer.php?stock_id=<?= $s['id'] ?>" class="btn btn-sm btn-outline-secondary py-1 px-2" title="Transfer to Another Warehouse">
                                                     <i class="bi bi-arrow-left-right"></i>
                                                 </a>
                                                 <a href="<?= BASE_URL ?>modules/dispatch/create.php?lot_id=<?= $s['lot_id'] ?>" class="btn btn-sm btn-outline-primary py-1 px-2" title="Create Dispatch">

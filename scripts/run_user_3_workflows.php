@@ -11,18 +11,18 @@ $pStmt = $db->query("SELECT id FROM products WHERE name LIKE '%Koti%' LIMIT 1");
 $prodId = (int)$pStmt->fetchColumn();
 if (!$prodId) {
     $db->prepare("INSERT INTO products (code, name, category, default_unit, description, is_active) 
-                  VALUES ('PROD-KOTI', 'Koti (کوٹی)', 'Knitwear', 'Pieces', 'Standard Koti with pocket and gala', 1)")
+                  VALUES ('PROD-KOTI', 'Koti', 'Knitwear', 'Pieces', 'Standard Koti with pocket and gala', 1)")
        ->execute();
     $prodId = (int)$db->lastInsertId();
 }
 
 // Ensure Product Elements: Front (1), Back (1), 2 Bazu (2), 2 Pocket (2), 1 Gla (1)
 $elementsSetup = [
-    ['name' => 'Front Panel (سامنے کا حصہ)', 'ratio' => 1, 'order' => 10],
-    ['name' => 'Back Panel (پچھلا حصہ)', 'ratio' => 1, 'order' => 20],
-    ['name' => 'Bazu / Sleeves (بازو)', 'ratio' => 2, 'order' => 30],
-    ['name' => 'Pocket (پاکٹ)', 'ratio' => 2, 'order' => 40],
-    ['name' => 'Gala / Neck (گلا)', 'ratio' => 1, 'order' => 50],
+    ['name' => 'Front Panel', 'ratio' => 1, 'order' => 10],
+    ['name' => 'Back Panel', 'ratio' => 1, 'order' => 20],
+    ['name' => 'Bazo / Sleeves', 'ratio' => 2, 'order' => 30],
+    ['name' => 'Pocket', 'ratio' => 2, 'order' => 40],
+    ['name' => 'Gala / Neck', 'ratio' => 1, 'order' => 50],
 ];
 
 // Clean or insert elements for Koti
@@ -64,15 +64,15 @@ if (!$mBtn) {
 // 8: Press
 // 9: Packing
 $workflowOps = [
-    1 => ['code' => 'OP-OPERATOR', 'name' => 'Operator Entry (مشین آپریٹر / نٹنگ)', 'rate' => 5.00],
-    2 => ['code' => 'OP-CUT', 'name' => 'Cutting Entry (کٹنگ)', 'rate' => 5.00],
-    3 => ['code' => 'OP-TAIL', 'name' => 'Stitching / Tailoring (سلائی)', 'rate' => 6.00],
-    4 => ['code' => 'OP-PCK', 'name' => 'Pocket Attachment (پاکٹ لگانا)', 'rate' => 3.00],
-    5 => ['code' => 'OP-NECK', 'name' => 'Gala / Neck Finishing (گلا)', 'rate' => 3.00],
-    6 => ['code' => 'OP-SAFE', 'name' => 'Safety (اوورلاک)', 'rate' => 3.00],
-    7 => ['code' => 'OP-BTN', 'name' => 'Button Attachment (بٹن لگانا)', 'rate' => 4.00],
-    8 => ['code' => 'OP-PRESS', 'name' => 'Press / Ironing (پریس)', 'rate' => 3.00],
-    9 => ['code' => 'OP-PACK', 'name' => 'Packing (پیکنگ)', 'rate' => 2.00],
+    1 => ['code' => 'OP-OPERATOR', 'name' => 'Operator Entry (Machine Operator / Knitting)', 'rate' => 5.00],
+    2 => ['code' => 'OP-CUT', 'name' => 'Cutting Entry (Cutting)', 'rate' => 5.00],
+    3 => ['code' => 'OP-TAIL', 'name' => 'Stitching / Tailoring', 'rate' => 6.00],
+    4 => ['code' => 'OP-PCK', 'name' => 'Pocket Attachment', 'rate' => 3.00],
+    5 => ['code' => 'OP-NECK', 'name' => 'Gala / Neck Finishing', 'rate' => 3.00],
+    6 => ['code' => 'OP-SAFE', 'name' => 'Safety (Overlock)', 'rate' => 3.00],
+    7 => ['code' => 'OP-BTN', 'name' => 'Button Attachment', 'rate' => 4.00],
+    8 => ['code' => 'OP-PRESS', 'name' => 'Press / Ironing', 'rate' => 3.00],
+    9 => ['code' => 'OP-PACK', 'name' => 'Packing', 'rate' => 2.00],
 ];
 
 $opIds = [];
@@ -122,11 +122,11 @@ function run_single_lot_workflow($db, $lotNumber, $prodId, $opIds, $elementIds, 
     // Pockets: 100 x 2 = 200 pcs (Day 100, Night 100)
     // Gala: 100 x 1 = 100 pcs (Day 50, Night 50)
     $elEntries = [
-        $elementIds['Front Panel (سامنے کا حصہ)'] => ['req' => 100, 'd' => 50, 'n' => 50],
-        $elementIds['Back Panel (پچھلا حصہ)'] => ['req' => 100, 'd' => 50, 'n' => 50],
-        $elementIds['Bazu / Sleeves (بازو)'] => ['req' => 50, 'd' => 25, 'n' => 25],
-        $elementIds['Pocket (پاکٹ)'] => ['req' => 200, 'd' => 100, 'n' => 100],
-        $elementIds['Gala / Neck (گلا)'] => ['req' => 100, 'd' => 50, 'n' => 50],
+        $elementIds['Front Panel'] => ['req' => 100, 'd' => 50, 'n' => 50],
+        $elementIds['Back Panel'] => ['req' => 100, 'd' => 50, 'n' => 50],
+        $elementIds['Bazo / Sleeves'] => ['req' => 50, 'd' => 25, 'n' => 25],
+        $elementIds['Pocket'] => ['req' => 200, 'd' => 100, 'n' => 100],
+        $elementIds['Gala / Neck'] => ['req' => 100, 'd' => 50, 'n' => 50],
     ];
 
     $insOpEl = $db->prepare("INSERT INTO lot_operator_element_entries 
@@ -154,11 +154,11 @@ function run_single_lot_workflow($db, $lotNumber, $prodId, $opIds, $elementIds, 
     $cutPcs = $scenarioConfig['cut_pieces'] ?? 100;
     // Update cut_pieces on elements
     $updCut = $db->prepare("UPDATE lot_operator_element_entries SET cut_pieces = ? WHERE lot_id = ? AND element_id = ?");
-    $updCut->execute([$cutPcs, $lotId, $elementIds['Front Panel (سامنے کا حصہ)']]);
-    $updCut->execute([$cutPcs, $lotId, $elementIds['Back Panel (پچھلا حصہ)']]);
-    $updCut->execute([min(50, round($cutPcs * 0.5)), $lotId, $elementIds['Bazu / Sleeves (بازو)']]);
-    $updCut->execute([$cutPcs * 2, $lotId, $elementIds['Pocket (پاکٹ)']]);
-    $updCut->execute([$cutPcs, $lotId, $elementIds['Gala / Neck (گلا)']]);
+    $updCut->execute([$cutPcs, $lotId, $elementIds['Front Panel']]);
+    $updCut->execute([$cutPcs, $lotId, $elementIds['Back Panel']]);
+    $updCut->execute([min(50, round($cutPcs * 0.5)), $lotId, $elementIds['Bazo / Sleeves']]);
+    $updCut->execute([$cutPcs * 2, $lotId, $elementIds['Pocket']]);
+    $updCut->execute([$cutPcs, $lotId, $elementIds['Gala / Neck']]);
 
     $peCutNum = 'PE-CUT-' . $lotId . '-' . rand(100,999);
     $cutLabour = $cutPcs * 5.00;

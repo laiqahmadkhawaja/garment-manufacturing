@@ -151,11 +151,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 </span>
                                 <?php if (($worker['rate_basis'] ?? 'whole_sweater') === 'element_wise'): ?>
                                     <span class="badge bg-dark-subtle text-dark border px-2 py-1 small fw-semibold" title="Rate & Production Basis">
-                                        <i class="bi bi-puzzle me-1"></i>اعضاء وار (Elements)
+                                        <i class="bi bi-puzzle me-1"></i>Element-wise (Elements)
                                     </span>
                                 <?php else: ?>
                                     <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-1 small fw-semibold" title="Rate & Production Basis">
-                                        <i class="bi bi-layers me-1"></i>مکمل سویٹر (Whole)
+                                        <i class="bi bi-layers me-1"></i>Complete Sweater (Whole)
                                     </span>
                                 <?php endif; ?>
                             </div>
@@ -508,22 +508,22 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 </tr>
                                 <?php if ($worker['worker_type'] === 'Daily Wage'): ?>
                                     <tr>
-                                        <th class="bg-light">Daily Wage Rate (یومیہ اجرت)</th>
-                                        <td class="fw-bold text-primary">Rs. <?= number_format($worker['default_rate'] ?? 0.00, 2) ?> / day (فی دن)</td>
+                                        <th class="bg-light">Daily Wage Rate</th>
+                                        <td class="fw-bold text-primary">Rs. <?= number_format($worker['default_rate'] ?? 0.00, 2) ?> / day</td>
                                     </tr>
                                 <?php elseif ($worker['worker_type'] === 'Monthly Salary'): ?>
                                     <tr>
-                                        <th class="bg-light">Monthly Salary (ماہانہ تنخواہ)</th>
+                                        <th class="bg-light">Monthly Salary</th>
                                         <td class="fw-bold text-primary">Rs. <?= number_format($worker['default_rate'] ?? 0.00, 2) ?> / month</td>
                                     </tr>
                                 <?php else: ?>
                                     <tr>
-                                        <th class="bg-light">Default Piece Rate (ریٹ فی پیس)</th>
+                                        <th class="bg-light">Default Piece Rate</th>
                                         <td class="fw-bold text-primary">Rs. <?= number_format($worker['default_rate'] ?? 0.00, 2) ?> / piece</td>
                                     </tr>
                                 <?php endif; ?>
                                 <tr>
-                                    <th class="bg-light">Standard Minute Rate (ریٹ فی منٹ)</th>
+                                    <th class="bg-light">Standard Minute Rate</th>
                                     <td class="fw-bold text-success">Rs. <?= number_format($worker['rate_per_minute'] ?? 2.50, 2) ?> / minute</td>
                                 </tr>
                             </tbody>
@@ -550,7 +550,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <div class="card-modern-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                         <div>
                             <h6 class="fw-bold mb-0 text-dark">
-                                <i class="bi bi-puzzle-fill text-primary me-2"></i> Garment Element Rates & SAM Breakdown (حصوں کے مخصوص ریٹ اور اوسط وقت)
+                                <i class="bi bi-puzzle-fill text-primary me-2"></i> Garment Element Rates & SAM Breakdown (Specific Element Rates & SAM Benchmarks)
                             </h6>
                             <span class="text-muted small">Define custom SAM minutes or piece rates for each element when produced by <?= clean($worker['name']) ?></span>
                         </div>
@@ -565,7 +565,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <table class="table table-bordered table-hover align-middle text-center mb-0" style="font-size: 0.88rem;">
                                     <thead class="table-light">
                                         <tr>
-                                            <th class="text-start">Garment Component / Element (حصہ)</th>
+                                            <th class="text-start">Garment Component / Element (Component)</th>
                                             <th>Product</th>
                                             <th>Standard SAM</th>
                                             <th>Worker Min Rate</th>
@@ -633,10 +633,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                             <div class="p-3 bg-light border-top d-flex flex-wrap justify-content-between align-items-center gap-2">
                                 <span class="text-muted small">
-                                    <i class="bi bi-info-circle me-1"></i> ریٹ یا SAM خالی رکھنے پر ورکر کا بنیادی فی منٹ ریٹ اور سٹینڈرڈ SAM خود بخود استعمال ہوگا۔
+                                    <i class="bi bi-info-circle me-1"></i> Leaving Rate or SAM empty defaults to worker minute rate and standard SAM.
                                 </span>
                                 <button type="submit" class="btn btn-sm btn-primary px-4 fw-bold shadow-sm">
-                                    <i class="bi bi-save me-1"></i> Save Element Rates (ریٹس محفوظ کریں)
+                                    <i class="bi bi-save me-1"></i> Save Element Rates
                                 </button>
                             </div>
                         </form>

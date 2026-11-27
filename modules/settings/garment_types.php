@@ -72,12 +72,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-4">
             <div>
                 <h4 class="fw-bold mb-1 text-dark">
-                    <i class="bi bi-scissors text-primary me-2"></i>Garment Types & Cutting Styles (کٹائی کی اقسام)
+                    <i class="bi bi-scissors text-primary me-2"></i>Garment Types & Cutting Styles
                 </h4>
-                <p class="text-muted small mb-0">Manage configurable garment styles displayed on the printed Lot Design Sheet and Job Card (Jersey, Coat, Full Zip, Gold Gala, etc.)</p>
+                <p class="text-muted small mb-0">Manage configurable garment styles displayed on the printed Lot Design Sheet and Job Card (Jersey, Coat, Full Zip, Gol Gala, etc.)</p>
             </div>
             <button type="button" class="btn btn-primary btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#modalAddGarmentType">
-                <i class="bi bi-plus-circle me-1"></i> Add New Style (+ نئی قسم)
+                <i class="bi bi-plus-circle me-1"></i> Add New Style
             </button>
         </div>
 
@@ -97,7 +97,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <thead class="table-light">
                                     <tr>
                                         <th style="width: 60px;" class="text-center">Order</th>
-                                        <th>Style / Variation Name (قسم کا نام)</th>
+                                        <th>Style / Variation Name</th>
                                         <th>Short Code</th>
                                         <th class="text-center" style="width: 100px;">Status</th>
                                         <th class="text-end" style="width: 120px;">Actions</th>
@@ -164,10 +164,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     </div>
                     <div class="card-modern-body">
                         <p class="small text-muted mb-3">
-                            These styles automatically appear as columns in the <strong>Cutting Master (کٹائی ماسٹر)</strong> section of your 4-copy printout:
+                            These styles automatically appear as columns in the <strong>Cutting Master</strong> section of your 4-copy printout:
                         </p>
                         <div class="p-3 bg-light border rounded-3 text-center">
-                            <div class="fw-bold small text-dark mb-2">کٹائی ماسٹر گرڈ (Cutting Master Columns)</div>
+                            <div class="fw-bold small text-dark mb-2">Cutting Master Columns</div>
                             <div class="d-flex flex-wrap gap-1 justify-content-center">
                                 <?php foreach ($garmentTypes as $gt): ?>
                                     <?php if ($gt['is_active']): ?>
@@ -197,14 +197,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 
                 <div class="modal-header bg-primary text-white">
                     <h6 class="modal-title fw-bold">
-                        <i class="bi bi-plus-circle me-1"></i> Add New Garment Style (نئی کٹائی قسم)
+                        <i class="bi bi-plus-circle me-1"></i> Add New Garment Style
                     </h6>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body p-4">
                     <div class="mb-3">
-                        <label class="form-label fw-semibold small">Style Name (قسم کا نام) *</label>
-                        <input type="text" name="name" class="form-control" placeholder="e.g. فل زپ گول گلا or V-Neck Coat" required>
+                        <label class="form-label fw-semibold small">Style Name *</label>
+                        <input type="text" name="name" class="form-control" placeholder="e.g. Full Zip Gol Gala or V-Neck Coat" required>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold small">Short Code</label>
@@ -241,7 +241,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 </div>
                 <div class="modal-body p-4">
                     <div class="mb-3">
-                        <label class="form-label fw-semibold small">Style Name (قسم کا نام) *</label>
+                        <label class="form-label fw-semibold small">Style Name *</label>
                         <input type="text" name="name" id="editGtName" class="form-control" required>
                     </div>
                     <div class="mb-3">

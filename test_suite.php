@@ -924,10 +924,10 @@ ob_start();
 include $jobCardFile;
 $jcHtml = ob_get_clean();
 
-$hasOperatorSec = (strpos($jcHtml, 'آپریٹر سیکشن') !== false);
-$hasCuttingSec = (strpos($jcHtml, 'کٹائی ماسٹر') !== false);
-$hasWorkerGrid = (strpos($jcHtml, 'کاریگروں کا کام اور کھاتہ لاگ') !== false);
-$hasCalcTbl = (strpos($jcHtml, 'حساب ضرب') !== false);
+$hasOperatorSec = (strpos($jcHtml, 'Operator Section') !== false);
+$hasCuttingSec = (strpos($jcHtml, 'Cutting Master') !== false);
+$hasWorkerGrid = (strpos($jcHtml, 'Worker Operation Matrix') !== false);
+$hasCalcTbl = (strpos($jcHtml, 'Calculation') !== false);
 
 $renderPassed = ($jobCardFileExists && $hasOperatorSec && $hasCuttingSec && $hasWorkerGrid && $hasCalcTbl);
 
@@ -1089,7 +1089,7 @@ assert_test("38. Dynamic Product Category Creation & Code Auto-Generation", $sce
 // =========================================================================
 // SCENARIO 39: PALLA YIELD, PIECES PER PALLA & RATE PER PALLA CALCULATION
 // =========================================================================
-echo "\n--- TESTING SCENARIO 39: PALLA YIELD & RATE PER PALLA (پلہ ریٹ اور کٹس) ---\n";
+echo "\n--- TESTING SCENARIO 39: PALLA YIELD & RATE PER PALLA ---\n";
 
 $pallaProdCode = 'PRD-PALLA-' . substr(md5(uniqid('', true)), 0, 6);
 $db->prepare("INSERT INTO products (code, name, product_type, is_active) VALUES (?, 'Palla Formula Jacket', 'Coat', 1)")
@@ -1103,9 +1103,9 @@ $pallaProdId = (int)$db->lastInsertId();
 $insPallaEl = $db->prepare("INSERT INTO product_elements 
     (product_id, element_name, quantity, multiplier, pieces_per_palla, pallas_per_garment, rate_per_palla, sort_order) 
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-$insPallaEl->execute([$pallaProdId, 'Front Panel (سامنے کا پلہ)', 1.0, 1.0, 1.0, 1.0000, 20.00, 1]);
-$insPallaEl->execute([$pallaProdId, 'Bazo / Sleeves (بازو)', 2.0, 2.0, 2.0, 1.0000, 20.00, 2]);
-$insPallaEl->execute([$pallaProdId, 'Pockets (پاکٹ)', 2.0, 2.0, 4.0, 0.5000, 20.00, 3]);
+$insPallaEl->execute([$pallaProdId, 'Front Panel', 1.0, 1.0, 1.0, 1.0000, 20.00, 1]);
+$insPallaEl->execute([$pallaProdId, 'Bazo / Sleeves', 2.0, 2.0, 2.0, 1.0000, 20.00, 2]);
+$insPallaEl->execute([$pallaProdId, 'Pockets', 2.0, 2.0, 4.0, 0.5000, 20.00, 3]);
 
 $pallaElements = $db->query("SELECT * FROM product_elements WHERE product_id = $pallaProdId ORDER BY sort_order ASC")->fetchAll();
 $totPcsPerGarment = array_sum(array_column($pallaElements, 'quantity')); // 1 + 2 + 2 = 5 pcs

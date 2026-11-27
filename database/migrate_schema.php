@@ -107,16 +107,16 @@ echo "[✓] Verified garment_types table\n";
 $gCount = (int)$db->query("SELECT COUNT(*) FROM garment_types")->fetchColumn();
 if ($gCount === 0) {
     $defaultGarmentTypes = [
-        ['name' => 'جرسی', 'code' => 'JERSEY', 'order' => 1],
-        ['name' => 'کوٹ', 'code' => 'COAT', 'order' => 2],
-        ['name' => 'فل زپ', 'code' => 'FULL_ZIP', 'order' => 3],
-        ['name' => 'ہاف زپ', 'code' => 'HALF_ZIP', 'order' => 4],
-        ['name' => 'فل زپ گول گلا', 'code' => 'FULL_ZIP_GG', 'order' => 5],
-        ['name' => 'ہاف زپ گول گلا', 'code' => 'HALF_ZIP_GG', 'order' => 6],
-        ['name' => 'سینڈو فل زپ', 'code' => 'SANDO_FZ', 'order' => 7],
-        ['name' => 'سینڈو ہاف زپ', 'code' => 'SANDO_HZ', 'order' => 8],
-        ['name' => 'سینڈو', 'code' => 'SANDO', 'order' => 9],
-        ['name' => 'جیکٹ', 'code' => 'JACKET', 'order' => 10],
+        ['name' => 'Jersey', 'code' => 'JERSEY', 'order' => 1],
+        ['name' => 'Coat', 'code' => 'COAT', 'order' => 2],
+        ['name' => 'Full Zip', 'code' => 'FULL_ZIP', 'order' => 3],
+        ['name' => 'Half Zip', 'code' => 'HALF_ZIP', 'order' => 4],
+        ['name' => 'Full Zip Round Neck', 'code' => 'FULL_ZIP_GG', 'order' => 5],
+        ['name' => 'Half Zip Round Neck', 'code' => 'HALF_ZIP_GG', 'order' => 6],
+        ['name' => 'Sando Full Zip', 'code' => 'SANDO_FZ', 'order' => 7],
+        ['name' => 'Sando Half Zip', 'code' => 'SANDO_HZ', 'order' => 8],
+        ['name' => 'Sando', 'code' => 'SANDO', 'order' => 9],
+        ['name' => 'Jacket', 'code' => 'JACKET', 'order' => 10],
     ];
     $insG = $db->prepare("INSERT INTO garment_types (name, code, sort_order) VALUES (?, ?, ?)");
     foreach ($defaultGarmentTypes as $gt) {
@@ -296,7 +296,7 @@ if (!$opCheck) {
         $deptId = (int)$db->lastInsertId();
     }
     $db->prepare("INSERT INTO operations (sequence, name, code, department_id, default_rate, is_active)
-                  VALUES (1, 'Operator Entry (مشین آپریٹر / نٹنگ)', 'OP-OPERATOR', ?, 5.00, 1)")
+                  VALUES (1, 'Operator Entry (Machine Operator / Knitting)', 'OP-OPERATOR', ?, 5.00, 1)")
        ->execute([$deptId]);
     echo "[✓] Created Operator Entry operation at sequence 1\n";
 } else {

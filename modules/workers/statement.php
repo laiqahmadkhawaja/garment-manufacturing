@@ -280,7 +280,7 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
             <div class="col-6">
                 <div class="p-3 border text-center <?= $netClosingBalance > 0 ? 'bg-light' : 'bg-light' ?>">
                     <div class="fw-bold small text-uppercase mb-1">
-                        <?= $netClosingBalance > 0 ? 'Closing Payable to Worker (فیکٹری نے کاریگر کو دینے ہیں)' : ($netClosingBalance < 0 ? 'Closing Advance Loan (کاریگر سے وصول کرنے ہیں)' : 'Account Fully Settled') ?>
+                        <?= $netClosingBalance > 0 ? 'Closing Payable to Worker (Factory owes worker)' : ($netClosingBalance < 0 ? 'Closing Advance Loan (Receivable advance loan from worker)' : 'Account Fully Settled') ?>
                     </div>
                     <div class="fs-4 fw-bold <?= $netClosingBalance > 0 ? 'text-danger' : ($netClosingBalance < 0 ? 'text-success' : 'text-dark') ?>">
                         Rs. <?= number_format(abs($netClosingBalance), 2) ?>

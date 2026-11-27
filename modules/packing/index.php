@@ -98,17 +98,17 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <i class="bi bi-box-seam-fill text-white fs-4"></i>
                         </div>
                         <div>
-                            <h6 class="fw-bold text-dark mb-1">یکجا ورک فلو پیکنگ سسٹم (Unified Production Packing)</h6>
+                            <h6 class="fw-bold text-dark mb-1">Unified Production Packing System</h6>
                             <p class="text-secondary small mb-0" style="line-height: 1.5;">
-                                پیکنگ کا پروسیس اب مکمل طور پر پروڈکشن ورک فلو کے ساتھ منسلک ہے۔ تمام لاٹس کی پیکنگ (کلرز کے سیٹ اور سائز وائز پیسز) 
-                                براہ راست پروڈکشن انٹری کے فائنل مرحلے میں درج ہوتی ہے جہاں سے کاریگر کی مزدوری خودکار طور پر لیجر میں کریڈٹ ہو جاتی ہے 
-                                اور ویئر ہاؤس کا فِنشڈ گڈز سٹاک فوری طور پر تیار مال (Ready Stock) میں جمع ہو جاتا ہے۔
+                                The packing process is now fully integrated with the production workflow. All lot packing (color sets and size quantities) 
+                                is recorded directly in the final production entry stage where worker labour is credited to the ledger 
+                                and finished goods warehouse stock is immediately updated to Ready Stock.
                             </p>
                         </div>
                     </div>
                     <div class="flex-shrink-0">
                         <a href="<?= BASE_URL ?>modules/production/index.php?operation_id=<?= $defaultPackOpId ?>" class="btn btn-primary btn-sm px-3 py-2 fw-semibold shadow-sm">
-                            <i class="bi bi-lightning-charge-fill me-1"></i> ورک فلو میں پیکنگ درج کریں
+                            <i class="bi bi-lightning-charge-fill me-1"></i> Enter Packing via Production Entry
                         </a>
                     </div>
                 </div>

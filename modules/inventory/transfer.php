@@ -218,7 +218,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-4">
             <div>
                 <h4 class="fw-bold mb-1 text-dark">Finished Goods Warehouse Transfer</h4>
-                <p class="text-muted small mb-0">Move finished goods between factory warehouses, depots and showroom branches (تیار مال کا گودام سے گودام ٹرانسفر)</p>
+                <p class="text-muted small mb-0">Move finished goods between factory warehouses, depots and showroom branches</p>
             </div>
             <div class="d-flex align-items-center gap-2">
                 <a href="<?= BASE_URL ?>modules/settings/warehouses.php" class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1">
@@ -246,7 +246,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <h6 class="fw-bold mb-0 text-dark">
                         <i class="bi bi-arrow-left-right text-primary me-2"></i> Execute Finished Goods Stock Transfer
                     </h6>
-                    <span class="text-muted small">فیکٹری گودام سے مال نکال کر شو روم یا دوسرے ڈسپیچ ڈپو میں منتقل کریں</span>
+                    <span class="text-muted small">Transfer stock from factory warehouse to showroom or distribution depots</span>
                 </div>
                 <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-1">
                     <i class="bi bi-shield-check me-1"></i> Automatic Inward/Outward Ledger Balance
@@ -263,7 +263,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <input type="date" name="transfer_date" class="form-control form-control-sm fw-bold" value="<?= date('Y-m-d') ?>" required>
                         </div>
                         <div class="col-12 col-md-4">
-                            <label class="form-label small fw-bold text-danger">Source Warehouse (منتقل کنندہ گودام / From) *</label>
+                            <label class="form-label small fw-bold text-danger">Source Warehouse (From) *</label>
                             <select name="from_warehouse_id" id="from_warehouse_id" class="form-select form-select-sm fw-bold border-danger" required>
                                 <option value="">-- Choose Origin Warehouse --</option>
                                 <?php foreach ($warehouses as $wh): ?>
@@ -274,7 +274,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             </select>
                         </div>
                         <div class="col-12 col-md-4">
-                            <label class="form-label small fw-bold text-success">Target Warehouse (منزل گودام / To) *</label>
+                            <label class="form-label small fw-bold text-success">Target Warehouse (To) *</label>
                             <select name="to_warehouse_id" id="to_warehouse_id" class="form-select form-select-sm fw-bold border-success" required>
                                 <option value="">-- Choose Destination Warehouse --</option>
                                 <?php foreach ($warehouses as $wh): ?>
@@ -312,7 +312,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                     <div class="row g-3 mb-4">
                         <div class="col-12 col-md-4">
-                            <label class="form-label small fw-bold text-dark">Quantity to Transfer (پیسز) *</label>
+                            <label class="form-label small fw-bold text-dark">Quantity to Transfer *</label>
                             <div class="input-group input-group-sm">
                                 <input type="number" name="quantity" id="transfer_qty" class="form-control form-control-sm text-center fw-bold text-primary fs-5" min="1" placeholder="0" required>
                                 <span class="input-group-text">pcs</span>
@@ -340,7 +340,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <h6 class="fw-bold mb-0 text-dark">
                     <i class="bi bi-clock-history text-primary me-2"></i> Recent Warehouse Stock Transfers (<?= count($recentTransfers) ?>)
                 </h6>
-                <span class="text-muted small">تمام گوداموں کے درمیان پچھلے اسٹاک ٹرانسفرز کا مکمل ریکارڈ</span>
+                <span class="text-muted small">Complete log of previous stock movements between warehouses</span>
             </div>
             <div class="card-modern-body p-0">
                 <div class="table-responsive">
@@ -361,7 +361,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <?php if (empty($recentTransfers)): ?>
                                 <tr>
                                     <td colspan="8" class="text-center py-4 text-muted">
-                                        ابھی تک کوئی گودام ٹرانسفر ریکارڈ نہیں ہوا۔
+                                        No warehouse transfers recorded yet.
                                     </td>
                                 </tr>
                             <?php else: ?>
@@ -442,7 +442,7 @@ document.addEventListener('DOMContentLoaded', function() {
         countBadge.textContent = `${matchingCount} items available`;
 
         if (matchingCount === 0) {
-            hintEl.innerHTML = `<span class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i>اس گودام میں فی الوقت کوئی تیار شدہ مال موجود نہیں ہے۔</span>`;
+            hintEl.innerHTML = `<span class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i>There is currently no finished goods stock in this warehouse.</span>`;
         } else {
             hintEl.textContent = '';
         }
@@ -479,7 +479,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!fromWh || !toWh || !stockId) valid = false;
         if (fromWh && toWh && fromWh === toWh) {
             valid = false;
-            alert('منزل گودام (Target) اور نکلنے والا گودام (Source) ایک جیسے نہیں ہو سکتے۔');
+            alert('Target and Source warehouses cannot be the same.');
             toWhSel.value = '';
         }
         if (q <= 0 || q > max) valid = false;

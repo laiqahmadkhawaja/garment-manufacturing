@@ -342,7 +342,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-4">
             <div>
                 <h4 class="fw-bold mb-1 text-dark">Create Customer Dispatch & Gate Pass</h4>
-                <p class="text-muted small mb-0">Bundle and dispatch multiple items from different lots under a single Delivery Challan (گیٹ پاس و ڈیلیوری چالان)</p>
+                <p class="text-muted small mb-0">Bundle and dispatch multiple items from different lots under a single Delivery Challan</p>
             </div>
             <a href="<?= BASE_URL ?>modules/dispatch/index.php" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-arrow-left me-1"></i> Back to Dispatches
@@ -362,7 +362,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <h6 class="fw-bold mb-0 text-dark">
                         <i class="bi bi-truck me-1 text-primary"></i> Multi-Lot Dispatch & Delivery Challan Form
                     </h6>
-                    <span class="text-muted small">ایک ہی چالان میں مختلف لاٹس کے آئٹمز شامل کر کے گیٹ پاس تیار کریں</span>
+                    <span class="text-muted small">Combine items across multiple lots into a single delivery challan</span>
                 </div>
                 <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-1">
                     <i class="bi bi-layers me-1"></i> Multi-Lot Dispatching Enabled
@@ -409,10 +409,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <div class="card bg-light border p-3 mb-3 rounded-3 shadow-xs">
                         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                             <span class="fw-bold text-dark small">
-                                <i class="bi bi-box-seam text-primary me-1"></i> Select Finished Goods from Any Lot to Add (لاٹ اور آئٹم منتخب کریں)
+                                <i class="bi bi-box-seam text-primary me-1"></i> Select Finished Goods from Any Lot to Add
                             </span>
                             <span class="text-muted small" style="font-size: 11px;">
-                                آپ ایک ہی ڈسپیچ میں سویٹر، جیکٹ یا کسی بھی دوسری لاٹ سے الگ الگ تعداد شامل کر سکتے ہیں
+                                You can bundle items from any lot into a single dispatch
                             </span>
                         </div>
                         <div class="row g-2 align-items-end">
@@ -438,7 +438,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 </select>
                             </div>
                             <div class="col-6 col-md-2">
-                                <label class="form-label small fw-semibold text-muted mb-1" style="font-size: 11px;">Dispatch Qty (پیسز) *</label>
+                                <label class="form-label small fw-semibold text-muted mb-1" style="font-size: 11px;">Dispatch Qty *</label>
                                 <input type="number" id="inpAddQty" class="form-control form-control-sm text-center fw-bold text-success" min="1" placeholder="Qty">
                             </div>
                             <div class="col-6 col-md-2">
@@ -474,7 +474,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <tr id="emptyItemsRow">
                                     <td colspan="9" class="text-center py-4 text-muted">
                                         <i class="bi bi-box-seam d-block fs-3 opacity-50 mb-1"></i>
-                                        ابھی کوئی لاٹ یا آئٹم شامل نہیں کیا گیا۔ اوپر سے کسی بھی لاٹ کا اسٹاک منتخب کر کے "Add to Dispatch List" پر کلک کریں۔
+                                        No items added to dispatch yet. Select finished stock above and click "Add to Dispatch List".
                                     </td>
                                 </tr>
                             </tbody>
@@ -495,31 +495,31 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-2 border-bottom">
                             <div>
                                 <span class="fw-bold text-dark fs-6">
-                                    <i class="bi bi-wallet2 text-success me-1"></i> Customer Payment & Ledger Settlement (ادائیگی / وصولی کی تفصیلات)
+                                    <i class="bi bi-wallet2 text-success me-1"></i> Customer Payment & Ledger Settlement
                                 </span>
-                                <span class="text-muted small ms-2 d-none d-md-inline">• بل کے ساتھ نقد، پیشگی رقم یا مکمل ادھار درج کریں تاکہ کھاتہ فوری ہم آہنگ ہو</span>
+                                <span class="text-muted small ms-2 d-none d-md-inline">• Record cash receipt, advance payment, or credit settlement with invoice</span>
                             </div>
                             <div class="btn-group btn-group-sm" role="group">
                                 <input type="radio" class="btn-check" name="payment_status" id="payStatusCredit" value="Credit" autocomplete="off" checked>
                                 <label class="btn btn-outline-danger fw-bold px-3 py-1" for="payStatusCredit">
-                                    <i class="bi bi-clock-history me-1"></i> Credit / Unpaid (مکمل ادھار)
+                                    <i class="bi bi-clock-history me-1"></i> Credit / Unpaid
                                 </label>
 
                                 <input type="radio" class="btn-check" name="payment_status" id="payStatusPartial" value="Partial" autocomplete="off">
                                 <label class="btn btn-outline-warning fw-bold px-3 py-1 text-dark" for="payStatusPartial">
-                                    <i class="bi bi-pie-chart-fill me-1"></i> Partial (جزوی / ایڈوانس)
+                                    <i class="bi bi-pie-chart-fill me-1"></i> Partial
                                 </label>
 
                                 <input type="radio" class="btn-check" name="payment_status" id="payStatusPaid" value="Paid" autocomplete="off">
                                 <label class="btn btn-outline-success fw-bold px-3 py-1" for="payStatusPaid">
-                                    <i class="bi bi-check-circle-fill me-1"></i> Full Paid (مکمل نقد وصول)
+                                    <i class="bi bi-check-circle-fill me-1"></i> Full Paid
                                 </label>
                             </div>
                         </div>
 
                         <div class="row g-3 align-items-center">
                             <div class="col-12 col-md-3">
-                                <label class="form-label small fw-semibold text-muted mb-1">Paid / Advance (وصول شدہ رقم)</label>
+                                <label class="form-label small fw-semibold text-muted mb-1">Paid / Advance</label>
                                 <div class="input-group">
                                     <span class="input-group-text fw-bold text-success">Rs.</span>
                                     <input type="number" name="paid_amount" id="dispPaidAmount" class="form-control form-control-lg fw-bold text-end text-success fs-5" step="0.01" min="0" placeholder="0.00" value="0.00">
@@ -527,14 +527,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             </div>
 
                             <div class="col-12 col-md-3">
-                                <label class="form-label small fw-semibold text-muted mb-1">Bill Balance Due (اس بل کا باقی)</label>
+                                <label class="form-label small fw-semibold text-muted mb-1">Bill Balance Due</label>
                                 <div class="p-2 border rounded bg-white text-end fw-bold fs-5 text-danger" id="lblDispBalance">
                                     Rs. 0.00
                                 </div>
                             </div>
 
                             <div class="col-12 col-md-3" id="payAccountWrapper">
-                                <label class="form-label small fw-semibold text-muted mb-1">Deposit To (وصولی کھاتہ / کیش رجسٹر)</label>
+                                <label class="form-label small fw-semibold text-muted mb-1">Deposit To</label>
                                 <select name="account_id" id="dispAccountId" class="form-select form-select-sm fw-semibold">
                                     <option value="" data-type="cash">-- Direct Factory Cash Drawer --</option>
                                     <?php foreach ($accounts as $acc): 
@@ -551,9 +551,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <div class="col-6 col-md-3" id="payMethodWrapper">
                                 <label class="form-label small fw-semibold text-muted mb-1">Payment Method</label>
                                 <select name="payment_method" id="dispPaymentMethod" class="form-select form-select-sm fw-semibold">
-                                    <option value="Cash">Cash (نقد)</option>
-                                    <option value="Bank Transfer">Bank Transfer (بینک ٹرانسفر)</option>
-                                    <option value="Cheque">Cheque (بینک چیک)</option>
+                                    <option value="Cash">Cash</option>
+                                    <option value="Bank Transfer">Bank Transfer</option>
+                                    <option value="Cheque">Cheque</option>
                                     <option value="Online / Mobile">Online (JazzCash / EasyPaisa / Raast)</option>
                                     <?php foreach ($paymentMethods as $pm): ?>
                                         <?php if (!in_array($pm['name'], ['Cash', 'Bank Transfer', 'Cheque', 'Online / Mobile'])): ?>
@@ -564,7 +564,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             </div>
 
                             <div class="col-6 col-md-3" id="payRefWrapper">
-                                <label class="form-label small fw-semibold text-muted mb-1">Cheque / Trx # (اختیاری)</label>
+                                <label class="form-label small fw-semibold text-muted mb-1">Cheque / Trx #</label>
                                 <input type="text" name="payment_reference" id="dispPaymentRef" class="form-control form-control-sm" placeholder="e.g. Chq# 4022 or Trx#">
                             </div>
 
@@ -573,19 +573,19 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <div class="p-3 border rounded-3 bg-white">
                                     <div class="row text-center g-2">
                                         <div class="col-6 col-md-3">
-                                            <span class="text-muted small d-block">Dispatch Total Bill (موجودہ بل)</span>
+                                            <span class="text-muted small d-block">Dispatch Total Bill</span>
                                             <span class="fw-bold text-dark fs-6" id="sumBillVal">Rs. 0.00</span>
                                         </div>
                                         <div class="col-6 col-md-3">
-                                            <span class="text-muted small d-block">Received Now (وصول شدہ)</span>
+                                            <span class="text-muted small d-block">Received Now</span>
                                             <span class="fw-bold text-success fs-6" id="sumPaidVal">Rs. 0.00</span>
                                         </div>
                                         <div class="col-6 col-md-3">
-                                            <span class="text-muted small d-block">Previous Balance (سابقہ کھاتہ)</span>
+                                            <span class="text-muted small d-block">Previous Balance</span>
                                             <span class="fw-bold fs-6" id="sumPrevBal">Rs. 0.00</span>
                                         </div>
                                         <div class="col-6 col-md-3">
-                                            <span class="text-muted small d-block">Customer Net Closing (نیا مجموعی بیلنس)</span>
+                                            <span class="text-muted small d-block">Customer Net Closing</span>
                                             <span class="fw-bold fs-6" id="sumNetBal">Rs. 0.00</span>
                                         </div>
                                     </div>
@@ -594,7 +594,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                             <div class="col-12">
                                 <div id="payStatusBanner" class="alert alert-secondary py-2 px-3 mb-0 small fw-semibold border">
-                                    <i class="bi bi-info-circle me-1"></i> کسٹمر اور مالیت درج کریں تاکہ ادائیگی کا تفصیلی حساب اور نیا بیلنس تیار ہو۔
+                                    <i class="bi bi-info-circle me-1"></i> Select customer and items to calculate billing and ledger balance.
                                 </div>
                             </div>
                         </div>
@@ -602,7 +602,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                     <div class="row g-3 mb-3">
                         <div class="col-12 col-md-6">
-                            <label class="form-label small fw-semibold text-muted">Vehicle / Transport Details (ٹرانسپورٹ و ڈرائیور تفصیل)</label>
+                            <label class="form-label small fw-semibold text-muted">Vehicle / Transport Details</label>
                             <input type="text" name="vehicle_details" class="form-control form-control-sm" placeholder="e.g. Suzuki Pickup / Driver Billa (0300-...)">
                         </div>
                         <div class="col-12 col-md-6">
@@ -696,7 +696,7 @@ document.addEventListener('DOMContentLoaded', function() {
         btnAddItemToList.addEventListener('click', function() {
             const opt = selStockPicker.selectedOptions[0];
             if (!opt || !opt.value) {
-                alert('براہ کرم اسٹاک لسٹ میں سے کوئی لاٹ یا پروڈکٹ منتخب کریں۔');
+                alert('Please select a lot or product from the stock list.');
                 selStockPicker.focus();
                 return;
             }
@@ -707,13 +707,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const rate = parseFloat(inpAddRate.value) || 0.00;
 
             if (qty <= 0) {
-                alert('براہ کرم درست تعداد (Quantity) درج کریں۔');
+                alert('Please enter a valid dispatch quantity.');
                 inpAddQty.focus();
                 return;
             }
 
             if (qty > maxStock) {
-                alert(`تعداد دستیاب اسٹاک (${maxStock} pcs) سے زیادہ نہیں ہو سکتی۔`);
+                alert(`Quantity cannot exceed available stock (${maxStock} pcs).`);
                 inpAddQty.value = maxStock;
                 inpAddQty.focus();
                 return;
@@ -722,7 +722,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Check if stock item is already in table
             const existingRow = document.querySelector(`.dispatch-item-row[data-stock-id="${stockId}"]`);
             if (existingRow) {
-                alert(`یہ آئٹم (LOT #${opt.dataset.lotNumber}) پہلے ہی لسٹ میں موجود ہے۔ آپ ٹیبل کے اندر اس کی تعداد تبدیل کر سکتے ہیں۔`);
+                alert(`This item (LOT #${opt.dataset.lotNumber}) is already in the list. You can adjust its quantity directly in the table.`);
                 const existingQtyInp = existingRow.querySelector('.item-qty-input');
                 if (existingQtyInp) existingQtyInp.focus();
                 return;
@@ -871,11 +871,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (selectedCustOpt && selectedCustOpt.value) {
             custBalanceNotice.style.display = 'block';
             if (prevBal > 0) {
-                custBalanceNotice.innerHTML = `<span class="badge bg-danger-subtle text-danger border px-2 py-1"><i class="bi bi-clock-history me-1"></i> سابقہ واجب الادا / ادھار (Receivable): <strong>${formatRs(prevBal)}</strong></span>`;
+                custBalanceNotice.innerHTML = `<span class="badge bg-danger-subtle text-danger border px-2 py-1"><i class="bi bi-clock-history me-1"></i> Previous Balance Due (Receivable): <strong>${formatRs(prevBal)}</strong></span>`;
             } else if (prevBal < 0) {
-                custBalanceNotice.innerHTML = `<span class="badge bg-success-subtle text-success border px-2 py-1"><i class="bi bi-check-circle-fill me-1"></i> سابقہ پیشگی رقم (Advance with Factory): <strong>${formatRs(Math.abs(prevBal))}</strong></span>`;
+                custBalanceNotice.innerHTML = `<span class="badge bg-success-subtle text-success border px-2 py-1"><i class="bi bi-check-circle-fill me-1"></i> Previous Advance (Credit): <strong>${formatRs(Math.abs(prevBal))}</strong></span>`;
             } else {
-                custBalanceNotice.innerHTML = `<span class="badge bg-light text-muted border px-2 py-1"><i class="bi bi-dash-circle me-1"></i> سابقہ بیلنس: صفر (Nil Balance)</span>`;
+                custBalanceNotice.innerHTML = `<span class="badge bg-light text-muted border px-2 py-1"><i class="bi bi-dash-circle me-1"></i> Previous Balance: Zero (Nil Balance)</span>`;
             }
         } else {
             custBalanceNotice.style.display = 'none';
@@ -944,13 +944,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (sumNetBal) {
             if (netBal > 0) {
                 sumNetBal.className = 'fw-bold fs-6 text-danger';
-                sumNetBal.textContent = formatRs(netBal) + ' (Receivable / کسٹمر ذمہ واجب الوصول)';
+                sumNetBal.textContent = formatRs(netBal) + ' (Receivable / Receivable)';
             } else if (netBal < 0) {
                 sumNetBal.className = 'fw-bold fs-6 text-success';
-                sumNetBal.textContent = formatRs(Math.abs(netBal)) + ' (Advance / کسٹمر کا ایڈوانس موجود)';
+                sumNetBal.textContent = formatRs(Math.abs(netBal)) + ' (Advance / Customer Advance)';
             } else {
                 sumNetBal.className = 'fw-bold fs-6 text-success';
-                sumNetBal.textContent = 'Rs. 0.00 (Clear / کھاتہ صاف)';
+                sumNetBal.textContent = 'Rs. 0.00 (Clear / Account Settled)';
             }
         }
 
@@ -958,13 +958,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (payStatusBanner) {
             if (mode === 'Paid') {
                 payStatusBanner.className = 'alert alert-success py-2 px-3 mb-0 small fw-semibold border';
-                payStatusBanner.innerHTML = `<i class="bi bi-check2-circle me-1"></i> <strong>Full Paid (مکمل نقد وصول):</strong> ڈسپیچ کا پورا بل (${formatRs(totalBill)}) موقع پر وصول ریکارڈ ہو گا اور کسٹمر کے کھاتے میں اس بل کا کوئی ادھار باقی نہیں رہے گا۔`;
+                payStatusBanner.innerHTML = `<i class="bi bi-check2-circle me-1"></i> <strong>Full Paid:</strong> Full invoice amount (${formatRs(totalBill)}) will be recorded as received in cash/bank with zero credit balance.`;
             } else if (mode === 'Credit') {
                 payStatusBanner.className = 'alert alert-danger py-2 px-3 mb-0 small fw-semibold border';
-                payStatusBanner.innerHTML = `<i class="bi bi-clock-history me-1"></i> <strong>Credit / Unpaid (مکمل ادھار):</strong> موجودہ ڈسپیچ کی پوری مالیت (${formatRs(totalBill)}) کسٹمر کے ذمے بقایا ادھار کھاتے (Receivable) میں شامل ہو جائے گی۔`;
+                payStatusBanner.innerHTML = `<i class="bi bi-clock-history me-1"></i> <strong>Credit / Unpaid:</strong> Full invoice value (${formatRs(totalBill)}) will be debited to customer receivable ledger.`;
             } else {
                 payStatusBanner.className = 'alert alert-warning py-2 px-3 mb-0 small fw-semibold border';
-                payStatusBanner.innerHTML = `<i class="bi bi-pie-chart-fill me-1"></i> <strong>Partial / Advance (جزوی وصولی):</strong> بل میں سے <strong>${formatRs(paid)}</strong> نقد/بینک وصول ہو رہے ہیں جبکہ باقی <strong>${formatRs(remainingBill)}</strong> کسٹمر کے ادھار کھاتے میں درج ہوں گے۔`;
+                payStatusBanner.innerHTML = `<i class="bi bi-pie-chart-fill me-1"></i> <strong>Partial / Advance:</strong> From invoice, <strong>${formatRs(paid)}</strong> received via Cash/Bank, and remaining <strong>${formatRs(remainingBill)}</strong> added to customer credit ledger.`;
             }
         }
 

@@ -235,10 +235,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             <div class="alert alert-warning border shadow-sm p-3 mb-4 rounded-3">
                 <div class="d-flex align-items-center gap-2 text-warning-emphasis fw-bold mb-1">
                     <i class="bi bi-lock-fill fs-5"></i>
-                    <span>Entry Locked (لاٹ مکمل یا اسٹور پر ڈسپیچ ہو چکی ہے)</span>
+                    <span>Entry Locked (Lot is completed or dispatched to warehouse)</span>
                 </div>
                 <div class="text-muted small">
-                    اس لاٹ کا موجودہ سٹیٹس <strong><?= clean($entry['lot_status']) ?></strong> ہے۔ تکمیل اور ڈسپیچ کے بعد ریکارڈز کو تبدیل نہیں کیا جا سکتا تاکہ فیکٹری انوینٹری اور فنانشل لیجر کا حساب محفوظ رہے۔
+                    Current lot status is <strong><?= clean($entry['lot_status']) ?></strong>. After completion and dispatch, production records are locked to protect factory inventory and financial ledgers.
                 </div>
             </div>
         <?php endif; ?>
@@ -287,21 +287,21 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                             <div class="row g-3 mb-3">
                                 <div class="col-12 col-md-4">
-                                    <label class="form-label small fw-semibold text-muted">Good Produced Qty (تیار شدہ) *</label>
+                                    <label class="form-label small fw-semibold text-muted">Good Produced Qty *</label>
                                     <div class="input-group input-group-sm">
                                         <input type="number" name="good_qty" id="goodQty" class="form-control form-control-sm text-center fw-bold text-success fs-5" min="0" required value="<?= clean($_POST['good_qty'] ?? $entry['good_qty']) ?>" <?= $isLocked ? 'disabled' : '' ?>>
                                         <span class="input-group-text">pcs</span>
                                     </div>
                                 </div>
                                 <div class="col-6 col-md-4">
-                                    <label class="form-label small fw-semibold text-muted">Rejected Qty (رد شدہ)</label>
+                                    <label class="form-label small fw-semibold text-muted">Rejected Qty</label>
                                     <div class="input-group input-group-sm">
                                         <input type="number" name="rejected_qty" id="rejQty" class="form-control form-control-sm text-center fw-bold text-danger" min="0" value="<?= clean($_POST['rejected_qty'] ?? $entry['rejected_qty']) ?>" <?= $isLocked ? 'disabled' : '' ?>>
                                         <span class="input-group-text">pcs</span>
                                     </div>
                                 </div>
                                 <div class="col-6 col-md-4">
-                                    <label class="form-label small fw-semibold text-muted">Rework Qty (دوبارہ ٹھیک)</label>
+                                    <label class="form-label small fw-semibold text-muted">Rework Qty</label>
                                     <div class="input-group input-group-sm">
                                         <input type="number" name="rework_qty" id="rewQty" class="form-control form-control-sm text-center fw-bold text-warning" min="0" value="<?= clean($_POST['rework_qty'] ?? $entry['rework_qty']) ?>" <?= $isLocked ? 'disabled' : '' ?>>
                                         <span class="input-group-text">pcs</span>
@@ -420,7 +420,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <div class="fw-bold text-dark mb-1">
                             <i class="bi bi-shield-check text-success me-1"></i> Balance Guarantee
                         </div>
-                        جب آپ انٹری کو اپڈیٹ کرتے ہیں تو ورکر لیجر کی متعلقہ ٹرانزیکشن، کمائی اور رننگ بیلنس تاریخ کے لحاظ سے خودکار دوبارہ کیلکولیٹ ہو جاتا ہے تاکہ کوئی حسابی فرق نہ آئے۔
+                        When you update an entry, the worker's ledger transaction, earnings, and running balance are automatically recalculated in chronological order to prevent discrepancies.
                     </div>
                 </div>
             </div>

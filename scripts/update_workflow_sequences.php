@@ -35,7 +35,7 @@ if (!$opId) {
         $deptId = (int)$db->lastInsertId();
     }
     $db->prepare("INSERT INTO operations (sequence, name, code, department_id, default_rate, is_active)
-                  VALUES (1, 'Operator Entry (مشین آپریٹر / نٹنگ)', 'OP-OPERATOR', ?, 5.00, 1)")
+                  VALUES (1, 'Operator Entry (Machine Operator / Knitting)', 'OP-OPERATOR', ?, 5.00, 1)")
        ->execute([$deptId]);
     $opId = (int)$db->lastInsertId();
     echo "[✓] Inserted OP-OPERATOR operation with ID $opId.\n";

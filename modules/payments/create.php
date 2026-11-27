@@ -207,9 +207,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <div class="col-12 col-md-4">
                             <label class="form-label">Payment Method</label>
                             <select name="payment_method" class="form-select">
-                                <option value="Cash">Cash (نقد)</option>
-                                <option value="Bank Transfer">Bank Transfer (بینک)</option>
-                                <option value="Cheque">Cheque (چیک)</option>
+                                <option value="Cash">Cash</option>
+                                <option value="Bank Transfer">Bank Transfer</option>
+                                <option value="Cheque">Cheque</option>
                                 <option value="Online / Mobile">Online</option>
                                 <?php foreach ($methods as $m): ?>
                                     <?php if (!in_array($m['name'], ['Cash', 'Bank Transfer', 'Cheque', 'Online / Mobile'])): ?>

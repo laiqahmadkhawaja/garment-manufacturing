@@ -266,7 +266,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         </div>
 
                         <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold">Machine(s) / مشین</label>
+                            <label class="form-label fw-semibold">Machine(s)</label>
                             <input type="text" name="machine_name" class="form-control font-monospace fw-bold" value="<?= clean($lot['machine_name'] ?? 'CMS 430') ?>" placeholder="e.g. CMS 430 or CMS 430 / CMS 530">
                             <div class="form-text small">Knitting machine number(s). Prints dynamically on Design Sheet.</div>
                         </div>
@@ -276,9 +276,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <input type="text" name="supervisor_name" class="form-control" value="<?= clean($lot['supervisor_name']) ?>" placeholder="e.g. Master Shabbir">
                         </div>
 
-                        <!-- Garment Diagram / Sketch Photo (خاکہ / تصویر) -->
+                        <!-- Garment Diagram / Sketch Photo (Sketch / Photo) -->
                         <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold">Garment Diagram / Sketch Photo (خاکہ / تصویر)</label>
+                            <label class="form-label fw-semibold">Garment Diagram / Sketch Photo (Sketch / Photo)</label>
                             <input type="file" name="sketch_image" class="form-control" accept="image/*">
                             <div class="form-text small">Upload actual completed garment photo or sketch diagram.</div>
                             <?php if (!empty($lot['sketch_image']) && file_exists(__DIR__ . '/../../' . $lot['sketch_image'])): ?>
@@ -346,16 +346,16 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <div class="form-check form-switch mb-2">
                                     <input class="form-check-input" type="checkbox" role="switch" name="has_anatomy_variants" id="edit_has_anatomy" value="1" <?= !empty($lot['has_anatomy_variants']) ? 'checked' : '' ?>>
                                     <label class="form-check-label fw-bold text-dark" for="edit_has_anatomy">
-                                        <i class="bi bi-diagram-3-fill text-primary me-1"></i> Style Anatomy Breakdown (بازو والے vs بغیر بازو / واسکٹ)
+                                        <i class="bi bi-diagram-3-fill text-primary me-1"></i> Style Anatomy Breakdown (Sleeved vs Sleeveless)
                                     </label>
                                 </div>
                                 <div class="row g-2 mt-2">
                                     <div class="col-6 col-sm-4">
-                                        <label class="form-label small text-muted">With Sleeves Qty (بازو والے)</label>
+                                        <label class="form-label small text-muted">With Sleeves Qty</label>
                                         <input type="number" name="with_sleeves_qty" class="form-control form-control-sm fw-bold" value="<?= (int)($anatomyData['with_sleeves'] ?? 0) ?>">
                                     </div>
                                     <div class="col-6 col-sm-4">
-                                        <label class="form-label small text-muted">Sleeveless Qty (بغیر بازو / واسکٹ)</label>
+                                        <label class="form-label small text-muted">Sleeveless Qty</label>
                                         <input type="number" name="sleeveless_qty" class="form-control form-control-sm fw-bold" value="<?= (int)($anatomyData['sleeveless'] ?? 0) ?>">
                                     </div>
                                 </div>
@@ -367,7 +367,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <div class="col-12">
                                 <div class="p-3 bg-light border border-primary-subtle rounded-3">
                                     <div class="d-flex align-items-center justify-content-between mb-2">
-                                        <span class="small fw-bold text-dark"><i class="bi bi-puzzle-fill text-primary me-1"></i> Product Cutting Elements (اجزاء):</span>
+                                        <span class="small fw-bold text-dark"><i class="bi bi-puzzle-fill text-primary me-1"></i> Product Cutting Elements:</span>
                                         <span class="small text-muted"><?= count($productElements) ?> components</span>
                                     </div>
                                     <div class="d-flex flex-wrap gap-1 align-items-center">
@@ -407,17 +407,17 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             </div>
                         <?php endif; ?>
 
-                        <!-- Garment Size & Pattern Measurements (لمبائی، چوڑائی، بارڈر، منٹ) -->
+                        <!-- Garment Size & Pattern Measurements -->
                         <div class="col-12">
                             <div class="card border border-warning shadow-sm">
                                 <div class="card-header bg-warning-subtle py-2 d-flex justify-content-between align-items-center">
                                     <h6 class="mb-0 fw-bold text-dark">
-                                        <i class="bi bi-rulers me-1 text-warning-emphasis"></i> Garment Pattern Size & Cutting Measurements (سائز اور کٹنگ پیمائش: لمبائی، چوڑائی، بارڈر)
+                                        <i class="bi bi-rulers me-1 text-warning-emphasis"></i> Garment Pattern Size & Cutting Measurements: Length, Width, Border
                                     </h6>
                                     <span class="badge bg-warning text-dark fw-bold">Lot Design Sheet Dimensions</span>
                                 </div>
                                 <div class="card-body p-3 bg-light">
-                                    <p class="text-muted small mb-3">Enter or adjust the pattern measurements for Body Panel (پلہ), Sleeves (بازو), and the 4 Size/Color Scheme columns. These reflect directly on the Lot Design Sheet (لاٹ پرچہ).</p>
+                                    <p class="text-muted small mb-3">Enter or adjust the pattern measurements for Body Panel, Sleeves, and the 4 Size/Color Scheme columns. These reflect directly on the Lot Design Sheet.</p>
                                     
                                     <!-- Palla & Bazo Row -->
                                     <div class="row g-3 mb-3">
@@ -425,24 +425,24 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <div class="col-12 col-md-6">
                                             <div class="card border h-100 shadow-sm">
                                                 <div class="card-header bg-primary text-white py-1">
-                                                    <strong class="small"><i class="bi bi-square me-1"></i> پلہ پیمائش (Body Panel)</strong>
+                                                    <strong class="small"><i class="bi bi-square me-1"></i> Palla Measurements</strong>
                                                 </div>
                                                 <div class="card-body p-2 bg-white">
                                                     <div class="row g-2">
                                                         <div class="col-6">
-                                                            <label class="form-label small fw-bold mb-1">لمبائی (Length)</label>
+                                                            <label class="form-label small fw-bold mb-1">Length</label>
                                                             <input type="text" name="pla_length" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curPlaLen) ?>" placeholder="41">
                                                         </div>
                                                         <div class="col-6">
-                                                            <label class="form-label small fw-bold mb-1">چوڑائی (Width)</label>
+                                                            <label class="form-label small fw-bold mb-1">Width</label>
                                                             <input type="text" name="pla_width" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curPlaWid) ?>" placeholder="15">
                                                         </div>
                                                         <div class="col-6">
-                                                            <label class="form-label small fw-bold mb-1">بارڈر (Border)</label>
+                                                            <label class="form-label small fw-bold mb-1">Border</label>
                                                             <input type="text" name="pla_border" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curPlaBor) ?>" placeholder="46">
                                                         </div>
                                                         <div class="col-6">
-                                                            <label class="form-label small fw-bold mb-1">منٹ (SAM Mins)</label>
+                                                            <label class="form-label small fw-bold mb-1">mins</label>
                                                             <input type="text" name="pla_mins" class="form-control form-control-sm text-center font-monospace fw-bold text-success" value="<?= clean($curPlaMins) ?>" placeholder="7">
                                                         </div>
                                                     </div>
@@ -454,24 +454,24 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <div class="col-12 col-md-6">
                                             <div class="card border h-100 shadow-sm">
                                                 <div class="card-header bg-info text-white py-1">
-                                                    <strong class="small"><i class="bi bi-diagram-2 me-1"></i> بازو پیمائش (Sleeves)</strong>
+                                                    <strong class="small"><i class="bi bi-diagram-2 me-1"></i> Sleeves Specs</strong>
                                                 </div>
                                                 <div class="card-body p-2 bg-white">
                                                     <div class="row g-2">
                                                         <div class="col-6">
-                                                            <label class="form-label small fw-bold mb-1">لمبائی (Length)</label>
+                                                            <label class="form-label small fw-bold mb-1">Length</label>
                                                             <input type="text" name="bazo_length" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curBazoLen) ?>" placeholder="48">
                                                         </div>
                                                         <div class="col-6">
-                                                            <label class="form-label small fw-bold mb-1">چوڑائی (Width)</label>
+                                                            <label class="form-label small fw-bold mb-1">Width</label>
                                                             <input type="text" name="bazo_width" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curBazoWid) ?>" placeholder="14">
                                                         </div>
                                                         <div class="col-6">
-                                                            <label class="form-label small fw-bold mb-1">بارڈر (Border)</label>
+                                                            <label class="form-label small fw-bold mb-1">Border</label>
                                                             <input type="text" name="bazo_border" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curBazoBor) ?>" placeholder="42">
                                                         </div>
                                                         <div class="col-6">
-                                                            <label class="form-label small fw-bold mb-1">منٹ (SAM Mins)</label>
+                                                            <label class="form-label small fw-bold mb-1">mins</label>
                                                             <input type="text" name="bazo_mins" class="form-control form-control-sm text-center font-monospace fw-bold text-success" value="<?= clean($curBazoMins) ?>" placeholder="7">
                                                         </div>
                                                     </div>
@@ -483,7 +483,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <!-- Size / Color Scheme Columns 1, 2, 3, 4 -->
                                     <div class="card border shadow-sm">
                                         <div class="card-header bg-white py-1 d-flex justify-content-between align-items-center">
-                                            <strong class="small text-dark"><i class="bi bi-palette me-1 text-warning"></i> سائز / کلر سکیم کالمز (Scheme Columns 1, 2, 3, 4)</strong>
+                                            <strong class="small text-dark"><i class="bi bi-palette me-1 text-warning"></i> Size & Scheme Columns 1-4</strong>
                                             <span class="badge bg-secondary-subtle text-secondary small">Columns 1 to 4</span>
                                         </div>
                                         <div class="card-body p-2 bg-white">
@@ -491,16 +491,16 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <table class="table table-bordered align-middle text-center mb-0" style="font-size: 0.85rem;">
                                                     <thead class="table-light">
                                                         <tr>
-                                                            <th style="width: 20%;">پیمائش</th>
-                                                            <th style="width: 20%;">کالم 1</th>
-                                                            <th style="width: 20%;">کالم 2</th>
-                                                            <th style="width: 20%;">کالم 3</th>
-                                                            <th style="width: 20%;">کالم 4</th>
+                                                            <th style="width: 20%;">Measurements</th>
+                                                            <th style="width: 20%;">Col 1</th>
+                                                            <th style="width: 20%;">Col 2</th>
+                                                            <th style="width: 20%;">Col 3</th>
+                                                            <th style="width: 20%;">Col 4</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
                                                         <tr>
-                                                            <td class="fw-bold text-start ps-2">لمبائی (Length)</td>
+                                                            <td class="fw-bold text-start ps-2">Length</td>
                                                             <?php for ($i = 1; $i <= 4; $i++): ?>
                                                                 <td>
                                                                     <input type="text" name="scheme_<?= $i ?>_length" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curScheme[$i]['length'] ?? '') ?>" placeholder="-">
@@ -508,7 +508,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                             <?php endfor; ?>
                                                         </tr>
                                                         <tr>
-                                                            <td class="fw-bold text-start ps-2">چوڑائی (Width)</td>
+                                                            <td class="fw-bold text-start ps-2">Width</td>
                                                             <?php for ($i = 1; $i <= 4; $i++): ?>
                                                                 <td>
                                                                     <input type="text" name="scheme_<?= $i ?>_width" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curScheme[$i]['width'] ?? '') ?>" placeholder="-">
@@ -516,7 +516,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                             <?php endfor; ?>
                                                         </tr>
                                                         <tr>
-                                                            <td class="fw-bold text-start ps-2">بارڈر (Border)</td>
+                                                            <td class="fw-bold text-start ps-2">Border</td>
                                                             <?php for ($i = 1; $i <= 4; $i++): ?>
                                                                 <td>
                                                                     <input type="text" name="scheme_<?= $i ?>_border" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curScheme[$i]['border'] ?? '') ?>" placeholder="-">
@@ -524,7 +524,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                             <?php endfor; ?>
                                                         </tr>
                                                         <tr>
-                                                            <td class="fw-bold text-start ps-2">منٹ (SAM Mins)</td>
+                                                            <td class="fw-bold text-start ps-2">mins</td>
                                                             <?php for ($i = 1; $i <= 4; $i++): ?>
                                                                 <td>
                                                                     <input type="text" name="scheme_<?= $i ?>_mins" class="form-control form-control-sm text-center font-monospace fw-bold text-success" value="<?= clean($curScheme[$i]['mins'] ?? '') ?>" placeholder="-">

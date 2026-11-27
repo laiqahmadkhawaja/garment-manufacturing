@@ -744,11 +744,11 @@ if ($action === 'save_fast_row_entry') {
 
     // Basic Validations
     if ($lotId <= 0 || $operationId <= 0 || $workerId <= 0) {
-        json_response(['status' => 'error', 'message' => 'براہ کرم لاٹ، آپریشن اور کاریگر کو منتخب کریں (Missing required fields)'], 400);
+        json_response(['status' => 'error', 'message' => 'Please select lot, operation, and worker (Missing required fields)'], 400);
     }
 
     if ($goodQty <= 0 && $rejectedQty <= 0 && $reworkQty <= 0) {
-        json_response(['status' => 'error', 'message' => 'براہ کرم کم از کم 1 پیس درج کریں'], 400);
+        json_response(['status' => 'error', 'message' => 'Please enter at least 1 piece'], 400);
     }
 
     // Verify Lot
@@ -760,7 +760,7 @@ if ($action === 'save_fast_row_entry') {
     $lotStmt->execute([$lotId]);
     $lot = $lotStmt->fetch();
     if (!$lot) {
-        json_response(['status' => 'error', 'message' => 'منتخب کردہ لاٹ موجود نہیں ہے'], 404);
+        json_response(['status' => 'error', 'message' => 'Selected lot was not found'], 404);
     }
 
     // Verify Operation
@@ -768,7 +768,7 @@ if ($action === 'save_fast_row_entry') {
     $opStmt->execute([$operationId]);
     $op = $opStmt->fetch();
     if (!$op) {
-        json_response(['status' => 'error', 'message' => 'منتخب کردہ آپریشن موجود نہیں ہے'], 404);
+        json_response(['status' => 'error', 'message' => 'Selected operation was not found'], 404);
     }
 
     // Verify Worker
@@ -776,7 +776,7 @@ if ($action === 'save_fast_row_entry') {
     $wStmt->execute([$workerId]);
     $worker = $wStmt->fetch();
     if (!$worker) {
-        json_response(['status' => 'error', 'message' => 'منتخب کردہ کاریگر موجود نہیں ہے'], 404);
+        json_response(['status' => 'error', 'message' => 'Selected worker was not found'], 404);
     }
 
     // Validate Sequential Workflow Stage Allowance & Capacity
@@ -793,18 +793,18 @@ if ($action === 'save_fast_row_entry') {
             if ($maxAvailable === 0) {
                 json_response([
                     'status' => 'error',
-                    'message' => "پچھلا مرحلہ ($prevOpName) ابھی زیرِ تکمیل ہے (صرف $prevDone پیسز تیار ہوئے ہیں)۔ جب تک پچھلے مرحلے سے مزید پیسز مکمل نہیں ہوتے، اس مرحلے ({$op['name']}) کی انٹری محفوظ نہیں ہو سکتی۔"
+                    'message' => "Preceding stage ($prevOpName) is still in progress (only $prevDone pcs completed). Work on ({$op['name']}) is restricted until preceding stage produces more pieces."
                 ], 400);
             } else {
                 json_response([
                     'status' => 'error',
-                    'message' => "پچھلے مرحلے ($prevOpName) میں صرف $prevDone پیسز تیار ہوئے ہیں (اور اس مرحلے میں پہلے سے $currentGood ہو چکے ہیں)! آپ اس وقت زیادہ سے زیادہ $maxAvailable پیسز ہی درج کر سکتے ہیں۔"
+                    'message' => "Preceding stage ($prevOpName) only has $prevDone pcs completed ($currentGood already done in this stage)! You can enter at most $maxAvailable pcs right now."
                 ], 400);
             }
         } else {
             json_response([
                 'status' => 'error',
-                'message' => "تعداد باقی پینڈنگ پیسز ($pendingBalance) سے زیادہ نہیں ہو سکتی! آپ نے $goodQty درج کی ہے۔"
+                'message' => "Quantity cannot exceed remaining pending balance ($pendingBalance)! You entered $goodQty."
             ], 400);
         }
     }
@@ -983,7 +983,7 @@ if ($action === 'save_fast_row_entry') {
 
         json_response([
             'status' => 'success',
-            'message' => "لاٹ #{$lot['lot_number']} برائے {$op['name']} کامیابی سے محفوظ ہو گئی! ($goodQty پیسز)",
+            'message' => "Lot #{$lot['lot_number']} for {$op['name']} saved successfully! ($goodQty pcs)",
             'lot_id' => $lotId,
             'operation_id' => $operationId,
             'entry_number' => $entryNum,
@@ -1000,7 +1000,7 @@ if ($action === 'save_fast_row_entry') {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
-        json_response(['status' => 'error', 'message' => 'انٹری محفوظ کرنے میں خرابی پیش آگئی: ' . $e->getMessage()], 500);
+        json_response(['status' => 'error', 'message' => 'Error saving entry: ' . $e->getMessage()], 500);
     }
 }
 

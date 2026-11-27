@@ -155,7 +155,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             </select>
                         </div>
                         <div class="col-12 col-md-3">
-                            <label class="form-label">Linked Color (دھاگے کا رنگ)</label>
+                            <label class="form-label">Linked Color (Yarn Color)</label>
                             <select name="color_id" id="matColorId" class="form-select">
                                 <option value="">-- Generic / No Color Linked --</option>
                                 <?php foreach ($allColors as $c): ?>

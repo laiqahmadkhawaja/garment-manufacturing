@@ -295,7 +295,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             </div>
             <div class="d-flex align-items-center gap-2">
                 <a href="<?= BASE_URL ?>modules/raw_materials/supplier_ledger.php" class="btn btn-outline-warning btn-sm text-dark fw-semibold">
-                    <i class="bi bi-journal-text me-1"></i> Supplier Ledgers (سپلائر کھاتہ)
+                    <i class="bi bi-journal-text me-1"></i> Supplier Ledgers
                 </a>
                 <a href="<?= BASE_URL ?>modules/settings/products.php#variants" class="btn btn-outline-primary btn-sm">
                     <i class="bi bi-palette me-1"></i> Factory Colors
@@ -361,14 +361,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <div class="p-2 px-3 border rounded-3 bg-light-subtle border-primary-subtle shadow-xs h-100">
                                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                                     <label class="form-label small fw-bold text-dark mb-0">
-                                        <i class="bi bi-palette-fill text-primary me-1"></i> Color / Yarn Shade Integration (رنگ کا انتخاب)
+                                        <i class="bi bi-palette-fill text-primary me-1"></i> Color / Yarn Shade Integration
                                     </label>
                                     <div class="btn-group btn-group-sm" role="group">
                                         <input type="radio" class="btn-check" name="color_mode" id="colModeExisting" value="existing" autocomplete="off" checked>
                                         <label class="btn btn-outline-primary py-0 px-2 small" for="colModeExisting"><i class="bi bi-list-check me-1"></i>Existing Color</label>
 
                                         <input type="radio" class="btn-check" name="color_mode" id="colModeNew" value="new" autocomplete="off">
-                                        <label class="btn btn-outline-primary py-0 px-2 small" for="colModeNew"><i class="bi bi-plus-circle me-1"></i>+ New Color (نیا رنگ)</label>
+                                        <label class="btn btn-outline-primary py-0 px-2 small" for="colModeNew"><i class="bi bi-plus-circle me-1"></i>+ New Color</label>
                                     </div>
                                 </div>
 
@@ -437,31 +437,31 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-2 border-bottom">
                                     <div>
                                         <span class="fw-bold text-dark fs-6">
-                                            <i class="bi bi-wallet2 text-success me-1"></i> Supplier Payment & Ledger Settlement (ادائیگی کی تفصیلات)
+                                            <i class="bi bi-wallet2 text-success me-1"></i> Supplier Payment & Ledger Settlement
                                         </span>
-                                        <span class="text-muted small ms-2 d-none d-md-inline">• بل کے وقت ہی ادھار یا ادائیگی درج کر کے الگ لیجر انٹری کے اضافی مرحلے سے بچیں</span>
+                                        <span class="text-muted small ms-2 d-none d-md-inline">• Record credit or payment right at purchase time to keep ledger updated</span>
                                     </div>
                                     <div class="btn-group btn-group-sm" role="group">
                                         <input type="radio" class="btn-check" name="payment_status" id="payStatusPaid" value="Paid" autocomplete="off" checked>
                                         <label class="btn btn-outline-success fw-bold px-3 py-1" for="payStatusPaid">
-                                            <i class="bi bi-check-circle-fill me-1"></i> Full Paid (مکمل نقد ادا)
+                                            <i class="bi bi-check-circle-fill me-1"></i> Full Paid
                                         </label>
 
                                         <input type="radio" class="btn-check" name="payment_status" id="payStatusPartial" value="Partial" autocomplete="off">
                                         <label class="btn btn-outline-warning fw-bold px-3 py-1 text-dark" for="payStatusPartial">
-                                            <i class="bi bi-pie-chart-fill me-1"></i> Partial (جزوی ادائیگی)
+                                            <i class="bi bi-pie-chart-fill me-1"></i> Partial
                                         </label>
 
                                         <input type="radio" class="btn-check" name="payment_status" id="payStatusCredit" value="Credit" autocomplete="off">
                                         <label class="btn btn-outline-danger fw-bold px-3 py-1" for="payStatusCredit">
-                                            <i class="bi bi-clock-history me-1"></i> Credit / Unpaid (ادھار)
+                                            <i class="bi bi-clock-history me-1"></i> Credit / Unpaid (Credit)
                                         </label>
                                     </div>
                                 </div>
 
                                 <div class="row g-3 align-items-center">
                                     <div class="col-12 col-md-3">
-                                        <label class="form-label small fw-semibold text-muted mb-1">Paid Amount (ادا کردہ رقم) *</label>
+                                        <label class="form-label small fw-semibold text-muted mb-1">Paid Amount *</label>
                                         <div class="input-group">
                                             <span class="input-group-text fw-bold text-success">Rs.</span>
                                             <input type="number" name="paid_amount" id="purPaidAmount" class="form-control form-control-lg fw-bold text-end text-success fs-5" step="0.01" min="0" placeholder="0.00" value="0.00">
@@ -469,14 +469,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     </div>
 
                                     <div class="col-12 col-md-3">
-                                        <label class="form-label small fw-semibold text-muted mb-1">Balance Due (باقی واجب الادا رقم)</label>
+                                        <label class="form-label small fw-semibold text-muted mb-1">Balance Due</label>
                                         <div class="p-2 border rounded bg-white text-end fw-bold fs-5 text-success" id="lblPurBalance">
                                             Rs. 0.00
                                         </div>
                                     </div>
 
                                     <div class="col-12 col-md-3" id="payAccountWrapper">
-                                        <label class="form-label small fw-semibold text-muted mb-1">Paid From (اکاؤنٹ / کیش رجسٹر)</label>
+                                        <label class="form-label small fw-semibold text-muted mb-1">Paid From</label>
                                         <select name="account_id" id="purAccountId" class="form-select form-select-sm fw-semibold">
                                             <option value="" data-type="cash">-- Direct Factory Cash Drawer --</option>
                                             <?php foreach ($accounts as $acc): 
@@ -493,9 +493,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <div class="col-6 col-md-3" id="payMethodWrapper">
                                         <label class="form-label small fw-semibold text-muted mb-1">Payment Method</label>
                                         <select name="payment_method" id="purPaymentMethod" class="form-select form-select-sm fw-semibold">
-                                            <option value="Cash">Cash (نقد)</option>
-                                            <option value="Bank Transfer">Bank Transfer (بینک)</option>
-                                            <option value="Cheque">Cheque (چیک)</option>
+                                            <option value="Cash">Cash</option>
+                                            <option value="Bank Transfer">Bank Transfer</option>
+                                            <option value="Cheque">Cheque</option>
                                             <option value="Online / Mobile">Online (EasyPaisa / JazzCash)</option>
                                             <?php foreach ($methods as $m): ?>
                                                 <?php if (!in_array($m['name'], ['Cash', 'Bank Transfer', 'Cheque', 'Online / Mobile'])): ?>
@@ -506,13 +506,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     </div>
 
                                     <div class="col-6 col-md-3" id="payRefWrapper">
-                                        <label class="form-label small fw-semibold text-muted mb-1">Cheque / Trx # (اختیاری)</label>
+                                        <label class="form-label small fw-semibold text-muted mb-1">Cheque / Trx #</label>
                                         <input type="text" name="payment_reference" id="purPaymentRef" class="form-control form-control-sm" placeholder="e.g. Chq# 8011 or Trx#">
                                     </div>
 
                                     <div class="col-12 col-md-9">
                                         <div id="payStatusBanner" class="alert alert-success py-2 px-3 mb-0 small fw-semibold border">
-                                            <i class="bi bi-check2-circle me-1"></i> <strong>Full Paid:</strong> پورا بل ادا شدہ سمجھا جائے گا اور سپلائر کھاتہ فوراً بیلنس ہو جائے گا (کوئی بقایا ادھار نہیں بچے گا)۔
+                                            <i class="bi bi-check2-circle me-1"></i> <strong>Full Paid:</strong> Full bill is recorded as paid with zero credit balance.
                                         </div>
                                     </div>
                                 </div>
@@ -675,7 +675,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (payMethodWrapper) payMethodWrapper.style.opacity = '1';
             if (payRefWrapper) payRefWrapper.style.opacity = '1';
             payStatusBanner.className = 'alert alert-success py-2 px-3 mb-0 small fw-semibold border';
-            payStatusBanner.innerHTML = '<i class="bi bi-check2-circle me-1"></i> <strong>Full Paid:</strong> پورا بل ادا شدہ سمجھا جائے گا اور سپلائر کھاتہ فوراً بیلنس ہو جائے گا (کوئی بقایا ادھار نہیں بچے گا)۔';
+            payStatusBanner.innerHTML = '<i class="bi bi-check2-circle me-1"></i> <strong>Full Paid:</strong> Full bill is recorded as paid with zero credit balance.';
         } else if (payStatusCredit.checked) {
             purPaidAmount.value = '0.00';
             purPaidAmount.readOnly = true;
@@ -685,7 +685,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (payMethodWrapper) payMethodWrapper.style.opacity = '0.5';
             if (payRefWrapper) payRefWrapper.style.opacity = '0.5';
             payStatusBanner.className = 'alert alert-danger py-2 px-3 mb-0 small fw-semibold border';
-            payStatusBanner.innerHTML = '<i class="bi bi-clock-history me-1"></i> <strong>On Credit (ادھار):</strong> مکمل رقم سپلائر کے کھاتے میں بطور ادھار (واجب الادا) درج ہو جائے گی اور بعد میں ادا کی جا سکے گی۔';
+            payStatusBanner.innerHTML = '<i class="bi bi-clock-history me-1"></i> <strong>On Credit (Credit):</strong> Full amount is debited to supplier payable ledger and can be settled later.';
         } else { // Partial
             purPaidAmount.readOnly = false;
             let paid = parseFloat(purPaidAmount.value) || 0;
@@ -704,7 +704,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (payMethodWrapper) payMethodWrapper.style.opacity = '1';
             if (payRefWrapper) payRefWrapper.style.opacity = '1';
             payStatusBanner.className = 'alert alert-warning py-2 px-3 mb-0 small fw-semibold border';
-            payStatusBanner.innerHTML = '<i class="bi bi-pie-chart-fill me-1"></i> <strong>Partial Payment:</strong> ادا کردہ رقم سپلائر کھاتے میں کریڈٹ کٹ جائے گی اور بقیہ رقم (Rs. ' + bal.toFixed(2) + ') سپلائر کے ادھار واجبات میں رہے گی۔';
+            payStatusBanner.innerHTML = '<i class="bi bi-pie-chart-fill me-1"></i> <strong>Partial Payment:</strong> Paid amount is settled and remaining balance (Rs. ' + bal.toFixed(2) + ') remains in supplier payable balance.';
         }
     }
 

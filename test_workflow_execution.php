@@ -96,7 +96,7 @@ try {
     report("3. Create Production Lot (120 pcs, 4 steps)", $lotId > 0, "Lot #$testLotNum created with 4-stage workflow");
 
     // -------------------------------------------------------------------------
-    // STEP 1: OPERATOR KNITTING - PARTIAL ENTRY (کچھ pieces pending رکھو)
+    // STEP 1: OPERATOR KNITTING - PARTIAL ENTRY (Keep some pieces pending)
     // Planned: 120 pcs. Day Operator: 40 pcs, Night Operator: 30 pcs = 70 pcs.
     // Remaining Pending: 50 pcs.
     // -------------------------------------------------------------------------
@@ -138,7 +138,7 @@ try {
     report("4. Stage 1 Operator - Partial Entry Recorded", $opDone1 === 70 && $opPending1 === 50, "Done: $opDone1 pcs, Pending: $opPending1 pcs (Day: 40, Night: 30)");
 
     // -------------------------------------------------------------------------
-    // STEP 2: OPERATOR KNITTING - COMPLETE REMAINING (کچھ کو پورا کرو)
+    // STEP 2: OPERATOR KNITTING - COMPLETE REMAINING (Complete remaining pieces)
     // Day Operator: 30 pcs, Night Operator: 20 pcs = 50 pcs. Total = 120 pcs.
     // Remaining Pending: 0 pcs.
     // -------------------------------------------------------------------------

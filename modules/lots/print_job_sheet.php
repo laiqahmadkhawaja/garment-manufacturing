@@ -183,10 +183,10 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
             $sumBatchCut = $calcBreakdown['total_cut_pieces'];
         ?>
             <h6 class="fw-bold text-uppercase border-bottom pb-1 mb-2">
-                <?= $secNum++ ?>. Garment Pattern Elements & Cutting Parts (کٹنگ کے اجزاء)
+                <?= $secNum++ ?>. Garment Pattern Elements & Cutting Parts
                 <?php if ($hasAnatomy): ?>
                     <span class="small text-muted text-lowercase fw-normal">
-                        (بازو والے: <?= (int)($anatomyData['with_sleeves'] ?? 0) ?> pcs | بغیر بازو: <?= (int)($anatomyData['sleeveless'] ?? 0) ?> pcs)
+                        (With Sleeves: <?= (int)($anatomyData['with_sleeves'] ?? 0) ?> pcs | Sleeveless: <?= (int)($anatomyData['sleeveless'] ?? 0) ?> pcs)
                     </span>
                 <?php endif; ?>
             </h6>
@@ -276,7 +276,7 @@ $companyPhone = get_setting('company_phone', '+92 300 1234567');
 
         <!-- Raw Material Recipe / Store Requisition -->
         <?php if ($productBom && !empty($bomItems)): ?>
-            <h6 class="fw-bold text-uppercase border-bottom pb-1 mb-2"><?= $secNum++ ?>. Raw Material Recipe & Store Allocation (خام مال اور ریسیپی)</h6>
+            <h6 class="fw-bold text-uppercase border-bottom pb-1 mb-2"><?= $secNum++ ?>. Raw Material Recipe & Store Allocation</h6>
             <table class="table table-bordered mb-4" style="font-size: 0.85rem;">
                 <thead class="bg-light text-center">
                     <tr>

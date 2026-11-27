@@ -184,11 +184,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <label class="form-label fw-bold text-dark small">Wage / Worker Type *</label>
                             <?php 
                             $types = [
-                                'Piece Rate' => '👕 Piece Rate (پر پیس ریٹ - کٹنگ، ٹیلرنگ، فنشنگ)',
-                                'Minute Rate' => '⏱️ Minute Rate (منٹ ریٹ - مشین آپریٹر ٹائم ریٹ)',
-                                'Daily Wage' => '📅 Daily Wage (یومیہ اجرت - فکسڈ فی دن)',
-                                'Monthly Salary' => '💼 Monthly Salary (ماہانہ فکسڈ تنخواہ)',
-                                'Contractor' => '🤝 Contractor (ٹھیکیدار / کنٹریکٹر)'
+                                'Piece Rate' => '👕 Piece Rate (Cutting, Tailoring, Finishing)',
+                                'Minute Rate' => '⏱️ Minute Rate (Knitting Machine Operator)',
+                                'Daily Wage' => '📅 Daily Wage (Fixed Per Day)',
+                                'Monthly Salary' => '💼 Monthly Salary (Fixed Per Month)',
+                                'Contractor' => '🤝 Contractor'
                             ];
                             $selType = $_POST['worker_type'] ?? $worker['worker_type'];
                             ?>
@@ -216,32 +216,32 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <label class="form-label fw-bold small text-dark">Rate & Work Basis *</label>
                             <?php $selBasis = $_POST['rate_basis'] ?? ($worker['rate_basis'] ?? 'whole_sweater'); ?>
                             <select name="rate_basis" id="wrk_rate_basis" class="form-select form-select-sm fw-semibold border-primary">
-                                <option value="whole_sweater" <?= $selBasis === 'whole_sweater' ? 'selected' : '' ?>>👕 Whole Sweaters (مکمل سویٹر - ٹیلرنگ، بٹن، کاج، پریس)</option>
-                                <option value="element_wise" <?= $selBasis === 'element_wise' ? 'selected' : '' ?>>🧩 Garment Elements (اعضاء وار بریک ڈاؤن - آپریٹر، کٹنگ)</option>
+                                <option value="whole_sweater" <?= $selBasis === 'whole_sweater' ? 'selected' : '' ?>>👕 Whole Sweaters (Tailoring, Buttons, Pressing)</option>
+                                <option value="element_wise" <?= $selBasis === 'element_wise' ? 'selected' : '' ?>>🧩 Garment Elements (Operator Knitting, Cutting)</option>
                             </select>
-                            <div class="form-text small" style="font-size: 11px;">پروڈکشن انٹری میں ورک فلو اور ریٹ کا تعین اس بنیاد پر ہوگا۔</div>
+                            <div class="form-text small" style="font-size: 11px;">Workflow and rate calculation in Production Entry will be based on this setting.</div>
                         </div>
 
-                        <!-- Piece Rate Input (روپے فی پیس) -->
+                        <!-- Piece Rate Input -->
                         <div class="col-12 col-md-3" id="grp_piece_rate">
-                            <label class="form-label fw-bold small text-primary" id="lbl_piece_rate">Default Piece Rate (ریٹ فی پیس) *</label>
+                            <label class="form-label fw-bold small text-primary" id="lbl_piece_rate">Default Piece Rate *</label>
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text bg-primary text-white fw-bold">Rs</span>
                                 <input type="number" name="default_rate" id="wrk_piece_rate" class="form-control form-control-sm fw-bold text-primary text-center" step="any" min="0" value="<?= clean($_POST['default_rate'] ?? $worker['default_rate']) ?>" placeholder="0.00">
                                 <span class="input-group-text" id="unit_piece_rate">/pc</span>
                             </div>
-                            <div class="form-text small" id="hint_piece_rate" style="font-size: 11px;">مکمل سویٹر یا کٹنگ فی پیس طے شدہ اجرت۔</div>
+                            <div class="form-text small" id="hint_piece_rate" style="font-size: 11px;">Fixed standard piece rate for finished piece or cutting.</div>
                         </div>
 
-                        <!-- Minute Rate Input (روپے فی منٹ) -->
+                        <!-- Minute Rate Input -->
                         <div class="col-12 col-md-3" id="grp_min_rate">
-                            <label class="form-label fw-semibold small text-success">Minute Rate (روپے فی منٹ) *</label>
+                            <label class="form-label fw-semibold small text-success">Minute Rate *</label>
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text bg-success text-white fw-bold">Rs</span>
                                 <input type="number" name="rate_per_minute" id="wrk_min_rate" class="form-control form-control-sm fw-bold text-success text-center" step="any" min="0.1" required value="<?= clean($_POST['rate_per_minute'] ?? $worker['rate_per_minute']) ?>">
                                 <span class="input-group-text">/m</span>
                             </div>
-                            <div class="form-text small text-muted" style="font-size: 11px;">مشین نٹنگ آپریٹر اور SAM وقت کا حساب: Rate = SAM × Rate/min</div>
+                            <div class="form-text small text-muted" style="font-size: 11px;">Knitting operator SAM formula: Rate = SAM × Rate/min</div>
                         </div>
                     </div>
 
@@ -262,7 +262,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <label class="form-label fw-semibold small text-muted">Account Status</label>
                             <div class="form-check form-switch mt-1">
                                 <input class="form-check-input" type="checkbox" name="is_active" id="is_active" value="1" <?= ($worker['is_active'] ? 'checked' : '') ?>>
-                                <label class="form-check-label fw-semibold text-dark small" for="is_active">Active Worker (کام پر موجود)</label>
+                                <label class="form-check-label fw-semibold text-dark small" for="is_active">Active Worker (Active)</label>
                             </div>
                         </div>
                     </div>
@@ -276,30 +276,30 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                             <div>
                                 <label class="form-label fw-bold text-dark mb-0">
-                                    <i class="bi bi-diagram-3-fill text-primary me-1"></i> Assigned Operations (ورکر کن مراحل پر کام کرتا ہے)
+                                    <i class="bi bi-diagram-3-fill text-primary me-1"></i> Assigned Operations
                                 </label>
                                 <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-2" id="lbl_op_count">0 selected</span>
                             </div>
                             <div class="d-flex align-items-center gap-2">
                                 <button type="button" class="btn btn-xs btn-outline-primary py-1 px-2 small" id="btn_select_all_ops" style="font-size: 11px;">
-                                    <i class="bi bi-check-all me-1"></i> Select All (سب منتخب کریں)
+                                    <i class="bi bi-check-all me-1"></i> Select All
                                 </button>
                                 <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 small" id="btn_deselect_all_ops" style="font-size: 11px;">
                                     <i class="bi bi-x-lg me-1"></i> Deselect All
                                 </button>
                                 <div class="form-check form-switch mb-0 ms-2" title="Show all factory operations regardless of department">
                                     <input class="form-check-input" type="checkbox" id="chk_show_all_ops">
-                                    <label class="form-check-label small text-muted" for="chk_show_all_ops" style="font-size: 11px;">Show All (تمام)</label>
+                                    <label class="form-check-label small text-muted" for="chk_show_all_ops" style="font-size: 11px;">Show All</label>
                                 </div>
                             </div>
                         </div>
 
                         <div class="border rounded-3 p-3 bg-light">
                             <div id="msg_select_dept" class="alert alert-info py-2 small mb-2 d-none">
-                                <i class="bi bi-info-circle me-1"></i> براہ کرم اوپر سے ڈیپارٹمنٹ منتخب کریں۔ اس ڈیپارٹمنٹ کے متعلقہ آپریشنز خودکار نیچے ظاہر اور چیک ہو جائیں گے۔
+                                <i class="bi bi-info-circle me-1"></i> Select a department above to auto-display and check its related operations.
                             </div>
                             <div id="msg_no_dept_ops" class="alert alert-warning py-2 small mb-2 d-none">
-                                <i class="bi bi-exclamation-triangle me-1"></i> اس ڈیپارٹمنٹ کے تحت ابھی سیٹنگز میں کوئی آپریشن درج نہیں ہے۔ آپ اوپر "Show All" کو فعال کر کے تمام آپریشنز دیکھ سکتے ہیں۔
+                                <i class="bi bi-exclamation-triangle me-1"></i> No operations found under this department. Enable "Show All" to view all operations.
                             </div>
 
                             <div class="row g-2" id="operations_container">
@@ -360,9 +360,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const grpPiece = document.getElementById('grp_piece_rate');
 
         if (val === 'Piece Rate') {
-            if (lblPieceRate) lblPieceRate.textContent = 'Default Piece Rate (ریٹ فی پیس) *';
+            if (lblPieceRate) lblPieceRate.textContent = 'Default Piece Rate *';
             if (unitPieceRate) unitPieceRate.textContent = '/pc';
-            if (hintPieceRate) hintPieceRate.textContent = 'مکمل سویٹر یا کٹنگ فی پیس طے شدہ اجرت۔';
+            if (hintPieceRate) hintPieceRate.textContent = 'Fixed standard piece rate for finished piece or cutting.';
             if (grpPiece) {
                 grpPiece.classList.remove('opacity-50');
                 grpPiece.style.borderLeft = '3px solid #0d6efd';
@@ -375,9 +375,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             if (rateBasisSelect && !rateBasisSelect.value) rateBasisSelect.value = 'whole_sweater';
         } else if (val === 'Minute Rate') {
-            if (lblPieceRate) lblPieceRate.textContent = 'Standard Piece Rate (اختیاری / ریفرنس)';
+            if (lblPieceRate) lblPieceRate.textContent = 'Standard Piece Rate (Optional / Reference)';
             if (unitPieceRate) unitPieceRate.textContent = '/pc';
-            if (hintPieceRate) hintPieceRate.textContent = 'کاریگر کا ریٹ منٹ ریٹ اور SAM وقت سے خودکار طے ہوگا۔';
+            if (hintPieceRate) hintPieceRate.textContent = 'Worker rate is calculated automatically from Minute Rate and SAM.';
             if (grpMin) {
                 grpMin.classList.remove('opacity-75');
                 grpMin.style.borderLeft = '3px solid #198754';
@@ -390,21 +390,21 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             if (rateBasisSelect) rateBasisSelect.value = 'element_wise';
         } else if (val === 'Daily Wage') {
-            if (lblPieceRate) lblPieceRate.textContent = 'Daily Wage Rate (یومیہ اجرت) *';
+            if (lblPieceRate) lblPieceRate.textContent = 'Daily Wage Rate *';
             if (unitPieceRate) unitPieceRate.textContent = '/day';
-            if (hintPieceRate) hintPieceRate.textContent = 'ایک دن (شفٹ) کی فکسڈ اجرت۔';
+            if (hintPieceRate) hintPieceRate.textContent = 'Fixed wage per shift / day.';
             if (grpPiece) grpPiece.classList.remove('opacity-50');
             if (grpMin) grpMin.classList.add('opacity-75');
         } else if (val === 'Monthly Salary') {
-            if (lblPieceRate) lblPieceRate.textContent = 'Monthly Fixed Salary (ماہانہ تنخواہ) *';
+            if (lblPieceRate) lblPieceRate.textContent = 'Monthly Fixed Salary *';
             if (unitPieceRate) unitPieceRate.textContent = '/month';
-            if (hintPieceRate) hintPieceRate.textContent = 'ماہانہ فکسڈ بنیادی تنخواہ۔';
+            if (hintPieceRate) hintPieceRate.textContent = 'Fixed monthly salary.';
             if (grpPiece) grpPiece.classList.remove('opacity-50');
             if (grpMin) grpMin.classList.add('opacity-75');
         } else if (val === 'Contractor') {
-            if (lblPieceRate) lblPieceRate.textContent = 'Contract Piece Rate (کنٹریکٹ ریٹ) *';
+            if (lblPieceRate) lblPieceRate.textContent = 'Contract Piece Rate *';
             if (unitPieceRate) unitPieceRate.textContent = '/pc';
-            if (hintPieceRate) hintPieceRate.textContent = 'ٹھیکیدار کا طے شدہ ریٹ فی پیس۔';
+            if (hintPieceRate) hintPieceRate.textContent = 'Contractor agreed piece rate.';
             if (grpPiece) grpPiece.classList.remove('opacity-50');
             if (grpMin) grpMin.classList.add('opacity-75');
         }

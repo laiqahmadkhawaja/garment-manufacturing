@@ -509,7 +509,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <option value="Sweater">Sweater</option>
                                         <option value="Jacket" selected>Jacket</option>
                                         <option value="Cardigan">Cardigan</option>
-                                        <option value="Vest">Vest / کوٹی</option>
+                                        <option value="Vest">Vest</option>
                                         <option value="Other">Other</option>
                                     </select>
                                 </div>
@@ -533,7 +533,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-2 border-bottom">
                                     <div>
                                         <h6 class="fw-bold mb-0 text-dark">
-                                            <i class="bi bi-puzzle-fill text-warning me-1"></i> Garment Elements / Pattern Breakdown (کٹنگ اور سلائی کے اجزاء)
+                                            <i class="bi bi-puzzle-fill text-warning me-1"></i> Garment Elements / Pattern Breakdown
                                         </h6>
                                         <span class="text-muted small">Specify garment pieces per unit (e.g. 1 Front, 1 Back, 2 Sleeves, 2 Pockets, 1 Collar) for floor artisans</span>
                                     </div>
@@ -552,15 +552,15 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <i class="bi bi-plus-circle me-1 text-primary"></i> 1-Click Quick Add Common Garment Parts:
                                     </div>
                                     <div class="d-flex flex-wrap gap-1" id="prodQuickChips">
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Front Panel (سامنے کا پلہ)" data-qty="1" data-ppp="1" data-ppg="1" data-rpp="20" data-sam="3.5" data-notes="1 panel = 1 front body">+ Front (1 پلہ)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Back Panel (پچھلا پلہ)" data-qty="1" data-ppp="1" data-ppg="1" data-rpp="20" data-sam="3.5" data-notes="1 panel = 1 back body">+ Back (1 پلہ)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Bazo / Sleeves (بازو)" data-qty="2" data-ppp="2" data-ppg="1" data-rpp="20" data-sam="4.0" data-notes="1 panel yields 2 sleeves">+ Bazo (2 pcs · 1 پلہ)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Bazo (3 per Palla)" data-qty="2" data-ppp="3" data-ppg="0.67" data-rpp="20" data-sam="4.0" data-notes="1 panel yields 3 sleeves">+ Bazo (1 پلے سے 3 بازو)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Pockets (پاکٹ)" data-qty="2" data-ppp="4" data-ppg="0.5" data-rpp="20" data-sam="0.5" data-notes="1 panel yields 4 pockets (0.5 پلہ)">+ Pockets (4 pcs/پلہ · 0.5 پلہ)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Pocket (Single)" data-qty="1" data-ppp="2" data-ppg="0.5" data-rpp="20" data-sam="0.5" data-notes="1 panel yields 2 pockets (0.5 پلہ)">+ Single Pocket (0.5 پلہ)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Gol Gala (گول گلا)" data-qty="1" data-ppp="1" data-ppg="1" data-rpp="10" data-sam="1.5" data-notes="Ribbed collar / stand neck">+ Gol Gala (1 پلہ)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Bon" data-qty="2" data-ppp="2" data-ppg="1" data-rpp="15" data-sam="2.0" data-notes="Ribbed bon">+ Bon (2 pcs · 1 پلہ)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Moday Tape (موڈھے)" data-qty="2" data-ppp="2" data-ppg="1" data-rpp="10" data-sam="1.0" data-notes="Armhole tape">+ Moday (1 پلہ)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Front Panel" data-qty="1" data-ppp="1" data-ppg="1" data-rpp="20" data-sam="3.5" data-notes="1 panel = 1 front body">+ Front (1 Palla)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Back Panel" data-qty="1" data-ppp="1" data-ppg="1" data-rpp="20" data-sam="3.5" data-notes="1 panel = 1 back body">+ Back (1 Palla)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Bazo / Sleeves" data-qty="2" data-ppp="2" data-ppg="1" data-rpp="20" data-sam="4.0" data-notes="1 panel yields 2 sleeves">+ Bazo (2 pcs · 1 Palla)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Bazo (3 per Palla)" data-qty="2" data-ppp="3" data-ppg="0.67" data-rpp="20" data-sam="4.0" data-notes="1 panel yields 3 sleeves">+ Sleeves (3 per Palla)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Pockets" data-qty="2" data-ppp="4" data-ppg="0.5" data-rpp="20" data-sam="0.5" data-notes="1 panel yields 4 pockets (0.5 Palla)">+ Pockets (4 pcs/Palla · 0.5 Palla)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Pocket (Single)" data-qty="1" data-ppp="2" data-ppg="0.5" data-rpp="20" data-sam="0.5" data-notes="1 panel yields 2 pockets (0.5 Palla)">+ Single Pocket (0.5 Palla)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Gol Gala" data-qty="1" data-ppp="1" data-ppg="1" data-rpp="10" data-sam="1.5" data-notes="Ribbed collar / stand neck">+ Gol Gala (1 Palla)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Bon" data-qty="2" data-ppp="2" data-ppg="1" data-rpp="15" data-sam="2.0" data-notes="Ribbed bon">+ Bon (2 pcs · 1 Palla)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Moday Tape" data-qty="2" data-ppp="2" data-ppg="1" data-rpp="10" data-sam="1.0" data-notes="Armhole tape">+ Moday (1 Palla)</button>
                                     </div>
                                 </div>
 
@@ -575,7 +575,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <th style="width: 125px;" class="text-center" title="Pieces from 1 Palla">Pcs / Palla *</th>
                                                 <th style="width: 125px;" class="text-center" title="Pallas required per garment">Pallas / Unit</th>
                                                 <th style="width: 130px;" class="text-center" title="Rate per knitted Palla">Rate / Palla (Rs.)</th>
-                                                <th style="width: 100px;" class="text-center">⏱️ SAM (منٹ)</th>
+                                                <th style="width: 100px;" class="text-center">⏱️ SAM</th>
                                                 <th>Pattern / Fabric Notes</th>
                                                 <th style="width: 50px;" class="text-center">Action</th>
                                             </tr>
@@ -595,7 +595,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <span class="vr"></span>
                                         <span>Total Pieces: <strong id="lblProdPiecesCount" class="text-primary fw-bold">0 pcs</strong></span>
                                         <span class="vr"></span>
-                                        <span>Total Pallas: <strong id="lblProdPallasCount" class="text-dark fw-bold">0.0 پلہ</strong></span>
+                                        <span>Total Pallas: <strong id="lblProdPallasCount" class="text-dark fw-bold">0.0 Palla</strong></span>
                                         <span class="vr"></span>
                                         <span>Palla Cost: <strong id="lblProdPallaCost" class="text-success fw-bold">Rs. 0.00</strong></span>
                                         <span class="vr"></span>
@@ -627,7 +627,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <th>Code</th>
                                         <th>Product Name</th>
                                         <th>Category / Type</th>
-                                        <th>Garment Elements / Pattern Parts (اجزاء)</th>
+                                        <th>Garment Elements / Pattern Parts</th>
                                         <th>Default Workflow</th>
                                         <th>Recipe Status</th>
                                         <th class="text-end">Actions</th>
@@ -659,9 +659,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                             <?php 
                                                                 $ppp = (float)($pe['pieces_per_palla'] ?? 1);
                                                                 $ppg = (float)($pe['pallas_per_garment'] ?? $pe['quantity']);
-                                                                $pallaBadge = ($ppp != 1) ? " (" . round($ppg, 2) . " پلہ)" : "";
+                                                                $pallaBadge = ($ppp != 1) ? " (" . round($ppg, 2) . " Palla)" : "";
                                                             ?>
-                                                            <span class="badge bg-light text-dark border" style="font-size: 0.73rem;" title="<?= clean($pe['notes'] ?? '') ?> · 1 پلے سے <?= $ppp ?> پیس">
+                                                            <span class="badge bg-light text-dark border" style="font-size: 0.73rem;" title="<?= clean($pe['notes'] ?? '') ?> · 1 Palla yields <?= $ppp ?> pcs">
                                                                 <?= clean($pe['element_name']) ?> <strong class="text-primary">×<?= (float)$pe['quantity'] ?></strong><span class="text-secondary"><?= $pallaBadge ?></span>
                                                             </span>
                                                         <?php endforeach; ?>
@@ -670,7 +670,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                         $totalPallasSum = array_sum(array_map(fn($e) => (float)($e['pallas_per_garment'] ?? $e['quantity']), $pElems));
                                                     ?>
                                                     <div class="small text-muted mt-1" style="font-size: 0.72rem;">
-                                                        <?= count($pElems) ?> components (<?= (float)$elemSum ?> pcs · <strong class="text-dark"><?= round($totalPallasSum, 2) ?> پلے</strong> / unit)
+                                                        <?= count($pElems) ?> components (<?= (float)$elemSum ?> pcs · <strong class="text-dark"><?= round($totalPallasSum, 2) ?> Pallas</strong> / unit)
                                                     </div>
                                                 <?php endif; ?>
                                             </td>
@@ -1098,32 +1098,32 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                                     <div class="mt-2">
                                         <a class="small text-decoration-none text-primary fw-semibold d-inline-flex align-items-center" data-bs-toggle="collapse" href="#addSizeMeasurementsCollapse" role="button" aria-expanded="false">
-                                            <i class="bi bi-rulers me-1"></i> + Default Measurements (کٹنگ پیمائش درج کریں - اختیاری)
+                                            <i class="bi bi-rulers me-1"></i> + Default Measurements (Pattern Measurements - Optional)
                                         </a>
                                         <div class="collapse mt-2" id="addSizeMeasurementsCollapse">
                                             <div class="p-2 border rounded bg-light">
                                                 <div class="row g-2 mb-2">
                                                     <div class="col-6">
-                                                        <span class="badge bg-primary text-white d-block mb-1 text-center py-1">پلا پیمائش (Panel)</span>
+                                                        <span class="badge bg-primary text-white d-block mb-1 text-center py-1">Panel Specs</span>
                                                         <div class="row g-1">
-                                                            <div class="col-6"><input type="text" name="pla_length" class="form-control form-control-sm text-center" placeholder="لمبائی"></div>
-                                                            <div class="col-6"><input type="text" name="pla_width" class="form-control form-control-sm text-center" placeholder="چوڑائی"></div>
-                                                            <div class="col-6"><input type="text" name="pla_border" class="form-control form-control-sm text-center" placeholder="بارڈر"></div>
-                                                            <div class="col-6"><input type="text" name="pla_mins" class="form-control form-control-sm text-center" placeholder="منٹ"></div>
+                                                            <div class="col-6"><input type="text" name="pla_length" class="form-control form-control-sm text-center" placeholder="Length"></div>
+                                                            <div class="col-6"><input type="text" name="pla_width" class="form-control form-control-sm text-center" placeholder="Width"></div>
+                                                            <div class="col-6"><input type="text" name="pla_border" class="form-control form-control-sm text-center" placeholder="Border"></div>
+                                                            <div class="col-6"><input type="text" name="pla_mins" class="form-control form-control-sm text-center" placeholder="mins"></div>
                                                         </div>
                                                     </div>
                                                     <div class="col-6">
-                                                        <span class="badge bg-info text-dark d-block mb-1 text-center py-1">بازو پیمائش (Sleeves)</span>
+                                                        <span class="badge bg-info text-dark d-block mb-1 text-center py-1">Sleeves Specs</span>
                                                         <div class="row g-1">
-                                                            <div class="col-6"><input type="text" name="bazo_length" class="form-control form-control-sm text-center" placeholder="لمبائی"></div>
-                                                            <div class="col-6"><input type="text" name="bazo_width" class="form-control form-control-sm text-center" placeholder="چوڑائی"></div>
-                                                            <div class="col-6"><input type="text" name="bazo_border" class="form-control form-control-sm text-center" placeholder="بارڈر"></div>
-                                                            <div class="col-6"><input type="text" name="bazo_mins" class="form-control form-control-sm text-center" placeholder="منٹ"></div>
+                                                            <div class="col-6"><input type="text" name="bazo_length" class="form-control form-control-sm text-center" placeholder="Length"></div>
+                                                            <div class="col-6"><input type="text" name="bazo_width" class="form-control form-control-sm text-center" placeholder="Width"></div>
+                                                            <div class="col-6"><input type="text" name="bazo_border" class="form-control form-control-sm text-center" placeholder="Border"></div>
+                                                            <div class="col-6"><input type="text" name="bazo_mins" class="form-control form-control-sm text-center" placeholder="mins"></div>
                                                         </div>
                                                     </div>
                                                 </div>
                                                 <div class="text-muted" style="font-size: 0.72rem;">
-                                                    <i class="bi bi-info-circle me-1"></i> مزید سکیم کالمز 1-4 بعد میں بھی "Edit" بٹن دبا کر اپ ڈیٹ کیے جا سکتے ہیں۔
+                                                    <i class="bi bi-info-circle me-1"></i> Scheme columns 1-4 can also be updated later by clicking the "Edit" button.
                                                 </div>
                                             </div>
                                         </div>
@@ -1313,10 +1313,10 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                     <!-- Measurements Section -->
                     <div class="d-flex align-items-center justify-content-between mb-2">
-                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-rulers text-warning me-1"></i> سائز اور کٹنگ پیمائش (Master Cutting Measurements)</h6>
+                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-rulers text-warning me-1"></i> Pattern Size & Cutting Measurements</h6>
                         <span class="badge bg-warning-subtle text-dark border">Lot Creation Default</span>
                     </div>
-                    <p class="text-muted small mb-3">یہ پیمائشیں لاٹ بناتے وقت اس سائز کے منتخب ہونے پر از خود فِل ہو جائیں گی۔</p>
+                    <p class="text-muted small mb-3">These measurements will automatically populate when this size is selected during lot creation.</p>
 
                     <!-- Body Panel & Sleeves -->
                     <div class="row g-2 mb-3">
@@ -1324,24 +1324,24 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <div class="col-12 col-md-6">
                             <div class="card border shadow-sm">
                                 <div class="card-header bg-primary text-white py-1 small fw-bold">
-                                    <i class="bi bi-square me-1"></i> پلہ پیمائش (Body Panel)
+                                    <i class="bi bi-square me-1"></i> Palla Measurements
                                 </div>
                                 <div class="card-body p-2 bg-white">
                                     <div class="row g-2">
                                         <div class="col-6">
-                                            <label class="form-label small fw-semibold mb-1">لمبائی (Length)</label>
+                                            <label class="form-label small fw-semibold mb-1">Length</label>
                                             <input type="text" name="pla_length" id="edit_size_pla_length" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="41">
                                         </div>
                                         <div class="col-6">
-                                            <label class="form-label small fw-semibold mb-1">چوڑائی (Width)</label>
+                                            <label class="form-label small fw-semibold mb-1">Width</label>
                                             <input type="text" name="pla_width" id="edit_size_pla_width" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="15">
                                         </div>
                                         <div class="col-6">
-                                            <label class="form-label small fw-semibold mb-1">بارڈر (Border)</label>
+                                            <label class="form-label small fw-semibold mb-1">Border</label>
                                             <input type="text" name="pla_border" id="edit_size_pla_border" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="46">
                                         </div>
                                         <div class="col-6">
-                                            <label class="form-label small fw-semibold mb-1">منٹ (SAM Mins)</label>
+                                            <label class="form-label small fw-semibold mb-1">mins</label>
                                             <input type="text" name="pla_mins" id="edit_size_pla_mins" class="form-control form-control-sm text-center font-monospace fw-bold text-success" placeholder="7">
                                         </div>
                                     </div>
@@ -1353,24 +1353,24 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <div class="col-12 col-md-6">
                             <div class="card border shadow-sm">
                                 <div class="card-header bg-info text-white py-1 small fw-bold">
-                                    <i class="bi bi-diagram-2 me-1"></i> بازو پیمائش (Sleeves)
+                                    <i class="bi bi-diagram-2 me-1"></i> Sleeves Specs
                                 </div>
                                 <div class="card-body p-2 bg-white">
                                     <div class="row g-2">
                                         <div class="col-6">
-                                            <label class="form-label small fw-semibold mb-1">لمبائی (Length)</label>
+                                            <label class="form-label small fw-semibold mb-1">Length</label>
                                             <input type="text" name="bazo_length" id="edit_size_bazo_length" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="48">
                                         </div>
                                         <div class="col-6">
-                                            <label class="form-label small fw-semibold mb-1">چوڑائی (Width)</label>
+                                            <label class="form-label small fw-semibold mb-1">Width</label>
                                             <input type="text" name="bazo_width" id="edit_size_bazo_width" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="14">
                                         </div>
                                         <div class="col-6">
-                                            <label class="form-label small fw-semibold mb-1">بارڈر (Border)</label>
+                                            <label class="form-label small fw-semibold mb-1">Border</label>
                                             <input type="text" name="bazo_border" id="edit_size_bazo_border" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="42">
                                         </div>
                                         <div class="col-6">
-                                            <label class="form-label small fw-semibold mb-1">منٹ (SAM Mins)</label>
+                                            <label class="form-label small fw-semibold mb-1">mins</label>
                                             <input type="text" name="bazo_mins" id="edit_size_bazo_mins" class="form-control form-control-sm text-center font-monospace fw-bold text-success" placeholder="7">
                                         </div>
                                     </div>
@@ -1382,41 +1382,41 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <!-- Scheme Columns 1-4 -->
                     <div class="card border shadow-sm">
                         <div class="card-header bg-warning text-dark py-1 small fw-bold d-flex justify-content-between align-items-center">
-                            <span><i class="bi bi-palette me-1"></i> سائز / کلر سکیم کالمز (Scheme Columns 1-4)</span>
+                            <span><i class="bi bi-palette me-1"></i> Size & Scheme Columns 1-4</span>
                         </div>
                         <div class="card-body p-2 bg-white">
                             <div class="table-responsive">
                                 <table class="table table-bordered table-sm align-middle text-center mb-0" style="font-size: 0.8rem;">
                                     <thead class="table-light">
                                         <tr>
-                                            <th style="width: 20%;">پیمائش</th>
-                                            <th style="width: 20%;">کالم 1</th>
-                                            <th style="width: 20%;">کالم 2</th>
-                                            <th style="width: 20%;">کالم 3</th>
-                                            <th style="width: 20%;">کالم 4</th>
+                                            <th style="width: 20%;">Measurements</th>
+                                            <th style="width: 20%;">Col 1</th>
+                                            <th style="width: 20%;">Col 2</th>
+                                            <th style="width: 20%;">Col 3</th>
+                                            <th style="width: 20%;">Col 4</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <tr>
-                                            <td class="fw-bold text-start ps-2">لمبائی (Length)</td>
+                                            <td class="fw-bold text-start ps-2">Length</td>
                                             <?php for ($i = 1; $i <= 4; $i++): ?>
                                                 <td><input type="text" name="scheme_<?= $i ?>_length" id="edit_size_scheme_<?= $i ?>_length" class="form-control form-control-sm text-center font-monospace" placeholder="—"></td>
                                             <?php endfor; ?>
                                         </tr>
                                         <tr>
-                                            <td class="fw-bold text-start ps-2">چوڑائی (Width)</td>
+                                            <td class="fw-bold text-start ps-2">Width</td>
                                             <?php for ($i = 1; $i <= 4; $i++): ?>
                                                 <td><input type="text" name="scheme_<?= $i ?>_width" id="edit_size_scheme_<?= $i ?>_width" class="form-control form-control-sm text-center font-monospace" placeholder="—"></td>
                                             <?php endfor; ?>
                                         </tr>
                                         <tr>
-                                            <td class="fw-bold text-start ps-2">بارڈر (Border)</td>
+                                            <td class="fw-bold text-start ps-2">Border</td>
                                             <?php for ($i = 1; $i <= 4; $i++): ?>
                                                 <td><input type="text" name="scheme_<?= $i ?>_border" id="edit_size_scheme_<?= $i ?>_border" class="form-control form-control-sm text-center font-monospace" placeholder="—"></td>
                                             <?php endfor; ?>
                                         </tr>
                                         <tr>
-                                            <td class="fw-bold text-start ps-2">منٹ (Minutes)</td>
+                                            <td class="fw-bold text-start ps-2">mins</td>
                                             <?php for ($i = 1; $i <= 4; $i++): ?>
                                                 <td><input type="text" name="scheme_<?= $i ?>_mins" id="edit_size_scheme_<?= $i ?>_mins" class="form-control form-control-sm text-center font-monospace text-success" placeholder="—"></td>
                                             <?php endfor; ?>
@@ -1508,7 +1508,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <td>
                 <div class="input-group input-group-sm">
                     <input type="number" step="any" min="0" name="pallas_per_garment[]" class="form-control text-center fw-bold text-primary bg-light pel-ppg-val" value="${ppg}" placeholder="1.0" title="Pallas required per garment">
-                    <span class="input-group-text px-1 small text-primary fw-bold">پلہ</span>
+                    <span class="input-group-text px-1 small text-primary fw-bold">Palla</span>
                 </div>
             </td>
             <td>
@@ -1632,7 +1632,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         if (lblCount) lblCount.textContent = rows.length;
         if (lblPcs) lblPcs.textContent = (Math.round(totalPcs * 100) / 100) + ' pcs';
-        if (lblPallas) lblPallas.textContent = (Math.round(totalPallas * 100) / 100) + ' پلہ';
+        if (lblPallas) lblPallas.textContent = (Math.round(totalPallas * 100) / 100) + ' Palla';
         if (lblPallaCost) lblPallaCost.textContent = 'Rs. ' + totalPallaCost.toFixed(2);
         if (lblSam) lblSam.textContent = totalSam.toFixed(1) + ' mins';
     }
@@ -1680,12 +1680,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (pJacket) {
         pJacket.addEventListener('click', function() {
             pTbody.innerHTML = '';
-            createProdRow('Front Panel (سامنے کا پلہ)', 1, '1 panel = 1 front', 3.5, 1.0, 1.0, 20.0);
-            createProdRow('Back Panel (پچھلا پلہ)', 1, '1 panel = 1 back', 3.5, 1.0, 1.0, 20.0);
-            createProdRow('Bazo / Sleeves (بازو)', 2, '1 panel yields 2 sleeves', 4.0, 2.0, 1.0, 20.0);
-            createProdRow('Pockets (پاکٹ)', 2, '1 panel yields 4 pockets (0.5 پلہ)', 0.5, 4.0, 0.5, 20.0);
+            createProdRow('Front Panel', 1, '1 panel = 1 front', 3.5, 1.0, 1.0, 20.0);
+            createProdRow('Back Panel', 1, '1 panel = 1 back', 3.5, 1.0, 1.0, 20.0);
+            createProdRow('Bazo / Sleeves', 2, '1 panel yields 2 sleeves', 4.0, 2.0, 1.0, 20.0);
+            createProdRow('Pockets', 2, '1 panel yields 4 pockets (0.5 Palla)', 0.5, 4.0, 0.5, 20.0);
             createProdRow('Bon', 2, 'Ribbed bon finish', 2.0, 2.0, 1.0, 15.0);
-            createProdRow('Gol Gala (گول گلا)', 1, 'Ribbed neck collar', 1.5, 1.0, 1.0, 10.0);
+            createProdRow('Gol Gala', 1, 'Ribbed neck collar', 1.5, 1.0, 1.0, 10.0);
         });
     }
 
@@ -1693,11 +1693,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (pVest) {
         pVest.addEventListener('click', function() {
             pTbody.innerHTML = '';
-            createProdRow('Front Panel (سامنے کا پلہ)', 1, '1 panel = 1 front', 3.5, 1.0, 1.0, 20.0);
-            createProdRow('Back Panel (پچھلا پلہ)', 1, '1 panel = 1 back', 3.5, 1.0, 1.0, 20.0);
-            createProdRow('Pockets (پاکٹ)', 2, '1 panel yields 4 pockets (0.5 پلہ)', 0.5, 4.0, 0.5, 20.0);
-            createProdRow('Gol Gala (گول گلا)', 1, 'V-neck / round collar', 1.5, 1.0, 1.0, 10.0);
-            createProdRow('Moday Tape (موڈھے)', 2, 'Armhole ribs', 1.0, 2.0, 1.0, 10.0);
+            createProdRow('Front Panel', 1, '1 panel = 1 front', 3.5, 1.0, 1.0, 20.0);
+            createProdRow('Back Panel', 1, '1 panel = 1 back', 3.5, 1.0, 1.0, 20.0);
+            createProdRow('Pockets', 2, '1 panel yields 4 pockets (0.5 Palla)', 0.5, 4.0, 0.5, 20.0);
+            createProdRow('Gol Gala', 1, 'V-neck / round collar', 1.5, 1.0, 1.0, 10.0);
+            createProdRow('Moday Tape', 2, 'Armhole ribs', 1.0, 2.0, 1.0, 10.0);
         });
     }
 
@@ -1705,20 +1705,20 @@ document.addEventListener('DOMContentLoaded', function() {
     if (pSweater) {
         pSweater.addEventListener('click', function() {
             pTbody.innerHTML = '';
-            createProdRow('Front Panel (سامنے کا پلہ)', 1, '1 panel = 1 front', 3.5, 1.0, 1.0, 20.0);
-            createProdRow('Back Panel (پچھلا پلہ)', 1, '1 panel = 1 back', 3.5, 1.0, 1.0, 20.0);
-            createProdRow('Bazo / Sleeves (بازو)', 2, '1 panel yields 2 sleeves', 4.0, 2.0, 1.0, 20.0);
-            createProdRow('Gol Gala (گول گلا)', 1, 'Round neck rib', 1.5, 1.0, 1.0, 10.0);
-            createProdRow('Bottom Hem (دامن پٹی)', 1, 'Elasticated waist rib', 1.0, 1.0, 1.0, 10.0);
+            createProdRow('Front Panel', 1, '1 panel = 1 front', 3.5, 1.0, 1.0, 20.0);
+            createProdRow('Back Panel', 1, '1 panel = 1 back', 3.5, 1.0, 1.0, 20.0);
+            createProdRow('Bazo / Sleeves', 2, '1 panel yields 2 sleeves', 4.0, 2.0, 1.0, 20.0);
+            createProdRow('Gol Gala', 1, 'Round neck rib', 1.5, 1.0, 1.0, 10.0);
+            createProdRow('Bottom Hem', 1, 'Elasticated waist rib', 1.0, 1.0, 1.0, 10.0);
         });
     }
 
     // Load initial default rows for product
     if (pTbody && pTbody.children.length === 0) {
-        createProdRow('Front Panel (سامنے کا پلہ)', 1, 'Main front body', 3.5, 1.0, 1.0, 20.0);
-        createProdRow('Back Panel (پچھلا پلہ)', 1, 'Main back body', 3.5, 1.0, 1.0, 20.0);
-        createProdRow('Bazo / Sleeves (بازو)', 2, '1 panel yields 2 sleeves', 4.0, 2.0, 1.0, 20.0);
-        createProdRow('Pockets (پاکٹ)', 2, '1 panel yields 4 pockets (0.5 پلہ)', 0.5, 4.0, 0.5, 20.0);
+        createProdRow('Front Panel', 1, 'Main front body', 3.5, 1.0, 1.0, 20.0);
+        createProdRow('Back Panel', 1, 'Main back body', 3.5, 1.0, 1.0, 20.0);
+        createProdRow('Bazo / Sleeves', 2, '1 panel yields 2 sleeves', 4.0, 2.0, 1.0, 20.0);
+        createProdRow('Pockets', 2, '1 panel yields 4 pockets (0.5 Palla)', 0.5, 4.0, 0.5, 20.0);
     }
 
     // =========================================================================

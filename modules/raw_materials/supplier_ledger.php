@@ -153,13 +153,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <!-- Top Page Header -->
         <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-4">
             <div>
-                <h4 class="fw-bold mb-1 text-dark">Supplier Ledgers & Payments (سپلائر کھاتہ)</h4>
+                <h4 class="fw-bold mb-1 text-dark">Supplier Ledgers & Payments</h4>
                 <p class="text-muted small mb-0">Track raw material purchases, direct disbursements, outstanding payables & complete statements</p>
             </div>
             <div class="d-flex align-items-center gap-2">
                 <?php if ($selectedSupplier): ?>
                     <button type="button" class="btn btn-primary btn-sm fw-semibold shadow-sm" data-bs-toggle="modal" data-bs-target="#disbursePaymentModal">
-                        <i class="bi bi-cash-stack me-1"></i> Disburse Payment (ادائیگی کریں)
+                        <i class="bi bi-cash-stack me-1"></i> Disburse Payment
                     </button>
                     <button type="button" onclick="window.print()" class="btn btn-outline-secondary btn-sm">
                         <i class="bi bi-printer me-1"></i> Print Statement
@@ -359,9 +359,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <div class="mb-3">
                                     <label class="form-label fw-semibold">Payment Method</label>
                                     <select name="payment_method" class="form-select">
-                                        <option value="Cash">Cash (نقد)</option>
-                                        <option value="Bank Transfer">Bank Transfer (بینک ٹرانسفر)</option>
-                                        <option value="Cheque">Cheque (بینک چیک)</option>
+                                        <option value="Cash">Cash</option>
+                                        <option value="Bank Transfer">Bank Transfer</option>
+                                        <option value="Cheque">Cheque</option>
                                         <option value="Online / Mobile">Online (EasyPaisa / JazzCash)</option>
                                         <?php foreach ($methods as $m): ?>
                                             <?php if (!in_array($m['name'], ['Cash', 'Bank Transfer', 'Cheque', 'Online / Mobile'])): ?>
@@ -372,7 +372,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 </div>
 
                                 <div class="mb-3">
-                                    <label class="form-label fw-semibold">From Account (کیش رجسٹر / بینک)</label>
+                                    <label class="form-label fw-semibold">From Account (Cash Register / Bank)</label>
                                     <select name="account_id" class="form-select">
                                         <option value="" data-type="cash">-- Direct Factory Cash Drawer --</option>
                                         <?php foreach ($accounts as $acc): 
@@ -387,7 +387,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 </div>
 
                                 <div class="mb-3">
-                                    <label class="form-label fw-semibold">Reference / Cheque # (اختیاری)</label>
+                                    <label class="form-label fw-semibold">Reference / Cheque #</label>
                                     <input type="text" name="reference_no" class="form-control" placeholder="e.g. Cheque 4091 or Trx ID">
                                 </div>
 

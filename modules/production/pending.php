@@ -175,7 +175,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             <td class="text-center fw-bold fs-6 <?= $isOver ? 'text-danger' : ($pending > 0 ? 'text-warning-emphasis' : 'text-success') ?>">
                                                 <?= $isOver ? '<span class="text-danger fw-bold">+' . number_format($good - $total) . ' Over</span>' : number_format($pending) ?>
                                                 <?php if ($unproduced > 0 && !$isOver && !$isComplete): ?>
-                                                    <div class="small fw-normal text-muted" style="font-size: 0.7rem;">(⏳ <?= $unproduced ?> بنے ہی نہیں)</div>
+                                                    <div class="small fw-normal text-muted" style="font-size: 0.7rem;">(⏳ <?= $unproduced ?> Unproduced)</div>
                                                 <?php endif; ?>
                                             </td>
                                             <td>
@@ -187,15 +187,15 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                     <span class="badge-status badge-completed"><i class="bi bi-check-circle-fill"></i> Completed</span>
                                                 <?php elseif ($isShortage): ?>
                                                     <div class="d-flex flex-wrap gap-1 align-items-center">
-                                                        <span class="badge bg-warning-subtle text-warning-emphasis border"><i class="bi bi-hourglass-split"></i> <?= number_format($pending) ?> باقی</span>
+                                                        <span class="badge bg-warning-subtle text-warning-emphasis border"><i class="bi bi-hourglass-split"></i> <?= number_format($pending) ?> Rem</span>
                                                         <?php if ($rej > 0): ?>
-                                                            <span class="badge bg-danger text-white">🔴 <?= $rej ?> خراب</span>
+                                                            <span class="badge bg-danger text-white">🔴 <?= $rej ?> Rej</span>
                                                         <?php endif; ?>
                                                         <?php if ($rew > 0): ?>
-                                                            <span class="badge bg-warning text-dark">🟡 <?= $rew ?> ری ورک</span>
+                                                            <span class="badge bg-warning text-dark">🟡 <?= $rew ?> Rew</span>
                                                         <?php endif; ?>
                                                         <?php if ($unproduced > 0): ?>
-                                                            <span class="badge bg-secondary text-white">⏳ <?= $unproduced ?> غیر تیار</span>
+                                                            <span class="badge bg-secondary text-white">⏳ <?= $unproduced ?> Unmade</span>
                                                         <?php endif; ?>
                                                     </div>
                                                 <?php else: ?>

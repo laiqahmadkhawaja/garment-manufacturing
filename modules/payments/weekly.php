@@ -316,7 +316,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 </nav>
                 <h3 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
                     <i class="bi bi-calendar2-week-fill text-warning"></i>
-                    <span>Weekly Worker Payments (ہفتہ وار ورکرز ادائیگیاں)</span>
+                    <span>Weekly Worker Payments</span>
                 </h3>
                 <p class="text-muted small mb-0">
                     Settlement Date: <strong><?= !empty($dateTo) ? date('d M Y', strtotime($dateTo)) : 'All Time' ?></strong> 
@@ -325,7 +325,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             </div>
             <div class="d-flex flex-wrap gap-2 no-print">
                 <button type="button" class="btn btn-outline-dark fw-semibold btn-print-trigger">
-                    <i class="bi bi-printer me-1"></i> Print Payroll Sheet (پرنٹ شیٹ)
+                    <i class="bi bi-printer me-1"></i> Print Payroll Sheet
                 </button>
                 <a href="<?= BASE_URL ?>modules/payments/create.php" class="btn btn-outline-primary fw-semibold">
                     <i class="bi bi-plus-lg me-1"></i> Single Payment Voucher
@@ -342,7 +342,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <div class="card-body p-3">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <span class="text-muted small fw-semibold">Visible Workers (ورکرز)</span>
+                                <span class="text-muted small fw-semibold">Visible Workers</span>
                                 <h4 class="fw-bold mb-0 text-dark mt-1" id="kpi_worker_count"><?= count($filteredWorkers) ?></h4>
                             </div>
                             <div class="rounded-circle bg-primary-subtle p-2 text-primary">
@@ -357,7 +357,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <div class="card-body p-3">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <span class="text-muted small fw-semibold">Period Earned (ہفتہ وار کمائی)</span>
+                                <span class="text-muted small fw-semibold">Period Earned</span>
                                 <h4 class="fw-bold mb-0 text-info mt-1"><?= format_currency($totalPeriodEarned) ?></h4>
                             </div>
                             <div class="rounded-circle bg-info-subtle p-2 text-info">
@@ -372,7 +372,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <div class="card-body p-3">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <span class="text-muted small fw-semibold">Period Paid (ہفتہ وار ادا شدہ)</span>
+                                <span class="text-muted small fw-semibold">Period Paid</span>
                                 <h4 class="fw-bold mb-0 text-secondary mt-1"><?= format_currency($totalPeriodPaid) ?></h4>
                             </div>
                             <div class="rounded-circle bg-secondary-subtle p-2 text-secondary">
@@ -387,7 +387,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <div class="card-body p-3">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <span class="text-muted small fw-semibold">Net Balance (کل واجبات)</span>
+                                <span class="text-muted small fw-semibold">Net Balance</span>
                                 <h4 class="fw-bold mb-0 text-danger mt-1" id="kpi_outstanding_total"><?= format_currency($totalOutstandingLiability) ?></h4>
                             </div>
                             <div class="rounded-circle bg-danger-subtle p-2 text-danger">
@@ -413,37 +413,37 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         
                         <a href="?date_from=<?= $defaultMonday ?>&date_to=<?= $today ?>&department_id=<?= $deptFilter ?>&wage_type=<?= urlencode($wageTypeFilter) ?>&balance_status=<?= urlencode($balanceFilter) ?>&lot_id=<?= $lotFilter ?>&tab=<?= $activeTab ?>" 
                            class="btn btn-xs btn-outline-primary py-1 px-2 <?= ($dateFrom === $defaultMonday && $dateTo === $today) ? 'active fw-bold' : '' ?>" style="font-size: 12px;">
-                            Today (آج کا حساب)
+                            Today
                         </a>
 
                         <a href="?date_from=<?= $yesterday6 ?>&date_to=<?= $yesterday ?>&department_id=<?= $deptFilter ?>&wage_type=<?= urlencode($wageTypeFilter) ?>&balance_status=<?= urlencode($balanceFilter) ?>&lot_id=<?= $lotFilter ?>&tab=<?= $activeTab ?>" 
                            class="btn btn-xs btn-outline-secondary py-1 px-2 <?= ($dateFrom === $yesterday6 && $dateTo === $yesterday) ? 'active fw-bold' : '' ?>" style="font-size: 12px;">
-                            Yesterday (گزشتہ کل)
+                            Yesterday
                         </a>
 
                         <a href="?date_from=<?= $lastThursday6 ?>&date_to=<?= $lastThursday ?>&department_id=<?= $deptFilter ?>&wage_type=<?= urlencode($wageTypeFilter) ?>&balance_status=<?= urlencode($balanceFilter) ?>&lot_id=<?= $lotFilter ?>&tab=<?= $activeTab ?>" 
                            class="btn btn-xs btn-outline-warning text-dark py-1 px-2 <?= ($dateFrom === $lastThursday6 && $dateTo === $lastThursday) ? 'active fw-bold' : '' ?>" style="font-size: 12px;">
-                            Thursday Settlement (گزشتہ جمعرات کا حساب)
+                            Thursday Settlement
                         </a>
 
                         <a href="?date_from=<?= $lastFriday6 ?>&date_to=<?= $lastFriday ?>&department_id=<?= $deptFilter ?>&wage_type=<?= urlencode($wageTypeFilter) ?>&balance_status=<?= urlencode($balanceFilter) ?>&lot_id=<?= $lotFilter ?>&tab=<?= $activeTab ?>" 
                            class="btn btn-xs btn-outline-secondary py-1 px-2 <?= ($dateFrom === $lastFriday6 && $dateTo === $lastFriday) ? 'active fw-bold' : '' ?>" style="font-size: 12px;">
-                            Friday Settlement (گزشتہ جمعہ)
+                            Friday Settlement
                         </a>
 
                         <a href="?date_from=<?= $lastMonday ?>&date_to=<?= $lastSunday ?>&department_id=<?= $deptFilter ?>&wage_type=<?= urlencode($wageTypeFilter) ?>&balance_status=<?= urlencode($balanceFilter) ?>&lot_id=<?= $lotFilter ?>&tab=<?= $activeTab ?>" 
                            class="btn btn-xs btn-outline-secondary py-1 px-2 <?= ($dateFrom === $lastMonday && $dateTo === $lastSunday) ? 'active fw-bold' : '' ?>" style="font-size: 12px;">
-                            Last Full Week (گزشتہ پورا ہفتہ)
+                            Last Full Week
                         </a>
 
                         <a href="?date_from=<?= $monthStart ?>&date_to=<?= $monthEnd ?>&department_id=<?= $deptFilter ?>&wage_type=<?= urlencode($wageTypeFilter) ?>&balance_status=<?= urlencode($balanceFilter) ?>&lot_id=<?= $lotFilter ?>&tab=<?= $activeTab ?>" 
                            class="btn btn-xs btn-outline-secondary py-1 px-2 <?= ($dateFrom === $monthStart && $dateTo === $monthEnd) ? 'active fw-bold' : '' ?>" style="font-size: 12px;">
-                            This Month (موجودہ مہینہ)
+                            This Month
                         </a>
 
                         <a href="?date_from=&date_to=&balance_status=payable&department_id=<?= $deptFilter ?>&wage_type=<?= urlencode($wageTypeFilter) ?>&tab=<?= $activeTab ?>" 
                            class="btn btn-xs btn-outline-danger py-1 px-2 <?= ($balanceFilter === 'payable' && empty($dateFrom)) ? 'active fw-bold' : '' ?>" style="font-size: 12px;">
-                            All Outstanding (تمام سابقہ واجبات)
+                            All Outstanding
                         </a>
                     </div>
 
@@ -452,7 +452,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <div class="col-12 col-sm-6 col-md-2">
                             <label class="form-label small fw-bold text-dark mb-1 d-flex justify-content-between align-items-center">
                                 <span><i class="bi bi-calendar-check text-primary me-1"></i>Settlement Date</span>
-                                <small class="text-muted">حساب کی تاریخ</small>
+                                <small class="text-muted">Calculation Date</small>
                             </label>
                             <input type="date" name="date_to" id="inp_date_to" class="form-control form-control-sm fw-bold border-primary" value="<?= clean($dateTo) ?>">
                         </div>
@@ -470,7 +470,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                         <!-- Search -->
                         <div class="col-12 col-sm-6 col-md-2">
-                            <label class="form-label small fw-bold text-muted mb-1">Search (تلاش ورکر)</label>
+                            <label class="form-label small fw-bold text-muted mb-1">Search</label>
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text"><i class="bi bi-search"></i></span>
                                 <input type="text" name="search" id="inp_live_search" class="form-control" placeholder="Name / Code / Phone" value="<?= clean($searchTerm) ?>">
@@ -479,7 +479,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                         <!-- Department -->
                         <div class="col-6 col-sm-6 col-md-2">
-                            <label class="form-label small fw-bold text-muted mb-1">Department (شعبہ)</label>
+                            <label class="form-label small fw-bold text-muted mb-1">Department</label>
                             <select name="department_id" class="form-select form-select-sm">
                                 <option value="">-- All Departments --</option>
                                 <?php foreach ($departments as $d): ?>
@@ -492,30 +492,30 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                         <!-- Wage Type -->
                         <div class="col-6 col-sm-6 col-md-2">
-                            <label class="form-label small fw-bold text-muted mb-1">Wage Type (اجرت کی قسم)</label>
+                            <label class="form-label small fw-bold text-muted mb-1">Wage Type</label>
                             <select name="wage_type" class="form-select form-select-sm">
                                 <option value="">-- All Wage Types --</option>
-                                <option value="Piece Rate" <?= $wageTypeFilter === 'Piece Rate' ? 'selected' : '' ?>>Piece Rate (پر پیس)</option>
-                                <option value="Daily Wage" <?= $wageTypeFilter === 'Daily Wage' ? 'selected' : '' ?>>Daily Wage (یومیہ)</option>
-                                <option value="Minute Rate" <?= $wageTypeFilter === 'Minute Rate' ? 'selected' : '' ?>>Minute Rate (منٹ)</option>
-                                <option value="Monthly Salary" <?= $wageTypeFilter === 'Monthly Salary' ? 'selected' : '' ?>>Monthly Salary (ماہانہ)</option>
+                                <option value="Piece Rate" <?= $wageTypeFilter === 'Piece Rate' ? 'selected' : '' ?>>Piece Rate</option>
+                                <option value="Daily Wage" <?= $wageTypeFilter === 'Daily Wage' ? 'selected' : '' ?>>Daily Wage</option>
+                                <option value="Minute Rate" <?= $wageTypeFilter === 'Minute Rate' ? 'selected' : '' ?>>Minute Rate</option>
+                                <option value="Monthly Salary" <?= $wageTypeFilter === 'Monthly Salary' ? 'selected' : '' ?>>Monthly Salary</option>
                             </select>
                         </div>
 
                         <!-- Balance Status -->
                         <div class="col-6 col-sm-6 col-md-2">
-                            <label class="form-label small fw-bold text-muted mb-1">Status (بیلنس کیفیت)</label>
+                            <label class="form-label small fw-bold text-muted mb-1">Status</label>
                             <select name="balance_status" class="form-select form-select-sm">
                                 <option value="">-- All Workers --</option>
-                                <option value="payable" <?= $balanceFilter === 'payable' ? 'selected' : '' ?>>Payable (&gt; 0 واجب الادا)</option>
-                                <option value="settled" <?= $balanceFilter === 'settled' ? 'selected' : '' ?>>Settled (= 0 بیباق)</option>
-                                <option value="advance" <?= $balanceFilter === 'advance' ? 'selected' : '' ?>>In Advance (&lt; 0 پیشگی)</option>
+                                <option value="payable" <?= $balanceFilter === 'payable' ? 'selected' : '' ?>>Payable (&gt; 0 Payable)</option>
+                                <option value="settled" <?= $balanceFilter === 'settled' ? 'selected' : '' ?>>Settled (= 0 Settled)</option>
+                                <option value="advance" <?= $balanceFilter === 'advance' ? 'selected' : '' ?>>In Advance (&lt; 0 Advance)</option>
                             </select>
                         </div>
 
                         <!-- Lot Filter -->
                         <div class="col-12 col-md-3 mt-2">
-                            <label class="form-label small fw-bold text-muted mb-1">Filter by Specific Lot (لاٹ)</label>
+                            <label class="form-label small fw-bold text-muted mb-1">Filter by Specific Lot</label>
                             <select name="lot_id" class="form-select form-select-sm searchable-lot">
                                 <option value="">-- All Lots in Period --</option>
                                 <?php foreach ($recentLots as $lt): ?>
@@ -529,7 +529,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <!-- Buttons -->
                         <div class="col-12 col-md-3 mt-2 ms-auto d-flex gap-2 justify-content-end">
                             <button type="submit" class="btn btn-sm btn-primary px-3 fw-semibold">
-                                <i class="bi bi-funnel-fill me-1"></i> Apply (لاگو کریں)
+                                <i class="bi bi-funnel-fill me-1"></i> Apply
                             </button>
                             <a href="<?= BASE_URL ?>modules/payments/weekly.php" class="btn btn-sm btn-outline-secondary">
                                 <i class="bi bi-arrow-counterclockwise"></i> Reset
@@ -550,13 +550,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <ul class="nav nav-pills" id="weeklyTabs" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link fw-semibold <?= $activeTab === 'workers' ? 'active' : '' ?>" id="workers-tab" data-bs-toggle="pill" data-bs-target="#workersPane" type="button" role="tab">
-                            <i class="bi bi-people-fill me-1"></i> Worker Disbursement Sheet (ورکر وار شیٹ)
+                            <i class="bi bi-people-fill me-1"></i> Worker Disbursement Sheet
                             <span class="badge bg-white text-primary ms-1"><?= count($filteredWorkers) ?></span>
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link fw-semibold <?= $activeTab === 'lots' ? 'active' : '' ?>" id="lots-tab" data-bs-toggle="pill" data-bs-target="#lotsPane" type="button" role="tab">
-                            <i class="bi bi-diagram-3-fill me-1"></i> Lot-Wise Labour (لاٹ وار خلاصہ)
+                            <i class="bi bi-diagram-3-fill me-1"></i> Lot-Wise Labour
                             <span class="badge bg-white text-secondary ms-1"><?= count($lotSummaryMap) ?></span>
                         </button>
                     </li>
@@ -569,7 +569,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <!-- Global Payment / Voucher Date with Quick Switch & Day Indicator -->
                         <div class="d-flex flex-wrap align-items-center gap-2 bg-white p-2 rounded border shadow-xs">
                             <span class="small fw-bold text-dark text-nowrap" title="Date that will be recorded on payment vouchers and ledgers">
-                                <i class="bi bi-calendar-event text-primary me-1"></i>تاریخ ادائیگی (Pay Date):
+                                <i class="bi bi-calendar-event text-primary me-1"></i>Pay Date:
                             </span>
                             <input type="date" id="global_payment_date" class="form-control form-control-sm py-1 fw-bold border-primary shadow-xs" style="width: 145px; font-size: 13px;" value="<?= clean($paymentDateDefault) ?>">
                             <span id="lbl_pay_day_name" class="badge bg-primary text-white py-1 px-2" style="font-size: 11px;">
@@ -579,16 +579,16 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <!-- Quick Day Switcher Buttons -->
                             <div class="btn-group btn-group-sm ms-1" role="group">
                                 <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 btn-set-pay-date <?= ($paymentDateDefault === $today) ? 'active fw-bold' : '' ?>" data-date="<?= $today ?>">
-                                    آج (Today)
+                                    Today (Today)
                                 </button>
                                 <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2 btn-set-pay-date <?= ($paymentDateDefault === $yesterday) ? 'active fw-bold' : '' ?>" data-date="<?= $yesterday ?>">
-                                    گزشتہ کل
+                                    Yesterday
                                 </button>
-                                <button type="button" class="btn btn-xs btn-outline-warning text-dark py-1 px-2 btn-set-pay-date <?= ($paymentDateDefault === $lastThursday) ? 'active fw-bold' : '' ?>" data-date="<?= $lastThursday ?>" title="جمعرات کی تاریخ پر ادائیگی ریکارڈ کریں">
-                                    <i class="bi bi-check2-circle text-warning-emphasis"></i> جمعرات (Thu)
+                                <button type="button" class="btn btn-xs btn-outline-warning text-dark py-1 px-2 btn-set-pay-date <?= ($paymentDateDefault === $lastThursday) ? 'active fw-bold' : '' ?>" data-date="<?= $lastThursday ?>" title="Record disbursement on Thursday">
+                                    <i class="bi bi-check2-circle text-warning-emphasis"></i> Thu
                                 </button>
                                 <button type="button" class="btn btn-xs btn-outline-success py-1 px-2 btn-set-pay-date <?= ($paymentDateDefault === $lastFriday) ? 'active fw-bold' : '' ?>" data-date="<?= $lastFriday ?>">
-                                    جمعہ (Fri)
+                                    Friday (Fri)
                                 </button>
                             </div>
                         </div>
@@ -597,7 +597,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <div class="d-flex align-items-center gap-1 bg-white p-1 px-2 rounded border">
                             <span class="small fw-semibold text-muted text-nowrap">Method:</span>
                             <select id="global_payment_method" class="form-select form-select-sm py-1" style="width: 130px; font-size: 12px;">
-                                <option value="Cash">Cash (نقد)</option>
+                                <option value="Cash">Cash</option>
                                 <option value="Bank Transfer">Bank Transfer</option>
                                 <option value="Cheque">Cheque</option>
                                 <option value="JazzCash">JazzCash</option>
@@ -628,7 +628,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 </span>
                             </div>
                             <button type="button" class="btn btn-sm btn-success fw-bold px-3 shadow-sm" id="btn_bulk_pay">
-                                <i class="bi bi-cash-stack me-1"></i> Pay Selected (منتخب ادائیگی)
+                                <i class="bi bi-cash-stack me-1"></i> Pay Selected
                             </button>
                         </div>
 
@@ -639,18 +639,18 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <div class="d-flex flex-wrap align-items-center gap-2">
                             <span class="small fw-bold text-dark"><i class="bi bi-lightning-charge-fill text-warning me-1"></i>One-Click Auto-Fill:</span>
                             <button type="button" class="btn btn-sm btn-primary fw-bold shadow-xs px-3" id="btn_autofill_last_week" title="Auto-fill last week's disbursement amounts into inputs">
-                                <i class="bi bi-lightning-charge-fill me-1"></i> Auto-Fill Last Week (گزشتہ ہفتے کے خرچے فل کریں)
+                                <i class="bi bi-lightning-charge-fill me-1"></i> Auto-Fill Last Week
                             </button>
                             <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold" id="btn_autofill_full_balance" title="Fill full remaining ledger balance for all workers">
-                                <i class="bi bi-wallet2 me-1"></i> Fill Full Balance (مکمل واجبات)
+                                <i class="bi bi-wallet2 me-1"></i> Fill Full Balance
                             </button>
                             <button type="button" class="btn btn-sm btn-outline-danger fw-semibold" id="btn_clear_all_amounts" title="Clear all input amounts">
-                                <i class="bi bi-x-circle me-1"></i> Clear All (سب خالی کریں)
+                                <i class="bi bi-x-circle me-1"></i> Clear All
                             </button>
                         </div>
                         <div class="small text-muted" style="font-size: 11.5px;">
                             <i class="bi bi-info-circle text-primary me-1"></i>
-                            رقم آٹو فل ہونے کے بعد صرف اسی ورکر کے آگے <strong>Pay</strong> بٹن دبائیں جس کو ادائیگی دینی ہے (باقی کسی کو خرچہ نہیں ملے گا)۔
+                            After auto-filling amounts, click Pay next to each worker you wish to disburse payments to.
                         </div>
                     </div>
                 </div>
@@ -672,14 +672,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <input class="form-check-input" type="checkbox" id="chk_select_all" title="Select / Deselect All Workers">
                                     </th>
                                     <th style="width: 45px;">#</th>
-                                    <th style="min-width: 190px;">Worker & Dept (کاریگر و شعبہ)</th>
-                                    <th style="min-width: 120px;">Lots Worked (لاٹس)</th>
-                                    <th class="text-end" style="min-width: 100px; white-space: nowrap;">Period Earned<br><small class="text-muted fw-normal">ہفتہ وار کمائی</small></th>
-                                    <th class="text-end" style="min-width: 100px; white-space: nowrap;">Period Paid<br><small class="text-muted fw-normal">ہفتہ وار ادائیگی</small></th>
-                                    <th class="text-end" style="min-width: 120px; white-space: nowrap;">Net Balance<br><small class="text-muted fw-normal">کل واجبات</small></th>
-                                    <th class="text-end" style="min-width: 110px; white-space: nowrap;">Last Paid<br><small class="text-muted fw-normal">گزشتہ ادائیگی</small></th>
+                                    <th style="min-width: 190px;">Worker & Dept</th>
+                                    <th style="min-width: 120px;">Lots Worked</th>
+                                    <th class="text-end" style="min-width: 100px; white-space: nowrap;">Period Earned<br><small class="text-muted fw-normal">Period Earned</small></th>
+                                    <th class="text-end" style="min-width: 100px; white-space: nowrap;">Period Paid<br><small class="text-muted fw-normal">Period Paid</small></th>
+                                    <th class="text-end" style="min-width: 120px; white-space: nowrap;">Net Balance<br><small class="text-muted fw-normal">Net Balance</small></th>
+                                    <th class="text-end" style="min-width: 110px; white-space: nowrap;">Last Paid<br><small class="text-muted fw-normal">Last Paid</small></th>
                                     <th class="text-end no-print" style="width: 215px; min-width: 215px;">
-                                        Paying Now (ادائیگی رقم) *
+                                        Paying Now *
                                         <div class="mt-1">
                                             <span class="badge bg-warning text-dark border font-latin" id="hdr_pay_date_badge" style="font-size: 10.5px;">
                                                 📅 <strong id="hdr_date_val"><?= date('d M Y (D)', strtotime($paymentDateDefault)) ?></strong>
@@ -687,8 +687,8 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         </div>
                                     </th>
                                     <th class="no-print" style="width: 165px; min-width: 165px;">Note / Reference</th>
-                                    <th class="text-center no-print" style="width: 125px; min-width: 125px;">Action (محفوظ کریں)</th>
-                                    <th class="d-none d-print-table-cell text-center" style="width: 140px;">Signature (دستخط)</th>
+                                    <th class="text-center no-print" style="width: 125px; min-width: 125px;">Action</th>
+                                    <th class="d-none d-print-table-cell text-center" style="width: 140px;">Signature</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -760,7 +760,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                             ?>
                                                             <span class="badge <?= $wtBadge ?> border" style="font-size: 10px;"><?= clean($wt) ?></span>
                                                             <?php if (!$shouldCheck && $defaultPayAmount <= 0): ?>
-                                                                <span class="badge bg-secondary-subtle text-secondary small border badge-skipped" style="font-size: 9px;">Skipped (نہیں دینا)</span>
+                                                                <span class="badge bg-secondary-subtle text-secondary small border badge-skipped" style="font-size: 9px;">Skipped</span>
                                                             <?php endif; ?>
                                                         </div>
                                                     </div>
@@ -809,15 +809,15 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                     <span class="fw-bold text-danger fs-6 lbl-net-balance">
                                                         Rs. <?= number_format($curBal, 2) ?>
                                                     </span>
-                                                    <span class="badge bg-danger-subtle text-danger d-block small" style="font-size: 9px;">Payable (واجب الادا)</span>
+                                                    <span class="badge bg-danger-subtle text-danger d-block small" style="font-size: 9px;">Payable</span>
                                                 <?php elseif ($curBal < 0): ?>
                                                     <span class="fw-bold text-warning-emphasis fs-6 lbl-net-balance">
                                                         Rs. <?= number_format(abs($curBal), 2) ?>
                                                     </span>
-                                                    <span class="badge bg-warning-subtle text-warning-emphasis d-block small" style="font-size: 9px;">Advance (پیشگی زیادہ ادا)</span>
+                                                    <span class="badge bg-warning-subtle text-warning-emphasis d-block small" style="font-size: 9px;">Advance</span>
                                                 <?php else: ?>
                                                     <span class="fw-semibold text-muted lbl-net-balance">Rs. 0.00</span>
-                                                    <span class="badge bg-light text-muted border d-block small" style="font-size: 9px;">Settled (بیباق)</span>
+                                                    <span class="badge bg-light text-muted border d-block small" style="font-size: 9px;">Settled</span>
                                                 <?php endif; ?>
 
                                                 <?php if (abs($curBal - $allTimeBal) > 0.01 && !empty($dateTo)): ?>
@@ -825,7 +825,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <?php endif; ?>
                                             </td>
 
-                                            <!-- Last Paid (گزشتہ ادائیگی) -->
+                                            <!-- Last Paid -->
                                             <td class="text-end" style="white-space: nowrap;">
                                                 <?php if ($lastPaid > 0): ?>
                                                     <span class="badge bg-light text-dark border fw-bold" style="font-size: 11px;">
@@ -879,13 +879,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                     <button type="button" class="btn btn-xs btn-outline-danger py-0 px-1 btn-set-zero" 
                                                             data-target="inp_pay_<?= $wId ?>" 
                                                             data-worker-id="<?= $wId ?>" 
-                                                            title="Skip / Set to 0 (اس بار ادائیگی نہ کریں)" 
+                                                            title="Skip / Set to 0 (Do not disburse this round)" 
                                                             style="font-size: 10px;">
                                                         0 (Skip)
                                                     </button>
                                                 </div>
                                                 <div class="text-end text-muted small mt-1" style="font-size: 10px;">
-                                                    تاریخ: <span class="lbl-row-date font-monospace fw-semibold text-primary"><?= date('d M', strtotime($paymentDateDefault)) ?></span>
+                                                    Date: <span class="lbl-row-date font-monospace fw-semibold text-primary"><?= date('d M', strtotime($paymentDateDefault)) ?></span>
                                                 </div>
                                             </td>
 
@@ -904,13 +904,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                             class="btn btn-sm btn-success px-3 fw-bold btn-tick-pay" 
                                                             data-worker-id="<?= $wId ?>"
                                                             data-worker-name="<?= clean($w['name']) ?>"
-                                                            title="Save Weekly Payment (ادائیگی محفوظ کریں)">
+                                                            title="Save Weekly Payment">
                                                         <i class="bi bi-check2-circle me-1"></i> Pay
                                                     </button>
                                                     <a href="<?= BASE_URL ?>modules/workers/statement.php?id=<?= $wId ?>" 
                                                         target="_blank" 
                                                         class="btn btn-sm btn-outline-secondary px-2" 
-                                                        title="View Full Worker Statement (کھاتہ)">
+                                                        title="View Full Worker Statement">
                                                         <i class="bi bi-file-text"></i>
                                                     </a>
                                                 </div>
@@ -961,12 +961,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <table class="table table-sm table-hover align-middle mb-0">
                                         <thead class="table-light text-muted small">
                                             <tr>
-                                                <th>Worker (کاریگر)</th>
+                                                <th>Worker</th>
                                                 <th>Department</th>
-                                                <th>Operation (مرحلہ)</th>
+                                                <th>Operation</th>
                                                 <th>Wage Scheme</th>
                                                 <th class="text-center">Good Pieces</th>
-                                                <th class="text-end">Labour Cost (رقم)</th>
+                                                <th class="text-end">Labour Cost</th>
                                                 <th class="text-center no-print">Action</th>
                                             </tr>
                                         </thead>
@@ -1010,7 +1010,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <div class="modal-content border-0 shadow-lg rounded-3">
             <div class="modal-header bg-success text-white py-3">
                 <h5 class="modal-title fw-bold">
-                    <i class="bi bi-shield-check me-2"></i>Confirm Weekly Payment (ادائیگی کی تصدیق)
+                    <i class="bi bi-shield-check me-2"></i>Confirm Weekly Payment
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -1023,11 +1023,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                 <div class="p-3 bg-light rounded-3 border mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="text-muted small">Current Net Balance (واجبات):</span>
+                        <span class="text-muted small">Current Net Balance:</span>
                         <strong class="text-dark" id="m_current_balance">Rs. 0.00</strong>
                     </div>
                     <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
-                        <span class="text-muted small">Payment Amount (رقم ادائیگی):</span>
+                        <span class="text-muted small">Payment Amount:</span>
                         <strong class="text-success fs-5" id="m_pay_amount">Rs. 0.00</strong>
                     </div>
                     <div class="d-flex justify-content-between align-items-center">
@@ -1044,20 +1044,20 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <div class="row g-2">
                     <div class="col-12 col-md-6">
                         <label class="form-label small fw-semibold text-muted mb-1 d-flex justify-content-between">
-                            <span>Disbursement Date (تاریخ ادائیگی)</span>
+                            <span>Disbursement Date</span>
                             <span id="m_lbl_day_name" class="badge bg-primary-subtle text-primary border" style="font-size: 10px;"><?= date('l', strtotime($paymentDateDefault)) ?></span>
                         </label>
                         <input type="date" id="m_payment_date" class="form-control form-control-sm fw-bold border-primary" value="<?= clean($paymentDateDefault) ?>">
                         <div class="d-flex gap-1 mt-1">
-                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-1" style="font-size: 10px;" onclick="document.getElementById('m_payment_date').value='<?= $today ?>'; document.getElementById('m_payment_date').dispatchEvent(new Event('change'));">آج</button>
-                            <button type="button" class="btn btn-xs btn-outline-warning text-dark py-0 px-1 fw-bold" style="font-size: 10px;" onclick="document.getElementById('m_payment_date').value='<?= $lastThursday ?>'; document.getElementById('m_payment_date').dispatchEvent(new Event('change'));">جمعرات</button>
-                            <button type="button" class="btn btn-xs btn-outline-success py-0 px-1" style="font-size: 10px;" onclick="document.getElementById('m_payment_date').value='<?= $lastFriday ?>'; document.getElementById('m_payment_date').dispatchEvent(new Event('change'));">جمعہ</button>
+                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-1" style="font-size: 10px;" onclick="document.getElementById('m_payment_date').value='<?= $today ?>'; document.getElementById('m_payment_date').dispatchEvent(new Event('change'));">Today</button>
+                            <button type="button" class="btn btn-xs btn-outline-warning text-dark py-0 px-1 fw-bold" style="font-size: 10px;" onclick="document.getElementById('m_payment_date').value='<?= $lastThursday ?>'; document.getElementById('m_payment_date').dispatchEvent(new Event('change'));">Thu</button>
+                            <button type="button" class="btn btn-xs btn-outline-success py-0 px-1" style="font-size: 10px;" onclick="document.getElementById('m_payment_date').value='<?= $lastFriday ?>'; document.getElementById('m_payment_date').dispatchEvent(new Event('change'));">Friday</button>
                         </div>
                     </div>
                     <div class="col-12 col-md-6">
                         <label class="form-label small fw-semibold text-muted mb-1">Payment Method</label>
                         <select id="m_payment_method" class="form-select form-select-sm">
-                            <option value="Cash">Cash (نقد)</option>
+                            <option value="Cash">Cash</option>
                             <option value="Bank Transfer">Bank Transfer</option>
                             <option value="Cheque">Cheque</option>
                             <option value="JazzCash">JazzCash</option>
@@ -1086,9 +1086,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <input type="hidden" id="m_raw_amount" value="0">
             </div>
             <div class="modal-footer bg-light py-2">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel (منسوخ)</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-success btn-sm px-4 fw-bold" id="btn_confirm_disburse">
-                    <i class="bi bi-check-lg me-1"></i> Disburse & Save (ادائیگی محفوظ کریں)
+                    <i class="bi bi-check-lg me-1"></i> Disburse & Save
                 </button>
             </div>
         </div>
@@ -1103,7 +1103,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <div class="modal-content border-0 shadow-lg rounded-3">
             <div class="modal-header bg-primary text-white py-3">
                 <h5 class="modal-title fw-bold">
-                    <i class="bi bi-diagram-3 me-2"></i>Worker Lot Production Breakdown (لاٹ بریک ڈاؤن)
+                    <i class="bi bi-diagram-3 me-2"></i>Worker Lot Production Breakdown
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -1153,7 +1153,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <div class="modal-content border-0 shadow-lg rounded-3">
             <div class="modal-header bg-success text-white py-3">
                 <h5 class="modal-title fw-bold">
-                    <i class="bi bi-cash-stack me-2"></i>Confirm Bulk Weekly Payment (اجتماعی ادائیگی)
+                    <i class="bi bi-cash-stack me-2"></i>Confirm Bulk Weekly Payment
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -1171,13 +1171,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                 <div class="row g-2">
                     <div class="col-12 col-md-6">
-                        <label class="form-label small fw-semibold text-muted mb-1">Disbursement Date (تاریخ ادائیگی)</label>
+                        <label class="form-label small fw-semibold text-muted mb-1">Disbursement Date</label>
                         <input type="date" id="bulk_payment_date" class="form-control form-control-sm fw-bold border-primary" value="<?= clean($paymentDateDefault) ?>">
                     </div>
                     <div class="col-12 col-md-6">
                         <label class="form-label small fw-semibold text-muted mb-1">Payment Method</label>
                         <select id="bulk_payment_method" class="form-select form-select-sm">
-                            <option value="Cash">Cash (نقد)</option>
+                            <option value="Cash">Cash</option>
                             <option value="Bank Transfer">Bank Transfer</option>
                             <option value="Cheque">Cheque</option>
                             <option value="JazzCash">JazzCash</option>
@@ -1201,7 +1201,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             <div class="modal-footer bg-light py-2">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-success btn-sm px-4 fw-bold" id="btn_execute_bulk_pay">
-                    <i class="bi bi-check2-circle me-1"></i> Disburse All (سب کو ادا کریں)
+                    <i class="bi bi-check2-circle me-1"></i> Disburse All
                 </button>
             </div>
         </div>
@@ -1271,13 +1271,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // PAYMENT DATE SYNCHRONIZER & QUICK DAY SELECTORS
     // -------------------------------------------------------------
     const dayNamesMap = [
-        'Sunday (اتوار)', 
-        'Monday (پیر)', 
-        'Tuesday (منگل)', 
-        'Wednesday (بدھ)', 
-        'Thursday (جمعرات)', 
-        'Friday (جمعہ)', 
-        'Saturday (ہفتہ)'
+        'Sunday', 
+        'Monday', 
+        'Tuesday', 
+        'Wednesday', 
+        'Thursday', 
+        'Friday', 
+        'Saturday'
     ];
     const shortMonthsMap = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -1360,7 +1360,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // User pays individually by clicking "Pay" on the workers they want to disburse!
             updateLiveSummary();
             if (typeof showToast === 'function') {
-                showToast(`گزشتہ ہفتے کے خرچے ${filledCount} ورکرز کے لیے آٹو فل ہو گئے (کل: Rs. ${totalFilled.toLocaleString()})۔ جس کو ادا کرنا ہو صرف اسی کے آگے 'Pay' پر کلک کریں۔`, 'success');
+                showToast(`Last week disbursements auto-filled for ${filledCount} workers (Total: Rs. ${totalFilled.toLocaleString()}). Click Pay next to each worker to disburse.`, 'success');
             } else {
                 alert(`Last week payment amounts filled for ${filledCount} workers. Click 'Pay' on the workers you want to disburse.`);
             }
@@ -1391,7 +1391,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             updateLiveSummary();
             if (typeof showToast === 'function') {
-                showToast(`مکمل واجبات ${filledCount} ورکرز کے لیے آٹو فل ہو گئے (کل: Rs. ${totalFilled.toLocaleString()})۔`, 'info');
+                showToast(`Full balance auto-filled for ${filledCount} workers (Total: Rs. ${totalFilled.toLocaleString()}).`, 'info');
             }
         });
     }
@@ -1411,7 +1411,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (chkSelectAll) chkSelectAll.checked = false;
             updateLiveSummary();
             if (typeof showToast === 'function') {
-                showToast('تمام رقمیں خالی کر دی گئیں (0.00)۔', 'secondary');
+                showToast('All payment amounts cleared to 0.00.', 'secondary');
             }
         });
     }
@@ -1523,7 +1523,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             const b = document.createElement('span');
                             b.className = 'badge bg-secondary-subtle text-secondary small border badge-skipped';
                             b.style.fontSize = '9px';
-                            b.textContent = 'Skipped (نہیں دینا)';
+                            b.textContent = 'Skipped';
                             infoCol.querySelector('div')?.appendChild(b);
                         }
                     }
@@ -1595,7 +1595,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const payAmt = parseFloat(payInput ? payInput.value : 0) || 0;
             if (payAmt <= 0) {
-                alert('براہ کرم ادائیگی کی درست رقم (0 سے زیادہ) درج کریں۔');
+                alert('Please enter a valid disbursement amount greater than 0.');
                 if (payInput) payInput.focus();
                 return;
             }
@@ -1695,7 +1695,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(res => res.json())
             .then(data => {
                 btnConfirmDisburse.disabled = false;
-                btnConfirmDisburse.innerHTML = '<i class="bi bi-check-lg me-1"></i> Disburse & Save (ادائیگی محفوظ کریں)';
+                btnConfirmDisburse.innerHTML = '<i class="bi bi-check-lg me-1"></i> Disburse & Save';
 
                 if (data.status === 'success') {
                     if (modalConfirm) modalConfirm.hide();
@@ -1752,7 +1752,7 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(err => {
                 btnConfirmDisburse.disabled = false;
-                btnConfirmDisburse.innerHTML = '<i class="bi bi-check-lg me-1"></i> Disburse & Save (ادائیگی محفوظ کریں)';
+                btnConfirmDisburse.innerHTML = '<i class="bi bi-check-lg me-1"></i> Disburse & Save';
                 alert('Connection error: ' + err.message);
             });
         });
@@ -1812,7 +1812,7 @@ document.addEventListener('DOMContentLoaded', function() {
         btnBulkPayTrigger.addEventListener('click', function() {
             const checkedBoxes = Array.from(document.querySelectorAll('.chk-worker-select:checked'));
             if (checkedBoxes.length === 0) {
-                alert('براہ کرم فہرست سے کم از کم ایک ورکر منتخب کریں۔');
+                alert('Please select at least one worker from the list.');
                 return;
             }
 
@@ -1833,7 +1833,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             if (validCount === 0 || totalAmt <= 0) {
-                alert('منتخب ورکرز کی ادائیگی کی رقم 0 سے زیادہ ہونی چاہیے۔');
+                alert('Selected workers must have a payment amount greater than 0.');
                 return;
             }
 
@@ -1919,7 +1919,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(res => res.json())
             .then(data => {
                 btnExecBulk.disabled = false;
-                btnExecBulk.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Disburse All (سب کو ادا کریں)';
+                btnExecBulk.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Disburse All';
 
                 if (data.status === 'success') {
                     if (modalBulk) modalBulk.hide();
@@ -1972,7 +1972,7 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(err => {
                 btnExecBulk.disabled = false;
-                btnExecBulk.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Disburse All (سب کو ادا کریں)';
+                btnExecBulk.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Disburse All';
                 alert('Connection error: ' + err.message);
             });
         });

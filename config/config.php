@@ -22,7 +22,7 @@ ini_set('log_errors', '1');
 ini_set('error_log', __DIR__ . '/../error.log');
 
 // =========================================================================
-// 1. DATABASE CONFIGURATION (ڈیٹا بیس کنفیگریشن)
+// 1. DATABASE CONFIGURATION
 // Update these credentials for your live hosting server or local environment:
 // =========================================================================
 if (!defined('DB_HOST')) define('DB_HOST', getenv('DB_HOST') ?: '127.0.0.1');     // Database host (usually 'localhost' or '127.0.0.1')
@@ -61,7 +61,7 @@ function get_db(): PDO {
 }
 
 // =========================================================================
-// 2. BASE URL AUTO-DETECTION (آٹو یو آر ایل ڈیٹیکشن)
+// 2. BASE URL AUTO-DETECTION
 // Automatically detects directory whether hosted at /Garment/, /smartfit/, or domain root.
 // Can also be manually overridden: define('BASE_URL', 'https://example.com/smartfit/');
 // =========================================================================
@@ -640,11 +640,11 @@ function calculate_lot_element_requirements(array $productElements, int $totalPi
         if ($hasAnatomyVariants && $isSleeve) {
             $targetPieces = $sleevedQty;
             $batchCut = (int)round($qtyPerUnit * $sleevedQty);
-            $calcNote = "{$sleevedQty} بازو والے پیسز کے لیے ({$qtyPerUnit} × {$sleevedQty} = {$batchCut})";
+            $calcNote = "For {$sleevedQty} sleeved pieces ({$qtyPerUnit} × {$sleevedQty} = {$batchCut})";
         } else {
             $targetPieces = $totalPieces;
             $batchCut = (int)round($qtyPerUnit * $totalPieces);
-            $calcNote = "تمام {$totalPieces} پیسز کے لیے ({$qtyPerUnit} × {$totalPieces} = {$batchCut})";
+            $calcNote = "For all {$totalPieces} pieces ({$qtyPerUnit} × {$totalPieces} = {$batchCut})";
         }
 
         $totalBatchCut += $batchCut;
@@ -1088,10 +1088,10 @@ function redirect_next_production_step(int $lotId, int $operationId, string $mes
     if ($nextOp) {
         $nextOpId = (int)$nextOp['operation_id'];
         $nextMode = $nextOp['default_mode'] ?? $fallbackMode;
-        $message .= " — اگلا مرحلہ لوڈ ہو گیا: {$nextOp['op_name']}";
+        $message .= " — Next stage loaded: {$nextOp['op_name']}";
         redirect("modules/production/index.php?lot_id=$lotId&operation_id=$nextOpId&mode=$nextMode", $message);
     } else {
-        $message .= " — اس لاٹ کے تمام ورک فلو مراحل مکمل ہو گئے!";
+        $message .= " — All workflow stages for this lot are complete!";
         redirect("modules/production/index.php?lot_id=$lotId", $message);
     }
 }

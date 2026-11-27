@@ -1,6 +1,6 @@
 <?php
 /**
- * Garment Manufacturing ERP - Digital Job Card (جاب کارڈ کنسولیڈیٹڈ ویو)
+ * Garment Manufacturing ERP - Digital Job Card (Consolidated View)
  * Exact digital counterpart of the factory handwritten Excel Job Card:
  * - Order & Lot details (Lot#, Design#, Product, Total Pieces, Sizes)
  * - Operator Element Section (Hashim, Adnan/Molu: Front, Back, Bazo, Pocket, Gala) with pending highlights
@@ -96,11 +96,11 @@ if (empty($operatorEntries)) {
     $stdElements = $peStmt->fetchAll();
     if (empty($stdElements)) {
         $stdElements = [
-            ['id' => 1, 'element_name' => 'Front (پلا)', 'multiplier' => 1, 'pieces_per_palla' => 1, 'pallas_per_garment' => 1, 'rate_per_palla' => 20],
-            ['id' => 2, 'element_name' => 'Back (پشت)', 'multiplier' => 1, 'pieces_per_palla' => 1, 'pallas_per_garment' => 1, 'rate_per_palla' => 20],
-            ['id' => 3, 'element_name' => 'Bazo (بازو)', 'multiplier' => 2, 'pieces_per_palla' => 2, 'pallas_per_garment' => 1, 'rate_per_palla' => 20],
-            ['id' => 4, 'element_name' => 'Pocket (پاکٹ)', 'multiplier' => 2, 'pieces_per_palla' => 4, 'pallas_per_garment' => 0.5, 'rate_per_palla' => 20],
-            ['id' => 5, 'element_name' => 'Gol Gala (گول گلا)', 'multiplier' => 1, 'pieces_per_palla' => 1, 'pallas_per_garment' => 1, 'rate_per_palla' => 10],
+            ['id' => 1, 'element_name' => 'Front (Panel)', 'multiplier' => 1, 'pieces_per_palla' => 1, 'pallas_per_garment' => 1, 'rate_per_palla' => 20],
+            ['id' => 2, 'element_name' => 'Back', 'multiplier' => 1, 'pieces_per_palla' => 1, 'pallas_per_garment' => 1, 'rate_per_palla' => 20],
+            ['id' => 3, 'element_name' => 'Bazo', 'multiplier' => 2, 'pieces_per_palla' => 2, 'pallas_per_garment' => 1, 'rate_per_palla' => 20],
+            ['id' => 4, 'element_name' => 'Pocket', 'multiplier' => 2, 'pieces_per_palla' => 4, 'pallas_per_garment' => 0.5, 'rate_per_palla' => 20],
+            ['id' => 5, 'element_name' => 'Gol Gala', 'multiplier' => 1, 'pieces_per_palla' => 1, 'pallas_per_garment' => 1, 'rate_per_palla' => 10],
         ];
     }
     foreach ($stdElements as $se) {
@@ -216,7 +216,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             <div>
                 <div class="d-flex align-items-center gap-2">
                     <h4 class="fw-bold mb-0 text-dark">
-                        <i class="bi bi-clipboard2-data-fill text-primary me-1"></i> Digital Job Card (جاب کارڈ)
+                        <i class="bi bi-clipboard2-data-fill text-primary me-1"></i> Digital Job Card
                     </h4>
                     <span class="badge bg-primary fs-6 font-monospace">Lot #<?= clean($lot['lot_number']) ?></span>
                 </div>
@@ -238,7 +238,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <i class="bi bi-lightning-charge-fill me-1"></i> Worker Production Entry
                 </a>
                 <a href="<?= BASE_URL ?>modules/lots/print_jobcard.php?id=<?= $lotId ?>" target="_blank" class="btn btn-success btn-sm fw-bold shadow-sm">
-                    <i class="bi bi-printer-fill me-1"></i> Print Job Card (پرنٹ جاب کارڈ)
+                    <i class="bi bi-printer-fill me-1"></i> Print Job Card
                 </a>
                 <a href="<?= BASE_URL ?>modules/lots/print_design_sheet.php?id=<?= $lotId ?>" target="_blank" class="btn btn-outline-secondary btn-sm">
                     <i class="bi bi-printer me-1"></i> Print Design Sheet
@@ -274,7 +274,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <?= $cuttingDone ?> / <?= (int)$lot['total_pieces'] ?> pcs
                         </div>
                         <div class="small text-muted">
-                            Master: <strong>علی رضا</strong> | Date: <?= clean($cuttingDate) ?>
+                            Master: <strong>Ali Raza</strong> | Date: <?= clean($cuttingDate) ?>
                         </div>
                     </div>
                     <div class="col-12 col-md-3">
@@ -298,7 +298,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <div class="card-modern shadow-sm h-100">
                     <div class="card-modern-header d-flex justify-content-between align-items-center bg-warning-subtle border-warning-subtle">
                         <h6 class="fw-bold mb-0 text-dark">
-                            <i class="bi bi-cpu-fill text-warning me-1"></i> Operator Section (آپریٹر سیکشن)
+                            <i class="bi bi-cpu-fill text-warning me-1"></i> Operator Section
                         </h6>
                         <a href="<?= BASE_URL ?>modules/production/operator_stage.php?lot_id=<?= $lotId ?>" class="btn btn-sm btn-outline-dark py-0 px-2 fw-semibold">
                             + Edit Entries
@@ -309,12 +309,12 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <table class="table table-bordered align-middle mb-0 text-center" style="font-size: 0.85rem;">
                                 <thead class="table-light">
                                     <tr>
-                                        <th class="text-start">Element (حصہ)</th>
+                                        <th class="text-start">Element (Component)</th>
                                         <th>Target</th>
                                         <th>Op 1</th>
                                         <th>Op 2</th>
                                         <th>Operator Total</th>
-                                        <th>Cut (کٹ گئے)</th>
+                                        <th>Cut (Completed)</th>
                                         <th>Cut Balance</th>
                                     </tr>
                                 </thead>
@@ -340,13 +340,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                     $rpp = (float)($oe['rate_per_palla'] ?? 0);
                                                 ?>
                                                 <?php if ($ppp != 1): ?>
-                                                    <span class="badge bg-light text-muted border small ms-1" style="font-size: 0.72rem;">1 پلہ = <?= $ppp ?> پیس</span>
+                                                    <span class="badge bg-light text-muted border small ms-1" style="font-size: 0.72rem;">1 Palla = <?= $ppp ?> pcs</span>
                                                 <?php endif; ?>
                                             </td>
                                             <td class="fw-bold text-muted">
                                                 <?= $req ?>
                                                 <?php if ($ppp > 1): ?>
-                                                    <div class="small text-muted" style="font-size: 0.70rem;"><?= round($req / $ppp, 1) ?> پلے</div>
+                                                    <div class="small text-muted" style="font-size: 0.70rem;"><?= round($req / $ppp, 1) ?> Pallas</div>
                                                 <?php endif; ?>
                                             </td>
                                             <td class="fw-semibold"><?= (int)$oe['operator1_pieces'] ?></td>
@@ -364,9 +364,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     </div>
                     <div class="card-modern-footer p-2 bg-light border-top text-center small">
                         <?php if ($allElementsComplete): ?>
-                            <span class="text-success fw-bold"><i class="bi bi-check-circle-fill me-1"></i> تمام اعضاء مکمل تیار ہیں (All Elements Ready for Stitching)</span>
+                            <span class="text-success fw-bold"><i class="bi bi-check-circle-fill me-1"></i> All Elements Ready for Stitching</span>
                         <?php else: ?>
-                            <span class="text-danger fw-bold"><i class="bi bi-exclamation-triangle-fill me-1"></i> توجہ فرمائیں: کچھ اعضاء کے پیسز ابھی باقی ہیں (Pending highlighted above)</span>
+                            <span class="text-danger fw-bold"><i class="bi bi-exclamation-triangle-fill me-1"></i> Notice: Some elements are still pending (highlighted above)</span>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -377,7 +377,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <div class="card-modern shadow-sm h-100">
                     <div class="card-modern-header d-flex justify-content-between align-items-center">
                         <h6 class="fw-bold mb-0 text-dark">
-                            <i class="bi bi-diagram-3-fill text-primary me-1"></i> Production Stages Progress (مراحل کی پیش رفت)
+                            <i class="bi bi-diagram-3-fill text-primary me-1"></i> Production Stages Progress
                         </h6>
                         <span class="badge bg-light text-secondary border">Real-time Stage Ceiling Validation</span>
                     </div>
@@ -463,7 +463,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <div class="card-modern-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                         <div>
                             <h6 class="fw-bold mb-0 text-dark">
-                                <i class="bi bi-people-fill text-primary me-1"></i> Worker Operations Grid (کاریگروں کا کام اور کھاتہ لاگ)
+                                <i class="bi bi-people-fill text-primary me-1"></i> Worker Operations Grid
                             </h6>
                             <span class="text-muted small">Matches the Arif, Asad, Bilal, Latif row matrix from the handwritten Job Card</span>
                         </div>
@@ -476,14 +476,14 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <table class="table table-bordered table-hover align-middle mb-0 text-center" style="font-size: 0.85rem;">
                                 <thead class="table-light">
                                     <tr>
-                                        <th class="text-start" style="min-width: 160px;">Worker Name (کاریگر)</th>
-                                        <th style="min-width: 110px;">تاریخ (Last Date)</th>
+                                        <th class="text-start" style="min-width: 160px;">Worker Name</th>
+                                        <th style="min-width: 110px;">Date (Last Date)</th>
                                         <?php foreach ($activeOpsInLot as $opId => $opName): ?>
                                             <th style="min-width: 100px;"><?= clean($opName) ?></th>
                                         <?php endforeach; ?>
-                                        <th class="table-active" style="width: 110px;">ٹوٹل پیسز</th>
-                                        <th style="width: 110px;">منٹ (SAM)</th>
-                                        <th style="width: 130px;" class="table-success">اجرت کھاتہ (Rs.)</th>
+                                        <th class="table-active" style="width: 110px;">Total Pieces</th>
+                                        <th style="width: 110px;">mins (SAM)</th>
+                                        <th style="width: 130px;" class="table-success">Labour Cost (Rs.)</th>
                                     </tr>
                                 </thead>
                                 <tbody>

@@ -442,16 +442,16 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <i class="bi bi-clock-history fs-4"></i>
                 </div>
                 <div>
-                    <strong class="text-dark d-block">Unsaved Lot Draft Found (پچھلا غیر محفوظ شدہ ڈرافٹ موجود ہے)!</strong>
+                    <strong class="text-dark d-block">Unsaved Lot Draft Found!</strong>
                     <span class="small text-muted" id="draftInfoText">A previous in-progress lot entry was auto-saved.</span>
                 </div>
             </div>
             <div class="d-flex align-items-center gap-2">
                 <button type="button" class="btn btn-primary btn-sm fw-semibold shadow-xs" id="btnRestoreDraft">
-                    <i class="bi bi-arrow-counterclockwise me-1"></i> Continue Draft (ڈرافٹ بحال کریں)
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Continue Draft
                 </button>
                 <button type="button" class="btn btn-outline-secondary btn-sm" id="btnDiscardDraft">
-                    <i class="bi bi-trash me-1"></i> Discard (نیا شروع کریں)
+                    <i class="bi bi-trash me-1"></i> Discard
                 </button>
             </div>
         </div>
@@ -526,7 +526,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <div class="col-12 col-lg-6">
                                     <div class="p-3 bg-light border border-primary-subtle rounded-3 h-100">
                                         <div class="d-flex align-items-center justify-content-between mb-2">
-                                            <span class="small fw-bold text-dark"><i class="bi bi-puzzle-fill text-primary me-1"></i> Product Cutting Elements (اجزاء):</span>
+                                            <span class="small fw-bold text-dark"><i class="bi bi-puzzle-fill text-primary me-1"></i> Product Cutting Elements:</span>
                                             <span class="small text-muted" id="lblProdElementsBadge">0 parts</span>
                                         </div>
                                         <div class="d-flex flex-wrap gap-1 align-items-center" id="prodElementsBadges"></div>
@@ -548,7 +548,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                         <!-- Shift Type (Single vs Double Shift) -->
                         <div class="col-12 col-md-4">
-                            <label class="form-label fw-semibold">Shift Handling (شفٹ کی قسم) *</label>
+                            <label class="form-label fw-semibold">Shift Handling *</label>
                             <div class="d-flex gap-2">
                                 <div class="form-check form-check-inline border rounded-3 px-3 py-2 flex-grow-1 bg-light cursor-pointer">
                                     <input class="form-check-input" type="radio" name="shift_type" id="shiftSingle" value="Single Shift" <?= (!isset($_POST['shift_type']) || $_POST['shift_type'] === 'Single Shift') ? 'checked' : '' ?>>
@@ -568,7 +568,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <!-- Day Shift Operator -->
                         <div class="col-12 col-md-4" id="dayOperatorContainer">
                             <label class="form-label fw-semibold">
-                                <span class="text-warning">☀️</span> Day Shift Operator (ڈے آپریٹر)
+                                <span class="text-warning">☀️</span> Day Shift Operator
                             </label>
                             <select name="operator_id" id="operator_id" class="form-select fw-semibold">
                                 <option value="">-- Choose Operator --</option>
@@ -584,7 +584,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <!-- Night Shift Operator (Shown when Double Shift is selected) -->
                         <div class="col-12 col-md-4 <?= (isset($_POST['shift_type']) && $_POST['shift_type'] === 'Double Shift') ? '' : 'd-none' ?>" id="nightOperatorContainer">
                             <label class="form-label fw-semibold">
-                                <span class="text-primary">🌙</span> Night Shift Operator (نائٹ آپریٹر)
+                                <span class="text-primary">🌙</span> Night Shift Operator
                             </label>
                             <select name="night_operator_id" id="night_operator_id" class="form-select fw-semibold">
                                 <option value="">-- Choose Night Operator --</option>
@@ -603,7 +603,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         </div>
 
                         <div class="col-12 col-md-4">
-                            <label class="form-label fw-semibold">Machine(s) / مشین</label>
+                            <label class="form-label fw-semibold">Machine(s)</label>
                             <input type="text" name="machine_name" class="form-control font-monospace" placeholder="e.g. CMS 430 or CMS 430 / CMS 530" value="<?= clean($_POST['machine_name'] ?? 'CMS 430') ?>">
                             <div class="form-text small" style="font-size: 11px;">Single or multiple knitting machines.</div>
                         </div>
@@ -624,21 +624,21 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <div class="form-check form-switch mb-2">
                                     <input class="form-check-input" type="checkbox" role="switch" name="has_anatomy_variants" id="has_anatomy_variants" value="1" <?= !empty($_POST['has_anatomy_variants']) ? 'checked' : '' ?>>
                                     <label class="form-check-label fw-bold text-dark" for="has_anatomy_variants">
-                                        <i class="bi bi-diagram-3-fill text-primary me-1"></i> Style Anatomy Breakdown (بازو والے vs بغیر بازو / واسکٹ)
+                                        <i class="bi bi-diagram-3-fill text-primary me-1"></i> Style Anatomy Breakdown (Sleeved vs Sleeveless)
                                     </label>
                                     <span class="badge bg-secondary-subtle text-secondary ms-2">Optional</span>
                                 </div>
                                 <div id="anatomyBreakdownInputs" class="<?= !empty($_POST['has_anatomy_variants']) ? '' : 'd-none' ?> mt-3 pt-3 border-top">
                                     <div class="row g-3 align-items-center">
                                         <div class="col-12 col-sm-4">
-                                            <label class="form-label fw-semibold small text-muted">With Sleeves Quantity (بازو والے پیسز)</label>
+                                            <label class="form-label fw-semibold small text-muted">With Sleeves Quantity</label>
                                             <div class="input-group">
                                                 <input type="number" name="with_sleeves_qty" id="with_sleeves_qty" class="form-control fw-bold text-primary" min="0" value="<?= clean($_POST['with_sleeves_qty'] ?? '0') ?>">
                                                 <span class="input-group-text small">pcs</span>
                                             </div>
                                         </div>
                                         <div class="col-12 col-sm-4">
-                                            <label class="form-label fw-semibold small text-muted">Sleeveless Quantity (بغیر بازو / واسکٹ)</label>
+                                            <label class="form-label fw-semibold small text-muted">Sleeveless Quantity</label>
                                             <div class="input-group">
                                                 <input type="number" name="sleeveless_qty" id="sleeveless_qty" class="form-control fw-bold text-secondary" min="0" value="<?= clean($_POST['sleeveless_qty'] ?? '0') ?>">
                                                 <span class="input-group-text small">pcs</span>
@@ -657,7 +657,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                                             <div class="fw-bold small text-dark d-flex align-items-center gap-1">
                                                 <i class="bi bi-scissors text-primary"></i>
-                                                <span>خودکار کٹنگ کے اجزاء کا حساب (Automatic Cutting Components Allocation)</span>
+                                                <span>Automatic Cutting Components Allocation (Automatic Cutting Components Allocation)</span>
                                             </div>
                                             <span class="badge bg-primary-subtle text-primary border border-primary-subtle" id="lblTotalCutPcsBadge">
                                                 Total Parts to Cut: 0 pcs
@@ -667,15 +667,15 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             <table class="table table-sm table-bordered align-middle mb-0 bg-white" style="font-size: 0.82rem;">
                                                 <thead class="table-light">
                                                     <tr>
-                                                        <th>Component / حصہ</th>
-                                                        <th class="text-center" style="width: 100px;">فی پیس تعداد</th>
-                                                        <th class="text-center" style="width: 130px;">ٹارگٹ پیسز</th>
-                                                        <th class="text-center" style="width: 160px;">بیچ کے لیے کٹنگ</th>
-                                                        <th>حساب کا طریقہ (Formula)</th>
+                                                        <th>Component / Component</th>
+                                                        <th class="text-center" style="width: 100px;">Qty / Pc</th>
+                                                        <th class="text-center" style="width: 130px;">Target Pcs</th>
+                                                        <th class="text-center" style="width: 160px;">Batch Cut Qty</th>
+                                                        <th>Formula (Formula)</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody id="tblCuttingPartsBody">
-                                                    <tr><td colspan="5" class="text-center text-muted py-2">پروڈکٹ منتخب کریں اور تعداد درج کریں تاکہ کٹنگ کا حساب خودکار ظاہر ہو۔</td></tr>
+                                                    <tr><td colspan="5" class="text-center text-muted py-2">Select a product and enter pieces to calculate cutting allocation automatically.</td></tr>
                                                 </tbody>
                                             </table>
                                         </div>
@@ -695,7 +695,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <div class="card-modern-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                     <div>
                         <h6 class="fw-bold mb-0 text-dark">
-                            <i class="bi bi-palette-fill text-primary me-1"></i> 2. Planned Colors & Sizes (رنگ اور سائز کی تعداد)
+                            <i class="bi bi-palette-fill text-primary me-1"></i> 2. Planned Colors & Sizes
                         </h6>
                         <span class="text-muted small">Select the specific colors and sizes to produce for this lot</span>
                     </div>
@@ -715,7 +715,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <!-- Auto-distribute button if anatomy is enabled -->
                         <button type="button" class="btn btn-outline-primary btn-sm py-1 px-2 d-none d-sm-inline-flex align-items-center gap-1 shadow-2xs" id="btnAutoDistributeAnatomy" title="Auto-distribute With Sleeves & Sleeveless Breakdown equally across color rows">
                             <i class="bi bi-magic"></i>
-                            <span>Auto-Fill from Breakdown (خودکار تقسیم)</span>
+                            <span>Auto-Fill from Breakdown</span>
                         </button>
 
                         <!-- Grand Total Badge -->
@@ -733,7 +733,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <th class="text-center" style="width: 50px;">#</th>
                                     <th style="min-width: 280px;">
                                         <div class="d-flex justify-content-between align-items-center">
-                                            <span class="fw-bold text-dark">Color / Shade (رنگ کا انتخاب) *</span>
+                                            <span class="fw-bold text-dark">Color / Shade *</span>
                                             <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" id="btnQuickAddCustomColor" style="font-size: 11px;" title="Register New Color Code">
                                                 <i class="bi bi-plus-lg"></i> New Color Code
                                             </button>
@@ -741,16 +741,16 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     </th>
                                     <th style="min-width: 220px;">
                                         <div class="d-flex justify-content-between align-items-center">
-                                            <span class="fw-bold text-dark">Size (سائز منتخب کریں) *</span>
-                                            <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" id="btnQuickAddSize" style="font-size: 11px;" title="Add New Size (نیا سائز شامل کریں)">
+                                            <span class="fw-bold text-dark">Size *</span>
+                                            <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" id="btnQuickAddSize" style="font-size: 11px;" title="Add New Size">
                                                 <i class="bi bi-plus-lg"></i> New Size
                                             </button>
                                         </div>
                                     </th>
                                     <th class="text-center" style="width: 150px;" class="fw-bold text-dark">Available Yarn Stock</th>
                                     <th class="text-center" style="width: 190px;" class="fw-bold text-dark">
-                                        Planned Pieces (تعداد) *
-                                        <small class="d-block text-primary fw-normal" style="font-size: 10px;">خودکار تقسیم بازو + واسکٹ</small>
+                                        Planned Pieces *
+                                        <small class="d-block text-primary fw-normal" style="font-size: 10px;">Auto split: with sleeves + sleeveless</small>
                                     </th>
                                     <th class="text-center" style="width: 60px;">Action</th>
                                 </tr>
@@ -878,7 +878,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <!-- Bottom Bar with Add Row Button -->
                     <div class="p-3 bg-light border-top d-flex flex-wrap justify-content-between align-items-center gap-2">
                         <button type="button" class="btn btn-primary fw-semibold shadow-sm" id="btnAddItemRow">
-                            <i class="bi bi-plus-circle me-1"></i> Add Row (+ نئی رو شامل کریں)
+                            <i class="bi bi-plus-circle me-1"></i> Add Row (+ Add New Row)
                         </button>
                         <div class="text-muted small">
                             <i class="bi bi-lightbulb text-warning me-1"></i> Select only the colors and sizes you are producing for this batch. Add as many rows as needed.
@@ -888,15 +888,15 @@ require_once __DIR__ . '/../../includes/sidebar.php';
             </div>
 
             <!-- ========================================== -->
-            <!-- 2.5 GARMENT PATTERN MEASUREMENTS (پیمائش) -->
+            <!-- 2.5 GARMENT PATTERN MEASUREMENTS -->
             <!-- ========================================== -->
             <div class="card-modern mb-4">
                 <div class="card-modern-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                     <div class="d-flex align-items-center gap-2">
                         <span class="badge bg-warning p-2 rounded-2 text-dark"><i class="bi bi-rulers fs-6"></i></span>
                         <div>
-                            <h6 class="fw-bold mb-0 text-dark">Garment Pattern Size & Cutting Measurements (سائز اور کٹنگ پیمائش: لمبائی، چوڑائی، بارڈر)</h6>
-                            <span class="text-muted small">Auto-filled from selected Size master (سائز منتخب کرنے پر خودکار فل ہو گی، ضرورت پڑنے پر ایڈٹ کی جا سکتی ہے)</span>
+                            <h6 class="fw-bold mb-0 text-dark">Garment Pattern Size & Cutting Measurements: Length, Width, Border</h6>
+                            <span class="text-muted small">Auto-filled from selected Size master</span>
                         </div>
                     </div>
                     <span class="badge bg-light text-dark border"><i class="bi bi-magic me-1 text-primary"></i> Auto-fills from Size Selection</span>
@@ -904,29 +904,29 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <div class="card-modern-body p-3 bg-light">
                     <!-- Palla & Bazo Row -->
                     <div class="row g-3 mb-3">
-                        <!-- Palla / Body Panel (پلہ) -->
+                        <!-- Palla / Body Panel -->
                         <div class="col-12 col-md-6">
                             <div class="card border shadow-sm h-100">
                                 <div class="card-header bg-primary text-white py-1 small fw-bold d-flex justify-content-between align-items-center">
-                                    <span><i class="bi bi-square me-1"></i> پلا پیمائش (Body Panel / Palla)</span>
+                                    <span><i class="bi bi-square me-1"></i> Panel Specs</span>
                                     <span class="badge bg-white text-primary fw-bold">Body</span>
                                 </div>
                                 <div class="card-body p-2 bg-white">
                                     <div class="row g-2">
                                         <div class="col-6">
-                                            <label class="form-label small fw-semibold mb-1">لمبائی (Length)</label>
+                                            <label class="form-label small fw-semibold mb-1">Length</label>
                                             <input type="text" name="pla_length" id="inp_pla_length" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="41">
                                         </div>
                                         <div class="col-6">
-                                            <label class="form-label small fw-semibold mb-1">چوڑائی (Width)</label>
+                                            <label class="form-label small fw-semibold mb-1">Width</label>
                                             <input type="text" name="pla_width" id="inp_pla_width" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="15">
                                         </div>
                                         <div class="col-6">
-                                            <label class="form-label small fw-semibold mb-1">بارڈر (Border)</label>
+                                            <label class="form-label small fw-semibold mb-1">Border</label>
                                             <input type="text" name="pla_border" id="inp_pla_border" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="46">
                                         </div>
                                         <div class="col-6">
-                                            <label class="form-label small fw-semibold mb-1">منٹ (SAM Mins)</label>
+                                            <label class="form-label small fw-semibold mb-1">mins</label>
                                             <input type="text" name="pla_mins" id="inp_pla_mins" class="form-control form-control-sm text-center font-monospace fw-bold text-success" placeholder="7">
                                         </div>
                                     </div>
@@ -934,29 +934,29 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             </div>
                         </div>
 
-                        <!-- Sleeves / Bazo (بازو) -->
+                        <!-- Sleeves / Bazo -->
                         <div class="col-12 col-md-6">
                             <div class="card border shadow-sm h-100">
                                 <div class="card-header bg-info text-dark py-1 small fw-bold d-flex justify-content-between align-items-center">
-                                    <span><i class="bi bi-layers me-1"></i> بازو پیمائش (Sleeves / Bazo)</span>
+                                    <span><i class="bi bi-layers me-1"></i> Sleeves Specs</span>
                                     <span class="badge bg-dark text-white fw-bold">Sleeves</span>
                                 </div>
                                 <div class="card-body p-2 bg-white">
                                     <div class="row g-2">
                                         <div class="col-6">
-                                            <label class="form-label small fw-semibold mb-1">لمبائی (Length)</label>
+                                            <label class="form-label small fw-semibold mb-1">Length</label>
                                             <input type="text" name="bazo_length" id="inp_bazo_length" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="48">
                                         </div>
                                         <div class="col-6">
-                                            <label class="form-label small fw-semibold mb-1">چوڑائی (Width)</label>
+                                            <label class="form-label small fw-semibold mb-1">Width</label>
                                             <input type="text" name="bazo_width" id="inp_bazo_width" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="14">
                                         </div>
                                         <div class="col-6">
-                                            <label class="form-label small fw-semibold mb-1">بارڈر (Border)</label>
+                                            <label class="form-label small fw-semibold mb-1">Border</label>
                                             <input type="text" name="bazo_border" id="inp_bazo_border" class="form-control form-control-sm text-center font-monospace fw-bold" placeholder="42">
                                         </div>
                                         <div class="col-6">
-                                            <label class="form-label small fw-semibold mb-1">منٹ (SAM Mins)</label>
+                                            <label class="form-label small fw-semibold mb-1">mins</label>
                                             <input type="text" name="bazo_mins" id="inp_bazo_mins" class="form-control form-control-sm text-center font-monospace fw-bold text-success" placeholder="7">
                                         </div>
                                     </div>
@@ -968,42 +968,42 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <!-- Scheme Columns 1-4 -->
                     <div class="card border shadow-sm">
                         <div class="card-header bg-warning text-dark py-1 small fw-bold d-flex justify-content-between align-items-center">
-                            <span><i class="bi bi-palette me-1"></i> سائز / کلر سکیم کالمز (Scheme Columns 1-4)</span>
-                            <span class="small text-muted fw-normal">Reflected in Lot Design Sheet (لاٹ پرچہ)</span>
+                            <span><i class="bi bi-palette me-1"></i> Size & Scheme Columns 1-4</span>
+                            <span class="small text-muted fw-normal">Reflected in Lot Design Sheet</span>
                         </div>
                         <div class="card-body p-2 bg-white">
                             <div class="table-responsive">
                                 <table class="table table-bordered table-sm align-middle text-center mb-0" style="font-size: 0.82rem;">
                                     <thead class="table-light">
                                         <tr>
-                                            <th style="width: 20%;">پیمائش</th>
-                                            <th style="width: 20%;">کالم 1</th>
-                                            <th style="width: 20%;">کالم 2</th>
-                                            <th style="width: 20%;">کالم 3</th>
-                                            <th style="width: 20%;">کالم 4</th>
+                                            <th style="width: 20%;">Measurements</th>
+                                            <th style="width: 20%;">Col 1</th>
+                                            <th style="width: 20%;">Col 2</th>
+                                            <th style="width: 20%;">Col 3</th>
+                                            <th style="width: 20%;">Col 4</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <tr>
-                                            <td class="fw-bold text-start ps-2">لمبائی (Length)</td>
+                                            <td class="fw-bold text-start ps-2">Length</td>
                                             <?php for ($i = 1; $i <= 4; $i++): ?>
                                                 <td><input type="text" name="scheme_<?= $i ?>_length" id="inp_scheme_<?= $i ?>_length" class="form-control form-control-sm text-center font-monospace" placeholder="—"></td>
                                             <?php endfor; ?>
                                         </tr>
                                         <tr>
-                                            <td class="fw-bold text-start ps-2">چوڑائی (Width)</td>
+                                            <td class="fw-bold text-start ps-2">Width</td>
                                             <?php for ($i = 1; $i <= 4; $i++): ?>
                                                 <td><input type="text" name="scheme_<?= $i ?>_width" id="inp_scheme_<?= $i ?>_width" class="form-control form-control-sm text-center font-monospace" placeholder="—"></td>
                                             <?php endfor; ?>
                                         </tr>
                                         <tr>
-                                            <td class="fw-bold text-start ps-2">بارڈر (Border)</td>
+                                            <td class="fw-bold text-start ps-2">Border</td>
                                             <?php for ($i = 1; $i <= 4; $i++): ?>
                                                 <td><input type="text" name="scheme_<?= $i ?>_border" id="inp_scheme_<?= $i ?>_border" class="form-control form-control-sm text-center font-monospace" placeholder="—"></td>
                                             <?php endfor; ?>
                                         </tr>
                                         <tr>
-                                            <td class="fw-bold text-start ps-2">منٹ (Minutes)</td>
+                                            <td class="fw-bold text-start ps-2">mins</td>
                                             <?php for ($i = 1; $i <= 4; $i++): ?>
                                                 <td><input type="text" name="scheme_<?= $i ?>_mins" id="inp_scheme_<?= $i ?>_mins" class="form-control form-control-sm text-center font-monospace text-success" placeholder="—"></td>
                                             <?php endfor; ?>
@@ -1030,7 +1030,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <i class="bi bi-shield-check text-success me-1"></i> Auto-Draft Active
                     </span>
                     <button type="button" class="btn btn-outline-primary fw-semibold" id="btnManualSaveDraft" title="Save entered values as draft so you can navigate away and continue later">
-                        <i class="bi bi-save me-1"></i> Save Draft (ڈرافٹ محفوظ کریں)
+                        <i class="bi bi-save me-1"></i> Save Draft
                     </button>
                     <a href="<?= BASE_URL ?>modules/lots/index.php" class="btn btn-outline-secondary">Cancel</a>
                     <button type="submit" class="btn btn-primary px-4 fw-semibold shadow-sm" id="btnSubmitLot">
@@ -1048,7 +1048,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <div class="modal-content shadow border-0">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title fw-bold" id="quickAddSizeModalLabel">
-                    <i class="bi bi-rulers me-2"></i>Add New Size in Real-Time (نیا سائز شامل کریں)
+                    <i class="bi bi-rulers me-2"></i>Add New Size in Real-Time
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -1088,7 +1088,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <div class="modal-content shadow border-0">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title fw-bold" id="quickAddColorModalLabel">
-                    <i class="bi bi-palette me-2"></i>Add New Color Code in Real-Time (نیا کلر شامل کریں)
+                    <i class="bi bi-palette me-2"></i>Add New Color Code in Real-Time
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -1170,7 +1170,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const elements = productElementsData[prodId] || [];
         if (elements.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">اس پروڈکٹ کے لیے کوئی پیٹرن اجزاء تشکیل نہیں دیے گئے۔</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">No pattern components configured for this product.</td></tr>`;
             if (badge) badge.textContent = `Total Parts to Cut: 0 pcs`;
             return;
         }
@@ -1181,11 +1181,11 @@ document.addEventListener('DOMContentLoaded', function() {
         elements.forEach(el => {
             const isSleeve = /(sleeve|بازو|bazu|aasteen|آستین)/i.test(el.name);
             let target = total;
-            let basis = `تمام ${total} پیسز کے لیے (${el.quantity} × ${total})`;
+            let basis = `For all ${total} pieces (${el.quantity} × ${total})`;
 
             if (hasAnatomy && isSleeve) {
                 target = s1;
-                basis = `<span class="badge bg-primary-subtle text-primary border border-primary">${s1} بازو والے پیسز (${el.quantity} × ${s1})</span>`;
+                basis = `<span class="badge bg-primary-subtle text-primary border border-primary">${s1} sleeved pieces (${el.quantity} × ${s1})</span>`;
             }
 
             const batchCut = el.quantity * target;
@@ -1288,7 +1288,7 @@ document.addEventListener('DOMContentLoaded', function() {
             </option>`;
         });
         if (availableCount === 0 && !selectedId) {
-            html += `<option value="" disabled>(All available colors already selected / تمام رنگ منتخب ہو چکے ہیں)</option>`;
+            html += `<option value="" disabled>(All available colors already selected)</option>`;
         }
         return html;
     }
@@ -2208,7 +2208,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnDiscardDraft = document.getElementById('btnDiscardDraft');
     if (btnDiscardDraft) {
         btnDiscardDraft.addEventListener('click', function() {
-            if (confirm('Are you sure you want to discard this saved draft and start fresh? (کیا آپ اس ڈرافٹ کو ختم کرنا چاہتے ہیں؟)')) {
+            if (confirm('Are you sure you want to discard this saved draft and start fresh? (Are you sure you want to discard this saved draft?)')) {
                 localStorage.removeItem(DRAFT_KEY);
                 const banner = document.getElementById('draftRestoreBanner');
                 if (banner) {
@@ -2233,7 +2233,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (statusBadge) {
                 statusBadge.innerHTML = `<i class="bi bi-cloud-check-fill text-success me-1"></i> Draft saved at ${data.saved_at}`;
             }
-            alert('✓ Draft saved successfully! (ڈرافٹ محفوظ ہو گیا ہے)\n\nYou can now navigate anywhere or close your page. All entered details and rows will be restored when you return.');
+            alert('✓ Draft saved successfully!\n\nYou can now navigate anywhere or close your page. All entered details and rows will be restored when you return.');
         });
     }
 

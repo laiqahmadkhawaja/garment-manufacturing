@@ -92,15 +92,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['issue_remaining_mater
     $shortageCount = count($issueRes['shortages'] ?? []);
 
     if ($issuedCount > 0) {
-        set_flash('success', "کامیابی! گودام سے $issuedCount میٹیریل لاٹ کو کامیابی سے ایشو ہو گئے۔");
+        set_flash('success', "Success! $issuedCount raw materials issued from warehouse to lot.");
     }
     if ($shortageCount > 0) {
         $shortNames = array_map(function($s) {
-            return clean($s['material_name']) . " (" . number_format($s['shortage'], 2) . " " . clean($s['unit_code']) . " کم)";
+            return clean($s['material_name']) . " (" . number_format($s['shortage'], 2) . " " . clean($s['unit_code']) . " short)";
         }, $issueRes['shortages']);
-        set_flash('danger', "توجہ فرمائیں! درج ذیل میٹیریل گودام میں کم ہے: " . implode(', ', $shortNames));
+        set_flash('danger', "Notice: Insufficient warehouse stock for: " . implode(', ', $shortNames));
     } elseif ($issuedCount === 0) {
-        set_flash('info', "کوئی بقایا میٹیریل ایشو کے لیے زیر التواء نہیں ہے یا گودام میں اسٹاک موجود نہیں ہے۔");
+        set_flash('info', "No remaining materials pending for issuance or warehouse is out of stock.");
     }
     redirect("modules/lots/view.php?id=$lotId#tab-materials");
 }
@@ -150,7 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_measurements']
         $upStmt = $db->prepare("UPDATE lots SET measurements_json = ? WHERE id = ?");
         $upStmt->execute([$mJson, $lotId]);
         log_audit('UPDATE_MEASUREMENTS', 'lots', $lotId, null, $measurementsArray);
-        redirect("modules/lots/view.php?id=$lotId", "Lot pattern & size measurements (پیمائش) updated successfully!");
+        redirect("modules/lots/view.php?id=$lotId", "Lot pattern & size measurements updated successfully!");
     } catch (Exception $e) {
         set_flash('danger', 'Failed to save measurements: ' . $e->getMessage());
     }
@@ -333,22 +333,22 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     </div>
                     <div>
                         <div class="fw-bold fs-6 text-danger d-flex align-items-center gap-2">
-                            <span>توجہ فرمائیں! خام مال کا اسٹاک ناکافی ہے (Raw Material Shortage Detected)</span>
-                            <span class="badge bg-danger"><?= count($shortages) ?> آئٹمز کم ہیں</span>
+                            <span>Notice: Raw Material Shortage Detected</span>
+                            <span class="badge bg-danger"><?= count($shortages) ?> items short</span>
                         </div>
                         <div class="text-dark small mt-1">
-                            لاٹ کی ریسیپی کے مطابق مطلوبہ میٹیریل گودام میں کم ہے۔ تفصیلی کمی دیکھنے اور بقایا ایشو کرنے کے لیے نیچے <strong>Materials</strong> ٹیب دیکھیں۔
+                            Required recipe materials are low in warehouse stock. Review the Materials tab below for shortage details.
                         </div>
                     </div>
                 </div>
                 <div class="d-flex flex-wrap gap-2 align-self-stretch align-self-md-auto">
                     <a href="<?= BASE_URL ?>modules/raw_materials/purchases.php?lot_id=<?= $lot['id'] ?>" class="btn btn-danger btn-sm d-inline-flex align-items-center gap-1 shadow-sm">
                         <i class="bi bi-plus-circle-fill"></i>
-                        <span>اسٹاک شامل کریں (Stock In)</span>
+                        <span>Stock In</span>
                     </a>
                     <button type="button" class="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1" onclick="const t = document.querySelector('[data-bs-target=\'#tab-materials\']'); if (t) { bootstrap.Tab.getOrCreateInstance(t).show(); t.scrollIntoView({behavior:'smooth'}); }">
                         <i class="bi bi-boxes"></i>
-                        <span>کمی کی تفصیل دیکھیں</span>
+                        <span>View Shortage Details</span>
                     </button>
                 </div>
             </div>
@@ -427,19 +427,19 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         </a>
                         <a href="<?= BASE_URL ?>modules/lots/print_design_sheet.php?id=<?= $lot['id'] ?>" target="_blank" class="btn btn-warning btn-sm d-inline-flex align-items-center gap-1 shadow-sm fw-bold">
                             <i class="bi bi-file-earmark-text-fill"></i>
-                            <span>Lot Design Sheet (لاٹ پرچہ)</span>
+                            <span>Lot Design Sheet</span>
                         </a>
                         <button type="button" class="btn btn-primary btn-sm d-inline-flex align-items-center gap-1 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#editMeasurementsModal">
                             <i class="bi bi-rulers"></i>
-                            <span>Size Measurements (پیمائش)</span>
+                            <span>Size Measurements</span>
                         </button>
                         <a href="<?= BASE_URL ?>modules/lots/print_jobcard.php?id=<?= $lot['id'] ?>" target="_blank" class="btn btn-success btn-sm d-inline-flex align-items-center gap-1 shadow-sm fw-bold">
                             <i class="bi bi-printer-fill"></i>
-                            <span>Print Job Card (پرنٹ جاب کارڈ)</span>
+                            <span>Print Job Card</span>
                         </a>
                         <a href="<?= BASE_URL ?>modules/lots/jobcard.php?id=<?= $lot['id'] ?>" class="btn btn-info btn-sm d-inline-flex align-items-center gap-1 shadow-sm fw-bold text-dark">
                             <i class="bi bi-clipboard2-data-fill"></i>
-                            <span>Digital Job Card (جاب کارڈ)</span>
+                            <span>Digital Job Card</span>
                         </a>
                         <a href="<?= BASE_URL ?>modules/lots/print_job_sheet.php?id=<?= $lot['id'] ?>" target="_blank" class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1">
                             <i class="bi bi-printer"></i>
@@ -533,7 +533,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                 <button class="nav-link fw-semibold <?= !empty($shortages) ? 'blink-shortage tab-shortage-alert fw-bold' : '' ?>" data-bs-toggle="tab" data-bs-target="#tab-materials" id="lot-tab-materials">
                     <i class="bi bi-boxes me-1"></i> Materials (<?= count($materialIssues) ?>)
                     <?php if (!empty($shortages)): ?>
-                        <span class="badge bg-danger ms-1 text-white"><i class="bi bi-exclamation-triangle-fill"></i> کمی ہے</span>
+                        <span class="badge bg-danger ms-1 text-white"><i class="bi bi-exclamation-triangle-fill"></i> Shortage</span>
                     <?php endif; ?>
                 </button>
             </li>
@@ -579,11 +579,11 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <div class="d-flex align-items-center gap-2">
                                 <span class="badge bg-primary p-2 rounded-2"><i class="bi bi-puzzle-fill text-white fs-6"></i></span>
                                 <div>
-                                    <h6 class="fw-bold mb-0 text-dark">Product Pattern Elements & Structure (اجزاء اور کٹنگ کے حصے)</h6>
+                                    <h6 class="fw-bold mb-0 text-dark">Product Pattern Elements & Structure</h6>
                                     <span class="text-muted small">
                                         Pattern anatomy for <?= clean($lot['product_name']) ?> (<?= clean($lot['product_type']) ?>)
                                         <?php if ($hasAnatomy): ?>
-                                            &bull; <span class="text-primary fw-semibold"><i class="bi bi-diagram-3-fill me-1"></i>بازو والے: <?= (int)($anatomyData['with_sleeves'] ?? 0) ?> pcs | بغیر بازو: <?= (int)($anatomyData['sleeveless'] ?? 0) ?> pcs</span>
+                                            &bull; <span class="text-primary fw-semibold"><i class="bi bi-diagram-3-fill me-1"></i>With Sleeves: <?= (int)($anatomyData['with_sleeves'] ?? 0) ?> pcs | Sleeveless: <?= (int)($anatomyData['sleeveless'] ?? 0) ?> pcs</span>
                                         <?php endif; ?>
                                     </span>
                                 </div>
@@ -607,7 +607,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                             <th class="text-center" style="width: 130px;">Qty Per Unit</th>
                                             <th class="text-center" style="width: 140px;">Target Garments</th>
                                             <th class="text-center" style="width: 180px;">Batch Required to Cut</th>
-                                            <th>Allocation Basis & Notes (حساب کا فارمولا)</th>
+                                            <th>Allocation Basis & Notes</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -650,68 +650,68 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <div class="d-flex align-items-center gap-2">
                             <span class="badge bg-warning p-2 rounded-2 text-dark"><i class="bi bi-rulers fs-6"></i></span>
                             <div>
-                                <h6 class="fw-bold mb-0 text-dark">Garment Pattern Size & Cutting Measurements (سائز اور کٹنگ پیمائش: لمبائی، چوڑائی، بارڈر)</h6>
-                                <span class="text-muted small">Panel, Sleeve, and Size/Color Scheme measurements (لمبائی، چوڑائی، بارڈر، منٹ) for machine floor & design sheet</span>
+                                <h6 class="fw-bold mb-0 text-dark">Garment Pattern Size & Cutting Measurements: Length, Width, Border</h6>
+                                <span class="text-muted small">Panel, Sleeve, and Size/Color Scheme measurements for machine floor & design sheet</span>
                             </div>
                         </div>
                         <div class="d-flex align-items-center gap-2">
                             <a href="<?= BASE_URL ?>modules/lots/print_design_sheet.php?id=<?= $lot['id'] ?>" target="_blank" class="btn btn-sm btn-outline-warning text-dark fw-bold">
-                                <i class="bi bi-printer me-1"></i>Print Design Sheet (لاٹ پرچہ)
+                                <i class="bi bi-printer me-1"></i>Print Design Sheet
                             </a>
                             <button type="button" class="btn btn-sm btn-primary fw-semibold" data-bs-toggle="modal" data-bs-target="#editMeasurementsModal">
-                                <i class="bi bi-pencil-square me-1"></i>Edit Measurements (پیمائش درج کریں)
+                                <i class="bi bi-pencil-square me-1"></i>Edit Measurements
                             </button>
                         </div>
                     </div>
                     <div class="card-modern-body p-3">
                         <div class="row g-3">
-                            <!-- Palla (Body Panel) -->
+                            <!-- Palla -->
                             <div class="col-12 col-md-3">
                                 <div class="border rounded-3 p-3 bg-light h-100">
                                     <div class="d-flex justify-content-between align-items-center mb-2 pb-1 border-bottom">
-                                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-square me-1 text-primary"></i>پلا پیمائش (Panel)</h6>
+                                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-square me-1 text-primary"></i>Panel Specs</h6>
                                         <span class="badge bg-primary-subtle text-primary">Body</span>
                                     </div>
                                     <div class="d-flex justify-content-between py-1 small">
-                                        <span class="text-muted">لمبائی (Length):</span>
+                                        <span class="text-muted">Length:</span>
                                         <strong class="text-dark font-monospace fs-6"><?= clean($curPlaLen) ?></strong>
                                     </div>
                                     <div class="d-flex justify-content-between py-1 small">
-                                        <span class="text-muted">چوڑائی (Width):</span>
+                                        <span class="text-muted">Width:</span>
                                         <strong class="text-dark font-monospace fs-6"><?= clean($curPlaWid) ?></strong>
                                     </div>
                                     <div class="d-flex justify-content-between py-1 small">
-                                        <span class="text-muted">بارڈر (Border):</span>
+                                        <span class="text-muted">Border:</span>
                                         <strong class="text-dark font-monospace fs-6"><?= clean($curPlaBor) ?></strong>
                                     </div>
                                     <div class="d-flex justify-content-between py-1 small">
-                                        <span class="text-muted">منٹ (SAM Mins):</span>
+                                        <span class="text-muted">mins:</span>
                                         <strong class="text-success font-monospace fs-6"><?= clean($curPlaMins) ?>m</strong>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Bazo (Sleeves) -->
+                            <!-- Bazo -->
                             <div class="col-12 col-md-3">
                                 <div class="border rounded-3 p-3 bg-light h-100">
                                     <div class="d-flex justify-content-between align-items-center mb-2 pb-1 border-bottom">
-                                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-diagram-2 me-1 text-info"></i>بازو پیمائش (Sleeves)</h6>
+                                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-diagram-2 me-1 text-info"></i>Sleeves Specs</h6>
                                         <span class="badge bg-info-subtle text-info">Sleeves</span>
                                     </div>
                                     <div class="d-flex justify-content-between py-1 small">
-                                        <span class="text-muted">لمبائی (Length):</span>
+                                        <span class="text-muted">Length:</span>
                                         <strong class="text-dark font-monospace fs-6"><?= clean($curBazoLen) ?></strong>
                                     </div>
                                     <div class="d-flex justify-content-between py-1 small">
-                                        <span class="text-muted">چوڑائی (Width):</span>
+                                        <span class="text-muted">Width:</span>
                                         <strong class="text-dark font-monospace fs-6"><?= clean($curBazoWid) ?></strong>
                                     </div>
                                     <div class="d-flex justify-content-between py-1 small">
-                                        <span class="text-muted">بارڈر (Border):</span>
+                                        <span class="text-muted">Border:</span>
                                         <strong class="text-dark font-monospace fs-6"><?= clean($curBazoBor) ?></strong>
                                     </div>
                                     <div class="d-flex justify-content-between py-1 small">
-                                        <span class="text-muted">منٹ (SAM Mins):</span>
+                                        <span class="text-muted">mins:</span>
                                         <strong class="text-success font-monospace fs-6"><?= clean($curBazoMins) ?>m</strong>
                                     </div>
                                 </div>
@@ -721,44 +721,44 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <div class="col-12 col-md-6">
                                 <div class="border rounded-3 p-3 bg-light h-100">
                                     <div class="d-flex justify-content-between align-items-center mb-2 pb-1 border-bottom">
-                                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-palette me-1 text-warning"></i>سائز / کلر سکیم کالمز (Scheme Columns)</h6>
+                                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-palette me-1 text-warning"></i>Size & Scheme Columns 1-4</h6>
                                         <span class="badge bg-warning-subtle text-warning-emphasis">Sheet Cols 1-4</span>
                                     </div>
                                     <div class="table-responsive">
                                         <table class="table table-sm table-bordered align-middle text-center mb-0 bg-white" style="font-size: 0.8rem;">
                                             <thead class="table-light">
                                                 <tr>
-                                                    <th>پیمائش</th>
-                                                    <th>کالم 1</th>
-                                                    <th>کالم 2</th>
-                                                    <th>کالم 3</th>
-                                                    <th>کالم 4</th>
+                                                    <th>Measurements</th>
+                                                    <th>Col 1</th>
+                                                    <th>Col 2</th>
+                                                    <th>Col 3</th>
+                                                    <th>Col 4</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 <tr>
-                                                    <td class="fw-bold text-start ps-2">لمبائی (Length)</td>
+                                                    <td class="fw-bold text-start ps-2">Length</td>
                                                     <td class="fw-bold text-primary font-monospace"><?= clean($curScheme['1']['length'] ?? '—') ?></td>
                                                     <td class="fw-bold text-primary font-monospace"><?= clean($curScheme['2']['length'] ?? '—') ?></td>
                                                     <td class="fw-bold text-primary font-monospace"><?= clean($curScheme['3']['length'] ?? '—') ?></td>
                                                     <td class="fw-bold text-primary font-monospace"><?= clean($curScheme['4']['length'] ?? '—') ?></td>
                                                 </tr>
                                                 <tr>
-                                                    <td class="fw-bold text-start ps-2">چوڑائی (Width)</td>
+                                                    <td class="fw-bold text-start ps-2">Width</td>
                                                     <td class="fw-bold text-primary font-monospace"><?= clean($curScheme['1']['width'] ?? '—') ?></td>
                                                     <td class="fw-bold text-primary font-monospace"><?= clean($curScheme['2']['width'] ?? '—') ?></td>
                                                     <td class="fw-bold text-primary font-monospace"><?= clean($curScheme['3']['width'] ?? '—') ?></td>
                                                     <td class="fw-bold text-primary font-monospace"><?= clean($curScheme['4']['width'] ?? '—') ?></td>
                                                 </tr>
                                                 <tr>
-                                                    <td class="fw-bold text-start ps-2">بارڈر (Border)</td>
+                                                    <td class="fw-bold text-start ps-2">Border</td>
                                                     <td class="fw-bold text-primary font-monospace"><?= clean($curScheme['1']['border'] ?? '—') ?></td>
                                                     <td class="fw-bold text-primary font-monospace"><?= clean($curScheme['2']['border'] ?? '—') ?></td>
                                                     <td class="fw-bold text-primary font-monospace"><?= clean($curScheme['3']['border'] ?? '—') ?></td>
                                                     <td class="fw-bold text-primary font-monospace"><?= clean($curScheme['4']['border'] ?? '—') ?></td>
                                                 </tr>
                                                 <tr>
-                                                    <td class="fw-bold text-start ps-2">منٹ (Minutes)</td>
+                                                    <td class="fw-bold text-start ps-2">mins</td>
                                                     <td class="fw-bold text-success font-monospace"><?= clean($curScheme['1']['mins'] ?? '—') ?></td>
                                                     <td class="fw-bold text-success font-monospace"><?= clean($curScheme['2']['mins'] ?? '—') ?></td>
                                                     <td class="fw-bold text-success font-monospace"><?= clean($curScheme['3']['mins'] ?? '—') ?></td>
@@ -1000,28 +1000,28 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <div>
                                 <div class="fw-bold text-danger d-flex align-items-center gap-2">
                                     <i class="bi bi-exclamation-octagon-fill fs-5"></i>
-                                    <span>خام مال کی کمی کی تفصیل (Material Shortage Status)</span>
+                                    <span>Raw Material Shortage Status</span>
                                 </div>
                                 <div class="text-danger small mt-1">
-                                    اس لاٹ کے لیے گودام میں درج ذیل خام مال ناکافی ہے۔ آپ نیا اسٹاک پرچیز کرنے کے بعد <strong>"بقایا مٹیریل ایشو کریں"</strong> پر کلک کر کے بقیہ کوٹہ ایشو کر سکتے ہیں۔
+                                    The following raw materials are short in warehouse stock. After purchasing new stock, click "Issue Remaining" to allocate.
                                 </div>
                                 <div class="d-flex flex-wrap gap-2 mt-2">
                                     <?php foreach ($shortages as $s): ?>
                                         <span class="badge bg-danger text-white py-1 px-2">
-                                            <?= clean($s['material_name']) ?>: درکار <?= number_format($s['pending'], 2) ?> | گودام میں <?= number_format($s['current_stock'], 2) ?> | <strong>کمی: <?= number_format($s['shortage'], 2) ?> <?= clean($s['unit_code']) ?></strong>
+                                            <?= clean($s['material_name']) ?>: Required: <?= number_format($s['pending'], 2) ?> | In Stock: <?= number_format($s['current_stock'], 2) ?> | <strong>Short: <?= number_format($s['shortage'], 2) ?> <?= clean($s['unit_code']) ?></strong>
                                         </span>
                                     <?php endforeach; ?>
                                 </div>
                             </div>
                             <div class="d-flex flex-wrap gap-2 align-self-stretch align-self-md-auto">
                                 <a href="<?= BASE_URL ?>modules/raw_materials/purchases.php?lot_id=<?= $lot['id'] ?>" class="btn btn-outline-danger btn-sm text-nowrap">
-                                    <i class="bi bi-box-arrow-in-down me-1"></i> اسٹاک خریدیں / داخل کریں
+                                    <i class="bi bi-box-arrow-in-down me-1"></i> Purchase Stock / Stock In
                                 </a>
                                 <form method="POST" action="" class="d-inline">
                                     <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
                                     <input type="hidden" name="issue_remaining_materials" value="1">
                                     <button type="submit" class="btn btn-danger btn-sm text-nowrap shadow-sm">
-                                        <i class="bi bi-arrow-repeat me-1"></i> بقایا مٹیریل ایشو کریں (Issue Remaining)
+                                        <i class="bi bi-arrow-repeat me-1"></i> Issue Remaining Materials
                                     </button>
                                 </form>
                             </div>
@@ -1037,7 +1037,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <div class="d-flex align-items-center gap-2">
                                 <span class="badge bg-success p-2 rounded-2"><i class="bi bi-card-checklist text-white fs-6"></i></span>
                                 <div>
-                                    <h6 class="fw-bold mb-0 text-dark">Production Recipe / BOM Allocation (پروڈکٹ ریسیپی اور خام مال کا تخمینہ)</h6>
+                                    <h6 class="fw-bold mb-0 text-dark">Production Recipe / BOM Allocation</h6>
                                     <span class="text-muted small">Standard recipe configured for <?= clean($lot['product_name']) ?> &bull; Wastage allowance: <?= (float)$productBom['wastage_percent'] ?>%</span>
                                 </div>
                             </div>
@@ -1059,7 +1059,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                 <table class="table table-modern align-middle mb-0" style="font-size: 0.85rem;">
                                     <thead class="table-light">
                                         <tr>
-                                            <th>Raw Material / خام مال</th>
+                                            <th>Raw Material</th>
                                             <th class="text-center">Per Piece Qty</th>
                                             <th class="text-center">Batch Required (w/ Wastage)</th>
                                             <th class="text-center">In Warehouse Stock</th>
@@ -1130,15 +1130,15 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <td class="text-center">
                                                     <?php if ($issuedQty >= $batchRequired): ?>
                                                         <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
-                                                            <i class="bi bi-check-circle me-1"></i>مکمل ایشو
+                                                            <i class="bi bi-check-circle me-1"></i>Fully Issued
                                                         </span>
                                                     <?php elseif ($itemShortage > 0): ?>
                                                         <span class="badge bg-danger text-white px-2 py-1 blink-shortage">
-                                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>کمی ہے
+                                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>Shortage
                                                         </span>
                                                     <?php else: ?>
                                                         <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1">
-                                                            <i class="bi bi-clock me-1"></i>ایشو کے لیے تیار
+                                                            <i class="bi bi-clock me-1"></i>Ready to Issue
                                                         </span>
                                                     <?php endif; ?>
                                                 </td>
@@ -1150,7 +1150,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     </tbody>
                                     <tfoot class="table-light">
                                         <tr>
-                                            <td colspan="7" class="text-end fw-bold">Estimated Raw Material Budget (بجٹ خام مال):</td>
+                                            <td colspan="7" class="text-end fw-bold">Estimated Raw Material Budget:</td>
                                             <td class="text-end fw-bold text-success fs-6">Rs. <?= number_format($estTotalRecipeCost, 2) ?></td>
                                         </tr>
                                     </tfoot>
@@ -1418,13 +1418,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                     <input type="hidden" name="update_measurements" value="1">
                     <div class="modal-header bg-dark text-white">
                         <h5 class="modal-title fw-bold" id="editMeasurementsModalLabel">
-                            <i class="bi bi-rulers me-2 text-warning"></i> سائز اور کٹنگ پیمائش (Garment Size & Cutting Measurements)
+                            <i class="bi bi-rulers me-2 text-warning"></i> Pattern Size & Cutting Measurements
                         </h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body p-4 bg-light">
                         <p class="text-muted small mb-3">
-                            Enter or edit the length, width, border, and SAM minutes for Body Panel (پلہ), Sleeves (بازو), and the 4 Size/Color Scheme columns. These will dynamically update the Lot Dashboard and the physical printout design sheets (لاٹ پرچہ).
+                            Enter or edit the length, width, border, and SAM minutes for Body Panel, Sleeves, and the 4 Size/Color Scheme columns. These will dynamically update the Lot Dashboard and the physical printout design sheets.
                         </p>
 
                         <!-- Palla & Bazo Row -->
@@ -1433,24 +1433,24 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <div class="col-12 col-md-6">
                                 <div class="card border h-100 shadow-sm">
                                     <div class="card-header bg-primary text-white py-2">
-                                        <h6 class="mb-0 fw-bold"><i class="bi bi-square me-1"></i> پلہ پیمائش (Body Panel)</h6>
+                                        <h6 class="mb-0 fw-bold"><i class="bi bi-square me-1"></i> Palla Measurements</h6>
                                     </div>
                                     <div class="card-body p-3 bg-white">
                                         <div class="row g-2">
                                             <div class="col-6">
-                                                <label class="form-label small fw-bold mb-1">لمبائی (Length)</label>
+                                                <label class="form-label small fw-bold mb-1">Length</label>
                                                 <input type="text" name="pla_length" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curPlaLen) ?>" placeholder="e.g. 41">
                                             </div>
                                             <div class="col-6">
-                                                <label class="form-label small fw-bold mb-1">چوڑائی (Width)</label>
+                                                <label class="form-label small fw-bold mb-1">Width</label>
                                                 <input type="text" name="pla_width" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curPlaWid) ?>" placeholder="e.g. 15">
                                             </div>
                                             <div class="col-6">
-                                                <label class="form-label small fw-bold mb-1">بارڈر (Border)</label>
+                                                <label class="form-label small fw-bold mb-1">Border</label>
                                                 <input type="text" name="pla_border" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curPlaBor) ?>" placeholder="e.g. 46">
                                             </div>
                                             <div class="col-6">
-                                                <label class="form-label small fw-bold mb-1">منٹ (SAM Mins)</label>
+                                                <label class="form-label small fw-bold mb-1">mins</label>
                                                 <input type="text" name="pla_mins" class="form-control form-control-sm text-center font-monospace fw-bold text-success" value="<?= clean($curPlaMins) ?>" placeholder="e.g. 7">
                                             </div>
                                         </div>
@@ -1462,24 +1462,24 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                             <div class="col-12 col-md-6">
                                 <div class="card border h-100 shadow-sm">
                                     <div class="card-header bg-info text-white py-2">
-                                        <h6 class="mb-0 fw-bold"><i class="bi bi-diagram-2 me-1"></i> بازو پیمائش (Sleeves)</h6>
+                                        <h6 class="mb-0 fw-bold"><i class="bi bi-diagram-2 me-1"></i> Sleeves Specs</h6>
                                     </div>
                                     <div class="card-body p-3 bg-white">
                                         <div class="row g-2">
                                             <div class="col-6">
-                                                <label class="form-label small fw-bold mb-1">لمبائی (Length)</label>
+                                                <label class="form-label small fw-bold mb-1">Length</label>
                                                 <input type="text" name="bazo_length" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curBazoLen) ?>" placeholder="e.g. 48">
                                             </div>
                                             <div class="col-6">
-                                                <label class="form-label small fw-bold mb-1">چوڑائی (Width)</label>
+                                                <label class="form-label small fw-bold mb-1">Width</label>
                                                 <input type="text" name="bazo_width" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curBazoWid) ?>" placeholder="e.g. 14">
                                             </div>
                                             <div class="col-6">
-                                                <label class="form-label small fw-bold mb-1">بارڈر (Border)</label>
+                                                <label class="form-label small fw-bold mb-1">Border</label>
                                                 <input type="text" name="bazo_border" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curBazoBor) ?>" placeholder="e.g. 42">
                                             </div>
                                             <div class="col-6">
-                                                <label class="form-label small fw-bold mb-1">منٹ (SAM Mins)</label>
+                                                <label class="form-label small fw-bold mb-1">mins</label>
                                                 <input type="text" name="bazo_mins" class="form-control form-control-sm text-center font-monospace fw-bold text-success" value="<?= clean($curBazoMins) ?>" placeholder="e.g. 7">
                                             </div>
                                         </div>
@@ -1491,24 +1491,24 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                         <!-- Size / Color Scheme Columns 1, 2, 3, 4 -->
                         <div class="card border shadow-sm">
                             <div class="card-header bg-warning text-dark py-2 d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0 fw-bold"><i class="bi bi-palette me-1"></i> سائز / کلر سکیم کالمز (Scheme Columns 1, 2, 3, 4)</h6>
-                                <span class="badge bg-dark text-white">4 Columns (سائز و سکیم کے مطابق)</span>
+                                <h6 class="mb-0 fw-bold"><i class="bi bi-palette me-1"></i> Size & Scheme Columns 1-4</h6>
+                                <span class="badge bg-dark text-white">4 Columns</span>
                             </div>
                             <div class="card-body p-3 bg-white">
                                 <div class="table-responsive">
                                     <table class="table table-bordered align-middle text-center mb-0">
                                         <thead class="table-light">
                                             <tr>
-                                                <th style="width: 20%;">پیمائش قسم</th>
-                                                <th style="width: 20%;">کالم 1</th>
-                                                <th style="width: 20%;">کالم 2</th>
-                                                <th style="width: 20%;">کالم 3</th>
-                                                <th style="width: 20%;">کالم 4</th>
+                                                <th style="width: 20%;">Measurement Type</th>
+                                                <th style="width: 20%;">Col 1</th>
+                                                <th style="width: 20%;">Col 2</th>
+                                                <th style="width: 20%;">Col 3</th>
+                                                <th style="width: 20%;">Col 4</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <tr>
-                                                <td class="fw-bold text-start ps-2">لمبائی (Length)</td>
+                                                <td class="fw-bold text-start ps-2">Length</td>
                                                 <?php for ($i = 1; $i <= 4; $i++): ?>
                                                     <td>
                                                         <input type="text" name="scheme_<?= $i ?>_length" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curScheme[$i]['length'] ?? '') ?>" placeholder="-">
@@ -1516,7 +1516,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <?php endfor; ?>
                                             </tr>
                                             <tr>
-                                                <td class="fw-bold text-start ps-2">چوڑائی (Width)</td>
+                                                <td class="fw-bold text-start ps-2">Width</td>
                                                 <?php for ($i = 1; $i <= 4; $i++): ?>
                                                     <td>
                                                         <input type="text" name="scheme_<?= $i ?>_width" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curScheme[$i]['width'] ?? '') ?>" placeholder="-">
@@ -1524,7 +1524,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <?php endfor; ?>
                                             </tr>
                                             <tr>
-                                                <td class="fw-bold text-start ps-2">بارڈر (Border)</td>
+                                                <td class="fw-bold text-start ps-2">Border</td>
                                                 <?php for ($i = 1; $i <= 4; $i++): ?>
                                                     <td>
                                                         <input type="text" name="scheme_<?= $i ?>_border" class="form-control form-control-sm text-center font-monospace fw-bold" value="<?= clean($curScheme[$i]['border'] ?? '') ?>" placeholder="-">
@@ -1532,7 +1532,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <?php endfor; ?>
                                             </tr>
                                             <tr>
-                                                <td class="fw-bold text-start ps-2">منٹ (SAM Mins)</td>
+                                                <td class="fw-bold text-start ps-2">mins</td>
                                                 <?php for ($i = 1; $i <= 4; $i++): ?>
                                                     <td>
                                                         <input type="text" name="scheme_<?= $i ?>_mins" class="form-control form-control-sm text-center font-monospace fw-bold text-success" value="<?= clean($curScheme[$i]['mins'] ?? '') ?>" placeholder="-">
@@ -1547,9 +1547,9 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 
                     </div>
                     <div class="modal-footer bg-light">
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel (منسوخ)</button>
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="submit" name="update_measurements" class="btn btn-primary fw-bold px-4">
-                            <i class="bi bi-save me-1"></i> Save Measurements (پیمائش محفوظ کریں)
+                            <i class="bi bi-save me-1"></i> Save Measurements
                         </button>
                     </div>
                 </form>
@@ -1560,7 +1560,7 @@ require_once __DIR__ . '/../../includes/sidebar.php';
 <?php if (!empty($shortages)): ?>
 <script>
     $(document).ready(function() {
-        showToast("توجہ: لاٹ کی ریسیپی کے مطابق خام مال کا اسٹاک کم ہے! براہ کرم Materials ٹیب دیکھیں۔", "danger");
+        showToast("Notice: Low stock detected for required recipe raw materials. Please review the Materials tab.", "danger");
     });
 </script>
 <?php endif; ?>

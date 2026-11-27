@@ -119,15 +119,15 @@ require_once __DIR__ . '/../../includes/sidebar.php';
         <div class="card-modern mb-3 bg-light border p-3">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
                 <h6 class="fw-bold mb-0 text-dark">
-                    <i class="bi bi-pie-chart-fill text-primary me-2"></i> لاٹ پروڈکشن لیجر سمری (Lot Production Audit Summary)
+                    <i class="bi bi-pie-chart-fill text-primary me-2"></i> Lot Production Audit Summary
                 </h6>
                 <div class="d-flex flex-wrap gap-2">
-                    <span class="badge bg-white text-dark border p-2">🎯 کل منصوبہ بندی (Planned): <strong><?= number_format($totLotPlanned) ?> pcs</strong></span>
-                    <span class="badge bg-success text-white p-2">✅ کل تیار (Good Done): <strong><?= number_format($totLotGood) ?> pcs</strong></span>
-                    <span class="badge bg-danger text-white p-2">🔴 کل خراب (Rejected): <strong><?= number_format($totLotRej) ?> pcs</strong></span>
-                    <span class="badge bg-warning text-dark p-2">🟡 کل ری ورک (In Rework): <strong><?= number_format($totLotRew) ?> pcs</strong></span>
-                    <span class="badge bg-secondary text-white p-2">⏳ بنے ہی نہیں (Unproduced): <strong><?= number_format($totLotUnmade) ?> pcs</strong></span>
-                    <span class="badge bg-primary text-white p-2">💰 کل اجرت (Total Labour): <strong><?= format_currency($totLotLabour) ?></strong></span>
+                    <span class="badge bg-white text-dark border p-2">🎯 Planned: <strong><?= number_format($totLotPlanned) ?> pcs</strong></span>
+                    <span class="badge bg-success text-white p-2">✅ Good Done: <strong><?= number_format($totLotGood) ?> pcs</strong></span>
+                    <span class="badge bg-danger text-white p-2">🔴 Rejected: <strong><?= number_format($totLotRej) ?> pcs</strong></span>
+                    <span class="badge bg-warning text-dark p-2">🟡 In Rework: <strong><?= number_format($totLotRew) ?> pcs</strong></span>
+                    <span class="badge bg-secondary text-white p-2">⏳ Unproduced: <strong><?= number_format($totLotUnmade) ?> pcs</strong></span>
+                    <span class="badge bg-primary text-white p-2">💰 Total Labour: <strong><?= format_currency($totLotLabour) ?></strong></span>
                 </div>
             </div>
         </div>
