@@ -1086,6 +1086,61 @@ $db->exec("DELETE FROM product_categories WHERE id = $catNewId");
 $scenario38Passed = ($catNewId > 0 && $catExists === 1 && $catDupDetected);
 assert_test("38. Dynamic Product Category Creation & Code Auto-Generation", $scenario38Passed, "Category created with generated code, duplicate check verified, and clean test cleanup");
 
+// =========================================================================
+// SCENARIO 39: PALLA YIELD, PIECES PER PALLA & RATE PER PALLA CALCULATION
+// =========================================================================
+echo "\n--- TESTING SCENARIO 39: PALLA YIELD & RATE PER PALLA (پلہ ریٹ اور کٹس) ---\n";
+
+$pallaProdCode = 'PRD-PALLA-' . substr(md5(uniqid('', true)), 0, 6);
+$db->prepare("INSERT INTO products (code, name, product_type, is_active) VALUES (?, 'Palla Formula Jacket', 'Coat', 1)")
+   ->execute([$pallaProdCode]);
+$pallaProdId = (int)$db->lastInsertId();
+
+// Insert elements with Palla yields:
+// Front: 1 pc/unit, 1 pc/palla => 1.00 palla, Rate Rs. 20/palla
+// Sleeves: 2 pcs/unit, 2 pcs/palla => 1.00 palla, Rate Rs. 20/palla
+// Pockets: 2 pcs/unit, 4 pcs/palla => 0.50 palla (half palla!), Rate Rs. 20/palla
+$insPallaEl = $db->prepare("INSERT INTO product_elements 
+    (product_id, element_name, quantity, multiplier, pieces_per_palla, pallas_per_garment, rate_per_palla, sort_order) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+$insPallaEl->execute([$pallaProdId, 'Front Panel (سامنے کا پلہ)', 1.0, 1.0, 1.0, 1.0000, 20.00, 1]);
+$insPallaEl->execute([$pallaProdId, 'Bazo / Sleeves (بازو)', 2.0, 2.0, 2.0, 1.0000, 20.00, 2]);
+$insPallaEl->execute([$pallaProdId, 'Pockets (پاکٹ)', 2.0, 2.0, 4.0, 0.5000, 20.00, 3]);
+
+$pallaElements = $db->query("SELECT * FROM product_elements WHERE product_id = $pallaProdId ORDER BY sort_order ASC")->fetchAll();
+$totPcsPerGarment = array_sum(array_column($pallaElements, 'quantity')); // 1 + 2 + 2 = 5 pcs
+$totPallasPerGarment = array_sum(array_column($pallaElements, 'pallas_per_garment')); // 1 + 1 + 0.5 = 2.50 pallas
+
+// Verify for a 100-piece lot:
+// Total Pallas required: 100 * 2.50 = 250 pallas
+// Total Knitted Palla Labour Cost: 250 * Rs. 20 = Rs. 5,000.00
+// Derived Pocket Piece Rate: Rs. 20 / 4 = Rs. 5.00/pc (2 pockets = Rs. 10 / garment = 0.5 palla * Rs. 20)
+// Derived Sleeve Piece Rate: Rs. 20 / 2 = Rs. 10.00/pc (2 sleeves = Rs. 20 / garment = 1.0 palla * Rs. 20)
+$pocketRow = array_values(array_filter($pallaElements, fn($e) => strpos($e['element_name'], 'Pocket') !== false))[0];
+$sleeveRow = array_values(array_filter($pallaElements, fn($e) => strpos($e['element_name'], 'Bazo') !== false))[0];
+
+$pocketPieceRate = (float)$pocketRow['rate_per_palla'] / (float)$pocketRow['pieces_per_palla'];
+$sleevePieceRate = (float)$sleeveRow['rate_per_palla'] / (float)$sleeveRow['pieces_per_palla'];
+
+$lotPieces39 = 100;
+$lotTotalPallas39 = $lotPieces39 * $totPallasPerGarment; // 250
+$lotTotalCost39 = $lotTotalPallas39 * 20.00; // 5000
+
+// Clean up test product
+$db->exec("DELETE FROM product_elements WHERE product_id = $pallaProdId");
+$db->exec("DELETE FROM products WHERE id = $pallaProdId");
+
+$scenario39Passed = (
+    $totPcsPerGarment == 5.0 && 
+    $totPallasPerGarment == 2.50 && 
+    $pocketPieceRate == 5.00 && 
+    $sleevePieceRate == 10.00 && 
+    $lotTotalPallas39 == 250.0 && 
+    $lotTotalCost39 == 5000.00
+);
+assert_test("39. Palla Yield, Pieces per Palla & Rate per Palla Calculation", $scenario39Passed, 
+    "Sleeves (2/2 = 1 palla @ Rs. 10/pc), Pockets (2/4 = 0.5 palla @ Rs. 5/pc); 100 pcs lot = 250 pallas (Rs. 5,000 labour)");
+
 echo "\n========================================================================\n";
 echo "TEST SUITE SUMMARY: $passCount PASSED, $failCount FAILED\n";
 echo "========================================================================\n";

@@ -78,7 +78,7 @@ foreach ($variants as $v) {
 }
 
 // Fetch Stage 1 Operator Element Entries
-$oeStmt = $db->prepare("SELECT oe.*, pe.element_name, pe.quantity AS multiplier,
+$oeStmt = $db->prepare("SELECT oe.*, pe.element_name, pe.quantity AS multiplier, pe.pieces_per_palla, pe.pallas_per_garment, pe.rate_per_palla,
                                w1.name AS op1_name, w2.name AS op2_name
                         FROM lot_operator_element_entries oe
                         JOIN product_elements pe ON oe.element_id = pe.id
@@ -91,16 +91,16 @@ $operatorEntries = $oeStmt->fetchAll();
 
 // If no entries saved yet, build standard template for preview
 if (empty($operatorEntries)) {
-    $peStmt = $db->prepare("SELECT id, element_name, quantity AS multiplier FROM product_elements WHERE product_id = ? ORDER BY sort_order ASC");
+    $peStmt = $db->prepare("SELECT id, element_name, quantity AS multiplier, pieces_per_palla, pallas_per_garment, rate_per_palla FROM product_elements WHERE product_id = ? ORDER BY sort_order ASC");
     $peStmt->execute([$lot['product_id']]);
     $stdElements = $peStmt->fetchAll();
     if (empty($stdElements)) {
         $stdElements = [
-            ['id' => 1, 'element_name' => 'Front (پلا)', 'multiplier' => 1],
-            ['id' => 2, 'element_name' => 'Back (پشت)', 'multiplier' => 1],
-            ['id' => 3, 'element_name' => 'Bazo (بازو)', 'multiplier' => 2],
-            ['id' => 4, 'element_name' => 'Pocket (پاکٹ)', 'multiplier' => 2],
-            ['id' => 5, 'element_name' => 'Gol Gala (گول گلا)', 'multiplier' => 1],
+            ['id' => 1, 'element_name' => 'Front (پلا)', 'multiplier' => 1, 'pieces_per_palla' => 1, 'pallas_per_garment' => 1, 'rate_per_palla' => 20],
+            ['id' => 2, 'element_name' => 'Back (پشت)', 'multiplier' => 1, 'pieces_per_palla' => 1, 'pallas_per_garment' => 1, 'rate_per_palla' => 20],
+            ['id' => 3, 'element_name' => 'Bazo (بازو)', 'multiplier' => 2, 'pieces_per_palla' => 2, 'pallas_per_garment' => 1, 'rate_per_palla' => 20],
+            ['id' => 4, 'element_name' => 'Pocket (پاکٹ)', 'multiplier' => 2, 'pieces_per_palla' => 4, 'pallas_per_garment' => 0.5, 'rate_per_palla' => 20],
+            ['id' => 5, 'element_name' => 'Gol Gala (گول گلا)', 'multiplier' => 1, 'pieces_per_palla' => 1, 'pallas_per_garment' => 1, 'rate_per_palla' => 10],
         ];
     }
     foreach ($stdElements as $se) {
@@ -108,6 +108,9 @@ if (empty($operatorEntries)) {
         $operatorEntries[] = [
             'element_id' => $se['id'],
             'element_name' => $se['element_name'],
+            'pieces_per_palla' => $se['pieces_per_palla'] ?? 1,
+            'pallas_per_garment' => $se['pallas_per_garment'] ?? 1,
+            'rate_per_palla' => $se['rate_per_palla'] ?? 0,
             'required_pieces' => $req,
             'operator1_pieces' => 0,
             'operator2_pieces' => 0,
@@ -331,8 +334,21 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <tr class="<?= $pending > 0 ? 'table-warning' : '' ?>">
                                             <td class="text-start fw-bold text-dark">
                                                 <?= clean($oe['element_name']) ?>
+                                                <?php 
+                                                    $ppp = (float)($oe['pieces_per_palla'] ?? 1);
+                                                    $ppg = (float)($oe['pallas_per_garment'] ?? 1);
+                                                    $rpp = (float)($oe['rate_per_palla'] ?? 0);
+                                                ?>
+                                                <?php if ($ppp != 1): ?>
+                                                    <span class="badge bg-light text-muted border small ms-1" style="font-size: 0.72rem;">1 پلہ = <?= $ppp ?> پیس</span>
+                                                <?php endif; ?>
                                             </td>
-                                            <td class="fw-bold text-muted"><?= $req ?></td>
+                                            <td class="fw-bold text-muted">
+                                                <?= $req ?>
+                                                <?php if ($ppp > 1): ?>
+                                                    <div class="small text-muted" style="font-size: 0.70rem;"><?= round($req / $ppp, 1) ?> پلے</div>
+                                                <?php endif; ?>
+                                            </td>
                                             <td class="fw-semibold"><?= (int)$oe['operator1_pieces'] ?></td>
                                             <td class="fw-semibold"><?= (int)$oe['operator2_pieces'] ?></td>
                                             <td class="fw-bold text-primary"><?= $done ?></td>

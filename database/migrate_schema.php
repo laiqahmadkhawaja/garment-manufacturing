@@ -227,6 +227,39 @@ try {
     echo "[!] Could not alter product_elements decimals: " . $e->getMessage() . "\n";
 }
 
+if (!in_array('pieces_per_palla', $peCols)) {
+    $db->exec("ALTER TABLE product_elements ADD COLUMN pieces_per_palla DECIMAL(8,2) NOT NULL DEFAULT 1.00 AFTER multiplier");
+    echo "[✓] Added pieces_per_palla to product_elements\n";
+}
+if (!in_array('pallas_per_garment', $peCols)) {
+    $db->exec("ALTER TABLE product_elements ADD COLUMN pallas_per_garment DECIMAL(8,4) NOT NULL DEFAULT 1.0000 AFTER pieces_per_palla");
+    echo "[✓] Added pallas_per_garment to product_elements\n";
+}
+if (!in_array('rate_per_palla', $peCols)) {
+    $db->exec("ALTER TABLE product_elements ADD COLUMN rate_per_palla DECIMAL(10,2) NOT NULL DEFAULT 0.00 AFTER pallas_per_garment");
+    echo "[✓] Added rate_per_palla to product_elements\n";
+}
+
+// Backfill existing elements with sensible palla yields:
+try {
+    $db->exec("UPDATE product_elements SET 
+        pieces_per_palla = CASE 
+            WHEN LOWER(element_name) LIKE '%sleeve%' OR element_name LIKE '%بازو%' THEN 2.00
+            WHEN LOWER(element_name) LIKE '%pocket%' OR element_name LIKE '%پاکٹ%' THEN 2.00
+            WHEN LOWER(element_name) LIKE '%cuff%' OR element_name LIKE '%کف%' THEN 2.00
+            ELSE 1.00 
+        END,
+        pallas_per_garment = CASE 
+            WHEN (LOWER(element_name) LIKE '%sleeve%' OR element_name LIKE '%بازو%') THEN GREATEST(0.01, quantity / 2.00)
+            WHEN (LOWER(element_name) LIKE '%pocket%' OR element_name LIKE '%پاکٹ%') THEN GREATEST(0.01, quantity / 2.00)
+            WHEN (LOWER(element_name) LIKE '%cuff%' OR element_name LIKE '%کف%') THEN GREATEST(0.01, quantity / 2.00)
+            ELSE quantity 
+        END
+        WHERE pieces_per_palla = 1.00 AND pallas_per_garment = 1.00");
+} catch (Exception $e) {
+    // Non-fatal
+}
+
 // 8. Operator Element Entries Table (Stage 1 without colors)
 $db->exec("CREATE TABLE IF NOT EXISTS lot_operator_element_entries (
     id INT AUTO_INCREMENT PRIMARY KEY,

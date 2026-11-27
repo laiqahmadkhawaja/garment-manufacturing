@@ -96,7 +96,7 @@ if (empty($productElements)) {
 }
 
 // Fetch Stage 1 Operator Element Entries
-$oeStmt = $db->prepare("SELECT oe.*, pe.element_name, pe.quantity AS multiplier, pe.default_sam_minutes,
+$oeStmt = $db->prepare("SELECT oe.*, pe.element_name, pe.quantity AS multiplier, pe.pieces_per_palla, pe.pallas_per_garment, pe.rate_per_palla, pe.default_sam_minutes,
                                w1.name AS op1_name, w2.name AS op2_name
                         FROM lot_operator_element_entries oe
                         JOIN product_elements pe ON oe.element_id = pe.id
@@ -114,6 +114,9 @@ if (empty($operatorEntries)) {
         $operatorEntries[] = [
             'element_id' => $se['id'],
             'element_name' => $se['element_name'],
+            'pieces_per_palla' => $se['pieces_per_palla'] ?? 1,
+            'pallas_per_garment' => $se['pallas_per_garment'] ?? 1,
+            'rate_per_palla' => $se['rate_per_palla'] ?? 0,
             'required_pieces' => $req,
             'operator1_pieces' => 0,
             'operator2_pieces' => 0,
@@ -451,7 +454,15 @@ foreach ($wRows as $wr) {
                         ?>
                             <tr>
                                 <td class="font-monospace fw-bold" dir="ltr"><?= clean($lot['lot_number']) ?></td>
-                                <td class="fw-bold text-start ps-2"><?= clean($oe['element_name']) ?></td>
+                                <td class="fw-bold text-start ps-2">
+                                    <?= clean($oe['element_name']) ?>
+                                    <?php 
+                                        $ppp = (float)($oe['pieces_per_palla'] ?? 1);
+                                    ?>
+                                    <?php if ($ppp != 1): ?>
+                                        <span style="font-size: 8.5px; color: #555; font-weight: normal;">(1 پلہ=<?= $ppp ?>)</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td class="font-monospace fw-bold" dir="ltr"><?= $p1 > 0 ? $p1 : '—' ?></td>
                                 <?php if ($isDoubleShift): ?>
                                     <td class="font-monospace fw-bold" dir="ltr"><?= $p2 > 0 ? $p2 : '—' ?></td>

@@ -71,7 +71,7 @@ if ($action === 'get_lot_operations_and_variants') {
 
     // Garment elements with operator & cutting progress for this lot
     $assignedWorkerId = (int)($_GET['worker_id'] ?? $lot['operator_id'] ?? 0);
-    $elemStmt = $db->prepare("SELECT pe.id, pe.element_name, pe.quantity, pe.multiplier, COALESCE(pe.default_sam_minutes, 0.00) AS default_sam_minutes,
+    $elemStmt = $db->prepare("SELECT pe.id, pe.element_name, pe.quantity, pe.multiplier, pe.pieces_per_palla, pe.pallas_per_garment, pe.rate_per_palla, COALESCE(pe.default_sam_minutes, 0.00) AS default_sam_minutes,
                                      COALESCE(MAX(loe.required_pieces), (pe.quantity * l.total_pieces)) AS required_pieces,
                                      COALESCE(SUM(loe.operator1_pieces), 0) AS operator1_pieces,
                                      COALESCE(SUM(loe.operator2_pieces), 0) AS operator2_pieces,
@@ -84,7 +84,7 @@ if ($action === 'get_lot_operations_and_variants') {
                               LEFT JOIN lot_operator_element_entries loe ON loe.element_id = pe.id AND loe.lot_id = l.id
                               LEFT JOIN worker_element_rates wer ON wer.element_id = pe.id AND wer.worker_id = ?
                               WHERE l.id = ?
-                              GROUP BY pe.id, pe.element_name, pe.quantity, pe.multiplier, pe.default_sam_minutes, pe.sort_order, l.total_pieces, wer.custom_sam_minutes, wer.custom_piece_rate
+                              GROUP BY pe.id, pe.element_name, pe.quantity, pe.multiplier, pe.pieces_per_palla, pe.pallas_per_garment, pe.rate_per_palla, pe.default_sam_minutes, pe.sort_order, l.total_pieces, wer.custom_sam_minutes, wer.custom_piece_rate
                               ORDER BY pe.sort_order ASC, pe.id ASC");
     $elemStmt->execute([$assignedWorkerId, $lotId]);
     $lotElements = $elemStmt->fetchAll();

@@ -2714,9 +2714,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const done = parseInt(el.operator_total || el.operator1_pieces || 0);
             const pending = Math.max(0, req - done);
             const sam = parseFloat(el.worker_custom_sam !== null && el.worker_custom_sam !== undefined && el.worker_custom_sam !== '' ? el.worker_custom_sam : el.default_sam_minutes) || 0;
+            const ppp = parseFloat(el.pieces_per_palla || 1) || 1;
+            const rpp = parseFloat(el.rate_per_palla || 0) || 0;
             let pieceRate = opDefRate;
             if (el.worker_custom_rate !== null && el.worker_custom_rate !== undefined && el.worker_custom_rate !== '') {
                 pieceRate = parseFloat(el.worker_custom_rate) || 0;
+            } else if (rpp > 0 && ppp > 0) {
+                pieceRate = rpp / ppp;
             } else if (sam > 0 && workerMinRate > 0) {
                 pieceRate = sam * workerMinRate;
             }
@@ -2736,8 +2740,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         <input type="hidden" name="elements[${el.id}][previous_done]" value="${done}">
                         <span class="text-primary me-1">🧵</span> ${el.element_name} 
                         <span class="badge bg-light text-muted border">×${mult}</span>
+                        ${ppp > 1 ? `<span class="badge bg-light text-primary border ms-1" style="font-size: 0.70rem;">1 پلہ = ${ppp} پیس</span>` : ''}
                     </td>
-                    <td class="fw-bold text-muted">${req}</td>
+                    <td class="fw-bold text-muted">
+                        ${req}
+                        ${ppp > 1 ? `<div class="text-muted" style="font-size: 0.70rem;">${(req / ppp).toFixed(1)} پلے</div>` : ''}
+                    </td>
                     <td class="fw-semibold text-info-emphasis">${done}</td>
                     <td class="fw-bold text-warning-emphasis">${pending}</td>
                     <td style="width: 125px;">

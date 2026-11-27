@@ -44,17 +44,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // Save product pattern elements (Front, Back, Sleeves, etc.)
                 $savedElemCount = 0;
+                $elemPiecesPerPalla = $_POST['pieces_per_palla'] ?? [];
+                $elemPallasPerGarment = $_POST['pallas_per_garment'] ?? [];
+                $elemRatePerPalla = $_POST['rate_per_palla'] ?? [];
                 $elemSams = $_POST['element_sam'] ?? [];
                 if (is_array($elemNames) && !empty($elemNames)) {
-                    $insElem = $db->prepare("INSERT INTO product_elements (product_id, element_name, quantity, multiplier, default_sam_minutes, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                    $insElem = $db->prepare("INSERT INTO product_elements 
+                        (product_id, element_name, quantity, multiplier, pieces_per_palla, pallas_per_garment, rate_per_palla, default_sam_minutes, notes, sort_order) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                     $sort = 1;
                     foreach ($elemNames as $idx => $eName) {
                         $eName = trim($eName);
                         if ($eName === '') continue;
                         $q = max(0, (float)($elemQtys[$idx] ?? 1.0));
+                        $ppp = max(0.01, (float)($elemPiecesPerPalla[$idx] ?? 1.0));
+                        $ppg = isset($elemPallasPerGarment[$idx]) && $elemPallasPerGarment[$idx] !== '' ? max(0, (float)$elemPallasPerGarment[$idx]) : ($ppp > 0 ? round($q / $ppp, 4) : $q);
+                        $rpp = max(0, (float)($elemRatePerPalla[$idx] ?? 0.00));
                         $sam = max(0, (float)($elemSams[$idx] ?? 0.00));
                         $notes = trim($elemNotes[$idx] ?? '');
-                        $insElem->execute([$newProductId, $eName, $q, $q, $sam, $notes, $sort++]);
+                        $insElem->execute([$newProductId, $eName, $q, $q, $ppp, $ppg, $rpp, $sam, $notes, $sort++]);
                         $savedElemCount++;
                     }
                 }
@@ -544,15 +552,15 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                         <i class="bi bi-plus-circle me-1 text-primary"></i> 1-Click Quick Add Common Garment Parts:
                                     </div>
                                     <div class="d-flex flex-wrap gap-1" id="prodQuickChips">
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Front" data-qty="1" data-sam="1.5" data-notes="Main front body">+ Front (1 · 1.5m)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Back" data-qty="1" data-sam="1.5" data-notes="Main back body">+ Back (1 · 1.5m)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Sleeves" data-qty="2" data-sam="2.0" data-notes="Left & right sleeves">+ Sleeves (2 · 2.0m)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Pockets" data-qty="2" data-sam="0.5" data-notes="Side welt / patch pockets">+ Pockets (2 · 0.5m)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Collar / Neck" data-qty="1" data-sam="1.0" data-notes="Ribbed collar / stand neck">+ Collar/Neck (1 · 1.0m)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Hood" data-qty="1" data-sam="1.5" data-notes="Detachable hood">+ Hood (1 · 1.5m)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Cuffs" data-qty="2" data-sam="1.0" data-notes="Wrist cuffs">+ Cuffs (2 · 1.0m)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Bottom Hem" data-qty="1" data-sam="1.0" data-notes="Elasticated rib / border">+ Bottom Hem (1 · 1.0m)</button>
-                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Inner Lining" data-qty="1" data-sam="2.0" data-notes="Inner silk/poly lining">+ Inner Lining (1 · 2.0m)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Front Panel (سامنے کا پلہ)" data-qty="1" data-ppp="1" data-ppg="1" data-rpp="20" data-sam="3.5" data-notes="1 panel = 1 front body">+ Front (1 پلہ)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Back Panel (پچھلا پلہ)" data-qty="1" data-ppp="1" data-ppg="1" data-rpp="20" data-sam="3.5" data-notes="1 panel = 1 back body">+ Back (1 پلہ)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Bazo / Sleeves (بازو)" data-qty="2" data-ppp="2" data-ppg="1" data-rpp="20" data-sam="4.0" data-notes="1 panel yields 2 sleeves">+ Bazo (2 pcs · 1 پلہ)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Bazo (3 per Palla)" data-qty="2" data-ppp="3" data-ppg="0.67" data-rpp="20" data-sam="4.0" data-notes="1 panel yields 3 sleeves">+ Bazo (1 پلے سے 3 بازو)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Pockets (پاکٹ)" data-qty="2" data-ppp="4" data-ppg="0.5" data-rpp="20" data-sam="0.5" data-notes="1 panel yields 4 pockets (0.5 پلہ)">+ Pockets (4 pcs/پلہ · 0.5 پلہ)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Pocket (Single)" data-qty="1" data-ppp="2" data-ppg="0.5" data-rpp="20" data-sam="0.5" data-notes="1 panel yields 2 pockets (0.5 پلہ)">+ Single Pocket (0.5 پلہ)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Gol Gala (گول گلا)" data-qty="1" data-ppp="1" data-ppg="1" data-rpp="10" data-sam="1.5" data-notes="Ribbed collar / stand neck">+ Gol Gala (1 پلہ)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Bon" data-qty="2" data-ppp="2" data-ppg="1" data-rpp="15" data-sam="2.0" data-notes="Ribbed bon">+ Bon (2 pcs · 1 پلہ)</button>
+                                        <button type="button" class="btn btn-sm btn-white border shadow-xs py-1 px-2 prod-quick-chip" data-name="Moday Tape (موڈھے)" data-qty="2" data-ppp="2" data-ppg="1" data-rpp="10" data-sam="1.0" data-notes="Armhole tape">+ Moday (1 پلہ)</button>
                                     </div>
                                 </div>
 
@@ -561,10 +569,13 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <table class="table table-bordered align-middle mb-0" id="prodElementsTable">
                                         <thead class="table-light small">
                                             <tr>
-                                                <th style="width: 45px;" class="text-center">#</th>
-                                                <th style="min-width: 180px;">Element / Component Name *</th>
-                                                <th style="width: 140px;" class="text-center">Qty Per Unit *</th>
-                                                <th style="width: 120px;" class="text-center">⏱️ Est. SAM (منٹ)</th>
+                                                <th style="width: 40px;" class="text-center">#</th>
+                                                <th style="min-width: 170px;">Element / Component Name *</th>
+                                                <th style="width: 120px;" class="text-center" title="Pieces per garment">Pcs / Garment *</th>
+                                                <th style="width: 125px;" class="text-center" title="Pieces from 1 Palla">Pcs / Palla *</th>
+                                                <th style="width: 125px;" class="text-center" title="Pallas required per garment">Pallas / Unit</th>
+                                                <th style="width: 130px;" class="text-center" title="Rate per knitted Palla">Rate / Palla (Rs.)</th>
+                                                <th style="width: 100px;" class="text-center">⏱️ SAM (منٹ)</th>
                                                 <th>Pattern / Fabric Notes</th>
                                                 <th style="width: 50px;" class="text-center">Action</th>
                                             </tr>
@@ -579,12 +590,16 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                     <button type="button" class="btn btn-outline-primary btn-sm fw-semibold" id="btnAddProdElementRow">
                                         <i class="bi bi-plus-circle me-1"></i> + Add Custom Element Row
                                     </button>
-                                    <div class="d-flex align-items-center gap-3 small text-muted">
+                                    <div class="d-flex align-items-center gap-3 small text-muted flex-wrap">
                                         <span>Components: <strong id="lblProdElementsCount" class="text-dark">0</strong></span>
                                         <span class="vr"></span>
-                                        <span>Total Pieces / Unit: <strong id="lblProdPiecesCount" class="text-primary fw-bold">0 pcs</strong></span>
+                                        <span>Total Pieces: <strong id="lblProdPiecesCount" class="text-primary fw-bold">0 pcs</strong></span>
                                         <span class="vr"></span>
-                                        <span>Total SAM: <strong id="lblProdTotalSam" class="text-success fw-bold">0.0 mins</strong></span>
+                                        <span>Total Pallas: <strong id="lblProdPallasCount" class="text-dark fw-bold">0.0 پلہ</strong></span>
+                                        <span class="vr"></span>
+                                        <span>Palla Cost: <strong id="lblProdPallaCost" class="text-success fw-bold">Rs. 0.00</strong></span>
+                                        <span class="vr"></span>
+                                        <span>Total SAM: <strong id="lblProdTotalSam" class="text-info fw-bold">0.0 mins</strong></span>
                                     </div>
                                 </div>
                             </div>
@@ -641,13 +656,21 @@ require_once __DIR__ . '/../../includes/sidebar.php';
                                                 <?php else: ?>
                                                     <div class="d-flex flex-wrap gap-1 align-items-center">
                                                         <?php foreach ($pElems as $pe): ?>
-                                                            <span class="badge bg-light text-dark border" style="font-size: 0.73rem;" title="<?= clean($pe['notes'] ?? '') ?>">
-                                                                <?= clean($pe['element_name']) ?> <strong class="text-primary">×<?= (float)$pe['quantity'] ?></strong>
+                                                            <?php 
+                                                                $ppp = (float)($pe['pieces_per_palla'] ?? 1);
+                                                                $ppg = (float)($pe['pallas_per_garment'] ?? $pe['quantity']);
+                                                                $pallaBadge = ($ppp != 1) ? " (" . round($ppg, 2) . " پلہ)" : "";
+                                                            ?>
+                                                            <span class="badge bg-light text-dark border" style="font-size: 0.73rem;" title="<?= clean($pe['notes'] ?? '') ?> · 1 پلے سے <?= $ppp ?> پیس">
+                                                                <?= clean($pe['element_name']) ?> <strong class="text-primary">×<?= (float)$pe['quantity'] ?></strong><span class="text-secondary"><?= $pallaBadge ?></span>
                                                             </span>
                                                         <?php endforeach; ?>
                                                     </div>
+                                                    <?php 
+                                                        $totalPallasSum = array_sum(array_map(fn($e) => (float)($e['pallas_per_garment'] ?? $e['quantity']), $pElems));
+                                                    ?>
                                                     <div class="small text-muted mt-1" style="font-size: 0.72rem;">
-                                                        <?= count($pElems) ?> components (<?= (float)$elemSum ?> pcs / unit)
+                                                        <?= count($pElems) ?> components (<?= (float)$elemSum ?> pcs · <strong class="text-dark"><?= round($totalPallasSum, 2) ?> پلے</strong> / unit)
                                                     </div>
                                                 <?php endif; ?>
                                             </td>
@@ -1448,10 +1471,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const pTbody = document.getElementById('prodElementsTbody');
     const lblCount = document.getElementById('lblProdElementsCount');
     const lblPcs = document.getElementById('lblProdPiecesCount');
+    const lblPallas = document.getElementById('lblProdPallasCount');
+    const lblPallaCost = document.getElementById('lblProdPallaCost');
     const lblSam = document.getElementById('lblProdTotalSam');
     const btnAddProdRow = document.getElementById('btnAddProdElementRow');
 
-    function createProdRow(name = '', qty = 1, notes = '', sam = 0.0) {
+    function createProdRow(name = '', qty = 1, notes = '', sam = 0.0, ppp = 1.0, ppg = null, rpp = 0.0) {
+        if (ppg === null || ppg === undefined) {
+            ppg = (ppp > 0) ? (Math.round((qty / ppp) * 1000) / 1000) : qty;
+        }
+        const pcRate = (ppp > 0 && rpp > 0) ? (Math.round((rpp / ppp) * 100) / 100) : 0;
         const tr = document.createElement('tr');
         tr.className = 'prod-element-row';
         tr.innerHTML = `
@@ -1462,8 +1491,29 @@ document.addEventListener('DOMContentLoaded', function() {
             <td>
                 <div class="input-group input-group-sm">
                     <button type="button" class="btn btn-outline-secondary btn-pel-minus"><i class="bi bi-dash"></i></button>
-                    <input type="number" step="any" min="0" name="element_qty[]" class="form-control text-center fw-bold pel-qty-val" value="${qty}" placeholder="1" required>
+                    <input type="number" step="any" min="0" name="element_qty[]" class="form-control text-center fw-bold pel-qty-val" value="${qty}" placeholder="1" required title="Pieces per garment">
                     <button type="button" class="btn btn-outline-secondary btn-pel-plus"><i class="bi bi-plus"></i></button>
+                </div>
+            </td>
+            <td>
+                <div class="input-group input-group-sm">
+                    <input type="number" step="any" min="0.01" name="pieces_per_palla[]" class="form-control text-center fw-bold pel-ppp-val" value="${ppp}" placeholder="1" required title="Cut pieces yielded from 1 Palla">
+                    <span class="input-group-text px-1 small text-muted">pcs</span>
+                </div>
+            </td>
+            <td>
+                <div class="input-group input-group-sm">
+                    <input type="number" step="any" min="0" name="pallas_per_garment[]" class="form-control text-center fw-bold text-primary bg-light pel-ppg-val" value="${ppg}" placeholder="1.0" title="Pallas required per garment">
+                    <span class="input-group-text px-1 small text-primary fw-bold">پلہ</span>
+                </div>
+            </td>
+            <td>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text px-1 small">Rs</span>
+                    <input type="number" step="any" min="0" name="rate_per_palla[]" class="form-control text-center fw-bold text-success pel-rpp-val" value="${rpp}" placeholder="0.00" title="Rate per knitted Palla">
+                </div>
+                <div class="text-muted text-center pel-piece-rate-badge" style="font-size: 0.70rem;">
+                    ${pcRate > 0 ? "Rs. " + pcRate.toFixed(2) + "/pc" : "—"}
                 </div>
             </td>
             <td>
@@ -1490,8 +1540,27 @@ document.addEventListener('DOMContentLoaded', function() {
         const minus = tr.querySelector('.btn-pel-minus');
         const plus = tr.querySelector('.btn-pel-plus');
         const qty = tr.querySelector('.pel-qty-val');
+        const pppInput = tr.querySelector('.pel-ppp-val');
+        const ppgInput = tr.querySelector('.pel-ppg-val');
+        const rppInput = tr.querySelector('.pel-rpp-val');
         const sam = tr.querySelector('.pel-sam-val');
         const remove = tr.querySelector('.btn-pel-remove');
+        const badge = tr.querySelector('.pel-piece-rate-badge');
+
+        function updateRowPallaCalc(skipPpg = false) {
+            const q = parseFloat(qty ? qty.value : 1) || 0;
+            const ppp = parseFloat(pppInput ? pppInput.value : 1) || 1;
+            const rpp = parseFloat(rppInput ? rppInput.value : 0) || 0;
+
+            if (!skipPpg && ppp > 0) {
+                ppgInput.value = Math.round((q / ppp) * 1000) / 1000;
+            }
+            const pcRate = (ppp > 0 && rpp > 0) ? (Math.round((rpp / ppp) * 100) / 100) : 0;
+            if (badge) {
+                badge.textContent = pcRate > 0 ? "Rs. " + pcRate.toFixed(2) + "/pc" : "—";
+            }
+            recalcProdTotals();
+        }
 
         minus.addEventListener('click', function() {
             let v = parseFloat(qty.value) || 0;
@@ -1502,7 +1571,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (v > 0.1) {
                 qty.value = Math.max(0, Math.round((v - 0.1) * 100) / 100);
             }
-            recalcProdTotals();
+            updateRowPallaCalc();
         });
 
         plus.addEventListener('click', function() {
@@ -1512,10 +1581,24 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 qty.value = Math.round((v + 1) * 100) / 100;
             }
-            recalcProdTotals();
+            updateRowPallaCalc();
         });
 
-        qty.addEventListener('input', recalcProdTotals);
+        qty.addEventListener('input', () => updateRowPallaCalc());
+        if (pppInput) pppInput.addEventListener('input', () => updateRowPallaCalc());
+        if (rppInput) rppInput.addEventListener('input', () => updateRowPallaCalc());
+
+        if (ppgInput) {
+            ppgInput.addEventListener('input', function() {
+                const ppg = parseFloat(this.value) || 0;
+                const q = parseFloat(qty.value) || 0;
+                if (ppg > 0 && q > 0) {
+                    pppInput.value = Math.round((q / ppg) * 100) / 100;
+                }
+                updateRowPallaCalc(true);
+            });
+        }
+
         if (sam) sam.addEventListener('input', recalcProdTotals);
 
         remove.addEventListener('click', function() {
@@ -1528,15 +1611,25 @@ document.addEventListener('DOMContentLoaded', function() {
         const rows = pTbody.querySelectorAll('.prod-element-row');
         let totalPcs = 0;
         let totalSam = 0;
+        let totalPallas = 0;
+        let totalPallaCost = 0;
+
         rows.forEach((r, i) => {
             r.querySelector('.p-row-idx').textContent = i + 1;
             const q = parseFloat(r.querySelector('.pel-qty-val').value) || 0;
             const s = parseFloat(r.querySelector('.pel-sam-val') ? r.querySelector('.pel-sam-val').value : 0) || 0;
+            const ppg = parseFloat(r.querySelector('.pel-ppg-val') ? r.querySelector('.pel-ppg-val').value : 0) || 0;
+            const rpp = parseFloat(r.querySelector('.pel-rpp-val') ? r.querySelector('.pel-rpp-val').value : 0) || 0;
+
             totalPcs += q;
             totalSam += (q * s);
+            totalPallas += ppg;
+            totalPallaCost += (ppg * rpp);
         });
         if (lblCount) lblCount.textContent = rows.length;
         if (lblPcs) lblPcs.textContent = (Math.round(totalPcs * 100) / 100) + ' pcs';
+        if (lblPallas) lblPallas.textContent = (Math.round(totalPallas * 100) / 100) + ' پلہ';
+        if (lblPallaCost) lblPallaCost.textContent = 'Rs. ' + totalPallaCost.toFixed(2);
         if (lblSam) lblSam.textContent = totalSam.toFixed(1) + ' mins';
     }
 
@@ -1549,7 +1642,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (btnAddProdRow) {
         btnAddProdRow.addEventListener('click', function() {
-            createProdRow('', 1, '', 0.0);
+            createProdRow('', 1, '', 0.0, 1.0, 1.0, 0.0);
             const inputs = pTbody.querySelectorAll('input[name="element_name[]"]');
             if (inputs.length) inputs[inputs.length - 1].focus();
         });
@@ -1559,10 +1652,13 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.prod-quick-chip').forEach(btn => {
         btn.addEventListener('click', function() {
             const name = this.getAttribute('data-name');
-            const qty = parseInt(this.getAttribute('data-qty')) || 1;
+            const qty = parseFloat(this.getAttribute('data-qty')) || 1;
+            const ppp = parseFloat(this.getAttribute('data-ppp')) || 1;
+            const ppg = parseFloat(this.getAttribute('data-ppg')) || null;
+            const rpp = parseFloat(this.getAttribute('data-rpp')) || 0;
             const sam = parseFloat(this.getAttribute('data-sam')) || 0.0;
             const notes = this.getAttribute('data-notes') || '';
-            createProdRow(name, qty, notes, sam);
+            createProdRow(name, qty, notes, sam, ppp, ppg, rpp);
         });
     });
 
@@ -1580,12 +1676,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (pJacket) {
         pJacket.addEventListener('click', function() {
             pTbody.innerHTML = '';
-            createProdRow('Front Panels', 2, 'Left & right overlap panels with zipper', 1.5);
-            createProdRow('Back', 1, 'Full back body', 1.5);
-            createProdRow('Sleeves', 2, 'Left and right sleeves', 2.0);
-            createProdRow('Pockets', 2, 'Front side welt pockets', 0.5);
-            createProdRow('Collar', 1, 'Stand / lapel collar', 1.0);
-            createProdRow('Inner Lining', 1, 'Silk polyester inner body', 2.0);
+            createProdRow('Front Panel (سامنے کا پلہ)', 1, '1 panel = 1 front', 3.5, 1.0, 1.0, 20.0);
+            createProdRow('Back Panel (پچھلا پلہ)', 1, '1 panel = 1 back', 3.5, 1.0, 1.0, 20.0);
+            createProdRow('Bazo / Sleeves (بازو)', 2, '1 panel yields 2 sleeves', 4.0, 2.0, 1.0, 20.0);
+            createProdRow('Pockets (پاکٹ)', 2, '1 panel yields 4 pockets (0.5 پلہ)', 0.5, 4.0, 0.5, 20.0);
+            createProdRow('Bon', 2, 'Ribbed bon finish', 2.0, 2.0, 1.0, 15.0);
+            createProdRow('Gol Gala (گول گلا)', 1, 'Ribbed neck collar', 1.5, 1.0, 1.0, 10.0);
         });
     }
 
@@ -1593,11 +1689,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (pVest) {
         pVest.addEventListener('click', function() {
             pTbody.innerHTML = '';
-            createProdRow('Front Panels', 2, 'Left & right front vest panels', 1.5);
-            createProdRow('Back', 1, 'Back panel with buckle adjuster', 1.5);
-            createProdRow('Pockets', 2, 'Waist welt pockets', 0.5);
-            createProdRow('V-Neck Collar', 1, 'V-neck border', 1.0);
-            createProdRow('Inner Lining', 1, 'Breathable lining', 1.5);
+            createProdRow('Front Panel (سامنے کا پلہ)', 1, '1 panel = 1 front', 3.5, 1.0, 1.0, 20.0);
+            createProdRow('Back Panel (پچھلا پلہ)', 1, '1 panel = 1 back', 3.5, 1.0, 1.0, 20.0);
+            createProdRow('Pockets (پاکٹ)', 2, '1 panel yields 4 pockets (0.5 پلہ)', 0.5, 4.0, 0.5, 20.0);
+            createProdRow('Gol Gala (گول گلا)', 1, 'V-neck / round collar', 1.5, 1.0, 1.0, 10.0);
+            createProdRow('Moday Tape (موڈھے)', 2, 'Armhole ribs', 1.0, 2.0, 1.0, 10.0);
         });
     }
 
@@ -1605,16 +1701,21 @@ document.addEventListener('DOMContentLoaded', function() {
     if (pSweater) {
         pSweater.addEventListener('click', function() {
             pTbody.innerHTML = '';
-            createProdRow('Front', 1, 'Main knit front pattern', 1.5);
-            createProdRow('Back', 1, 'Main knit back', 1.5);
-            createProdRow('Sleeves', 2, 'Left and right knit sleeves', 2.0);
-            createProdRow('Neck Rib', 1, 'Neck trim collar', 1.0);
-            createProdRow('Bottom Hem Rib', 1, 'Elastic waist ribbing', 1.0);
+            createProdRow('Front Panel (سامنے کا پلہ)', 1, '1 panel = 1 front', 3.5, 1.0, 1.0, 20.0);
+            createProdRow('Back Panel (پچھلا پلہ)', 1, '1 panel = 1 back', 3.5, 1.0, 1.0, 20.0);
+            createProdRow('Bazo / Sleeves (بازو)', 2, '1 panel yields 2 sleeves', 4.0, 2.0, 1.0, 20.0);
+            createProdRow('Gol Gala (گول گلا)', 1, 'Round neck rib', 1.5, 1.0, 1.0, 10.0);
+            createProdRow('Bottom Hem (دامن پٹی)', 1, 'Elasticated waist rib', 1.0, 1.0, 1.0, 10.0);
         });
     }
 
     // Load initial default rows for product
     if (pTbody && pTbody.children.length === 0) {
+        createProdRow('Front Panel (سامنے کا پلہ)', 1, 'Main front body', 3.5, 1.0, 1.0, 20.0);
+        createProdRow('Back Panel (پچھلا پلہ)', 1, 'Main back body', 3.5, 1.0, 1.0, 20.0);
+        createProdRow('Bazo / Sleeves (بازو)', 2, '1 panel yields 2 sleeves', 4.0, 2.0, 1.0, 20.0);
+        createProdRow('Pockets (پاکٹ)', 2, '1 panel yields 4 pockets (0.5 پلہ)', 0.5, 4.0, 0.5, 20.0);
+    }
         createProdRow('Front', 1, 'Main front body', 1.5);
         createProdRow('Back', 1, 'Main back body', 1.5);
         createProdRow('Sleeves', 2, 'Left & right sleeves', 2.0);
